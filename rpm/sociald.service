@@ -1,0 +1,10 @@
+[Unit]
+Description=The sociald sync daemon
+After=xorg.target
+Requires=dbus.socket xorg.target lipstick.service
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/sociald --systemd
+Restart=always
+
