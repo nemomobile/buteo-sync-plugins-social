@@ -1,0 +1,5 @@
+sociald is a daemon process which provides data synchronisation with
+various social services (such as Facebook and Google+).
+It supports synchronising data of various types (contacts, calendar
+events, notifications, etc) either via manual invocation via DBus
+or via polling timers.
