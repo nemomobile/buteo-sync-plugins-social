@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Social service sync daemon
+Exec=/usr/bin/sociald
+X-Moblin-Priority=Low
+OnlyShowIn=X-MEEGO-HS;
+X-Meego-Watchdog=Restart
