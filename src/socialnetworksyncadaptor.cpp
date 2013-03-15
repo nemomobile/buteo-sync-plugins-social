@@ -75,7 +75,7 @@ QDateTime SocialNetworkSyncAdaptor::lastSyncTimestamp(const QString &serviceName
         return QDateTime();
     }
 
-    QSqlQuery query;
+    QSqlQuery query(*q->database());
     query.prepare("SELECT syncTimestamp FROM syncTimestamps WHERE serviceName = :sn AND accountIdentifier = :aid AND dataType = :dt");
     query.bindValue(":sn", serviceName);
     query.bindValue(":aid", accountId);
@@ -104,7 +104,7 @@ bool SocialNetworkSyncAdaptor::updateLastSyncTimestamp(const QString &serviceNam
         return false;
     }
 
-    QSqlQuery query;
+    QSqlQuery query(*q->database());
     query.prepare("INSERT INTO syncTimestamps (serviceName, accountIdentifier, dataType, syncTimestamp) VALUES (:sn, :aid, :dt, :st)");
     query.bindValue(":sn", serviceName);
     query.bindValue(":aid", accountId);
@@ -129,7 +129,7 @@ QDateTime SocialNetworkSyncAdaptor::whenSyncedDatum(const QString &serviceName, 
         return QDateTime();
     }
 
-    QSqlQuery query;
+    QSqlQuery query(*q->database());
     query.prepare("SELECT syncTimestamp FROM syncedData WHERE serviceName = :sn AND datumIdentifier = :di");
     query.bindValue(":sn", serviceName);
     query.bindValue(":di", datumIdentifier);
@@ -157,7 +157,7 @@ bool SocialNetworkSyncAdaptor::markSyncedDatum(const QString &localIdentifier, c
         return false;
     }
 
-    QSqlQuery query;
+    QSqlQuery query(*q->database());
     query.prepare("INSERT INTO syncedData (id, serviceName, accountIdentifier, dataType, createdTimestamp, syncTimestamp, datumIdentifier) VALUES (:id, :sn, :aid, :dt, :ct, :st, :di)");
     query.bindValue(":id", localIdentifier);
     query.bindValue(":sn", serviceName);
@@ -185,7 +185,7 @@ bool SocialNetworkSyncAdaptor::removeAllData(const QString &serviceName, const Q
         return false;
     }
 
-    QSqlQuery query;
+    QSqlQuery query(*q->database());
     query.prepare("DELETE FROM syncedData WHERE serviceName = :sn AND dataType = :dt AND accountIdentifier = :aid");
     query.bindValue(":sn", serviceName);
     query.bindValue(":dt", dataType);
@@ -221,7 +221,7 @@ QStringList SocialNetworkSyncAdaptor::accountIdsWithSyncTimestamp(const QString 
 
     QStringList retn;
 
-    QSqlQuery query;
+    QSqlQuery query(*q->database());
     query.prepare("SELECT DISTINCT accountIdentifier FROM syncTimestamps WHERE serviceName = :sn AND dataType = :dt");
     query.bindValue(":sn", serviceName);
     query.bindValue(":dt", dataType);
@@ -254,7 +254,7 @@ QStringList SocialNetworkSyncAdaptor::syncedDatumLocalIdentifiers(const QString 
 
     QStringList retn;
 
-    QSqlQuery query;
+    QSqlQuery query(*q->database());
     query.prepare("SELECT DISTINCT id FROM syncedData WHERE serviceName = :sn AND dataType = :dt AND accountIdentifier = :aid");
     query.bindValue(":sn", serviceName);
     query.bindValue(":dt", dataType);

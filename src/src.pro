@@ -1,5 +1,3 @@
-system(qdbusxml2cpp org.nemomobile.sociald.Sync.xml -a syncdbusadaptor -c SyncDBusAdaptor -l SyncService -i syncservice.h)
-
 TEMPLATE = app
 
 TARGET = sociald
@@ -7,7 +5,6 @@ VERSION = 0.0.1
 CONFIG += eventfeed
 
 target.path += /usr/bin
-INSTALLS = target ts_install engineering_english_install
 
 QT += \
     network \
@@ -16,6 +13,7 @@ QT += \
 
 include(facebook/facebook.pri)
 
+# if you change this, you need to modify jolla-gallery-facebook too!
 DEFINES += 'SOCIALD_DATABASE_DIR=\'\"/home/nemo/.config/sociald\"\''
 DEFINES += 'SOCIALD_DATABASE_NAME=\'\"sociald.db\"\''
 
@@ -29,6 +27,11 @@ SOURCES += \
     $$PWD/main.cpp \
     $$PWD/socialnetworksyncadaptor.cpp \
     $$PWD/syncservice.cpp
+
+# autogenerate the dbus interface implementation from the interface specification
+system(qdbusxml2cpp org.nemomobile.sociald.sync.xml -a syncdbusadaptor -c SyncDBusAdaptor -l SyncService -i syncservice.h)
+HEADERS += syncdbusadaptor.h
+SOURCES += syncdbusadaptor.cpp
 
 MOC_DIR = $$PWD/../.moc
 OBJECTS_DIR = $$PWD/../.obj
@@ -56,3 +59,11 @@ engineering_english_install.CONFIG += no_check_exist
 
 QMAKE_EXTRA_TARGETS += ts engineering_english
 PRE_TARGETDEPS += ts engineering_english
+
+# dbus service and interface
+service.files = org.nemomobile.sociald.sync.service
+service.path = /usr/share/dbus-1/services/
+interface.files = org.nemomobile.sociald.sync.xml
+interface.path = /usr/share/dbus-1/interfaces/
+
+INSTALLS = target service interface ts_install engineering_english_install

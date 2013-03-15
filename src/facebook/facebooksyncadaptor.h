@@ -33,10 +33,21 @@
 #define FACEBOOKSYNCADAPTOR_H
 
 #include "socialnetworksyncadaptor.h"
+#include "syncservice.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
 #include <QtCore/QMap>
+#include <QtCore/QList>
+
+//libaccounts-qt
+#include <Accounts/Manager>
+
+class QNetworkAccessManager;
+
+class FacebookDataTypeSyncAdaptor;
+class FacebookImageSyncAdaptor;
+class FacebookNotificationSyncAdaptor;
 
 class FacebookSyncAdaptor : public SocialNetworkSyncAdaptor
 {
@@ -47,6 +58,14 @@ public:
     ~FacebookSyncAdaptor();
 
     void sync(const QString &dataType);
+
+protected:
+    void checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds);
+    Accounts::Manager *m_accountManager;
+    QNetworkAccessManager *m_qnam;
+    friend class FacebookDataTypeSyncAdaptor;
+    friend class FacebookImageSyncAdaptor;
+    friend class FacebookNotificationSyncAdaptor;
 
 private:
     // In the future, we should use a plugin system.

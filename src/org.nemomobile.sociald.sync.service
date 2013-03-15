@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.nemomobile.sociald.sync
+Exec=/usr/bin/sociald

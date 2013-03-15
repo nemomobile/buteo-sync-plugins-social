@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.1
+Version:    0.0.2
 Release:    1
 Group:      System/Applications
 License:    TBD
@@ -28,7 +28,10 @@ A daemon process which provides data synchronization with various social service
 %files
 %defattr(-,root,root,-)
 %{_bindir}/sociald
+%{_datadir}/dbus-1/services/org.nemomobile.sociald.sync.service
+%{_datadir}/dbus-1/interfaces/org.nemomobile.sociald.sync.xml
 %{_libdir}/systemd/user/sociald.service
+%{_libdir}/systemd/user/jolla-session.target.wants/sociald.service
 %config /etc/xdg/autostart/sociald.desktop
 %{_datadir}/translations/sociald_eng_en.qm
 
@@ -58,4 +61,5 @@ rm -rf %{buildroot}
 mkdir -p %{buildroot}%{_libdir}/systemd/user/
 cp -a %{SOURCE2} %{buildroot}%{_libdir}/systemd/user/
 install -D -m 644 %{SOURCE1} %{buildroot}/etc/xdg/autostart/sociald.desktop
-
+mkdir -p %{buildroot}%{_libdir}/systemd/user/jolla-session.target.wants/
+ln -sf ../sociald.service %{buildroot}%{_libdir}/systemd/user/jolla-session.target.wants/

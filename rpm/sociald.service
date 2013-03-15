@@ -8,3 +8,6 @@ Type=notify
 ExecStart=/usr/bin/sociald --systemd
 Restart=always
 
+[Install]
+WantedBy=jolla-session.target
+

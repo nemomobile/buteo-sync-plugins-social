@@ -30,17 +30,11 @@
  */
 
 #include "facebooknotificationsyncadaptor.h"
+#include "facebooksyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
 
 #include <QtCore/QPair>
-#include <QtSql/QSqlQuery>
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-#include <qjson/parser.h>
-#else
-#include <QJsonDocument>
-#endif
 
 //QtMobility
 #include <QtContacts/QContactManager>
@@ -52,30 +46,16 @@
 #include <QtContacts/QContactPresence>
 #include <QtContacts/QContactAvatar>
 
-//libaccounts-qt
-#include <Accounts/Manager>
-#include <Accounts/Service>
-#include <Accounts/Account>
-#include <Accounts/AccountService>
-#include <Accounts/AuthData>
-
-//libsignon-qt
-#include <SignOn/Identity>
-#include <SignOn/SessionData>
-#include <SignOn/AuthSession>
-
 //meegotouchevents/meventfeed
 #include <meventfeed.h>
 
-Q_DECLARE_METATYPE(SignOn::Identity*)
-
 #define SOCIALD_FACEBOOK_NOTIFICATIONS_GROUPNAME QLatin1String("sociald-sync-facebook-notifications")
 
-FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *parent)
-    : SocialNetworkSyncAdaptor(parent)
+// currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
+
+FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
+    : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Notifications)
     , m_contactFetchRequest(new QContactFetchRequest(this))
-    , m_accountManager(new Accounts::Manager(QLatin1String("sync"), this))
-    , m_qnam(new QNetworkAccessManager(this))
     , m_eventFeed(MEventFeed::instance())
 {
     if (!m_eventFeed) {
@@ -85,11 +65,15 @@ FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *pa
 
     // can sync, enabled
     m_enabled = true;
+    m_status = SocialNetworkSyncAdaptor::Inactive;
 
     // fetch all contacts.  We detect which contact a notification came from.
+    // XXX TODO: we really shouldn't do this, we should do it on demand instead
+    // of holding the contacts in memory.  If qtcontacts-tracker doesn't observe
+    // our fetch hint, it could return an obscenely large amount of data...
     if (m_contactFetchRequest) {
         QContactFetchHint cfh;
-        cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences);
+        cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
         cfh.setDetailDefinitionsHint(QStringList()
                 << QContactAvatar::DefinitionName
                 << QContactName::DefinitionName
@@ -108,13 +92,6 @@ FacebookNotificationSyncAdaptor::~FacebookNotificationSyncAdaptor()
 
 void FacebookNotificationSyncAdaptor::sync(const QString &dataType)
 {
-    if (dataType != SyncService::dataType(SyncService::Notifications)) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: facebook notification sync adaptor was asked to sync %1"))
-                .arg(dataType));
-        return;
-    }
-
     // refresh local cache of contacts.
     // we do this asynchronous request in parallel to the sync code below
     // since the network request round-trip times should far exceed the
@@ -127,66 +104,11 @@ void FacebookNotificationSyncAdaptor::sync(const QString &dataType)
         m_contactFetchRequest->start();
     }
 
-    // three stage process.
-    // 1) if an account has been removed, we need to purge the notifications we retrieved with it
-    // 2) if an account has been added, we need to pull notifications for the account
-    // 3) for existing accounts, pull new notifications for the existing account
-    // Currently, we integrate with the device notifications via libeventfeed
-
-    QList<int> newIds, purgeIds, updateIds;
-    checkAccounts(&newIds, &purgeIds, &updateIds);
-    purgeNotifications(purgeIds);
-    updateNotifications(newIds);
-    updateNotifications(updateIds);
-
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("successfully triggered sync of notifications: %1 purged, %2 new, %3 updated accounts"))
-            .arg(purgeIds.size()).arg(newIds.size()).arg(updateIds.size()));
+    // call superclass impl.
+    FacebookDataTypeSyncAdaptor::sync(dataType);
 }
 
-void FacebookNotificationSyncAdaptor::checkAccounts(QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds)
-{
-    QList<int> knownIds;
-    QStringList knownIdStrings = accountIdsWithSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Notifications));
-    foreach (const QString &kis, knownIdStrings) {
-        // XXX TODO: instead of QString::number(accountId) use fb user id.
-        bool ok = true;
-        int intId = kis.toInt(&ok);
-        if (ok) {
-            knownIds.append(intId);
-        } else {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: unable to convert known id string to int: %1"))
-                    .arg(kis));
-        }
-    }
-
-    Accounts::AccountIdList currentIds = m_accountManager->accountList();
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
-            .arg(currentIds.size()));
-    for (int i = 0; i < currentIds.size(); ++i) {
-        int currId = currentIds.at(i);
-        Accounts::Account *act = m_accountManager->account(currId);
-        if (!act || act->providerName() != QLatin1String("facebook")) {
-            continue; // not a facebook account.  Ignore it.
-        }
-
-        if (knownIds.contains(currId)) {
-            knownIds.removeOne(currId);
-            updateIds->append(currId);
-        } else {
-            newIds->append(currId);
-        }
-    }
-
-    // anything left in knownIds must belong to an old, removed account.
-    for (int i = 0; i < knownIds.size(); ++i) {
-        purgeIds->append(knownIds.at(i));
-    }
-}
-
-void FacebookNotificationSyncAdaptor::purgeNotifications(const QList<int> &purgeIds)
+void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
     foreach (int pid, purgeIds) {
         // first, purge all data from libeventfeed
@@ -214,111 +136,9 @@ void FacebookNotificationSyncAdaptor::purgeNotifications(const QList<int> &purge
     }
 }
 
-void FacebookNotificationSyncAdaptor::updateNotifications(const QList<int> &updateIds)
+void FacebookNotificationSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
-    foreach (int uid, updateIds) {
-        Accounts::Account *act = m_accountManager->account(uid);
-        if (!act) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
-                    .arg(uid));
-            continue;
-        }
-
-        // grab out a valid identity for the sync service.
-        Accounts::ServiceList enabledSrvs = act->enabledServices();
-        if (!enabledSrvs.size()) {
-            TRACE(SOCIALD_INFORMATION,
-                    QString(QLatin1String("account with id %1 has no enabled sync service"))
-                    .arg(uid));
-            continue;
-        }
-
-        quint32 identityId = 0;
-        Accounts::AccountService *asrv = 0;
-        for (int i = 0; i < enabledSrvs.size(); ++i) {
-            asrv = new Accounts::AccountService(act, enabledSrvs.at(i));
-            if (!asrv) {
-                continue;
-            }
-            identityId = asrv->authData().credentialsId();
-            if (identityId != 0) {
-                break;
-            }
-
-            asrv->deleteLater();
-            asrv = 0;
-        }
-
-        if (identityId == 0) {
-            TRACE(SOCIALD_INFORMATION,
-                    QString(QLatin1String("account with id %1 has no valid credentials"))
-                    .arg(uid));
-            continue;
-        }
-
-        SignOn::Identity *ident = SignOn::Identity::existingIdentity(identityId);
-        if (!ident) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved"))
-                    .arg(uid));
-            continue;
-        }
-
-        // sign in - we need the access token to perform requests.
-        // set UiPolicy to NO_USER_INTERACTION because we don't want
-        // to show any UI if we don't already have a token.
-        Accounts::AuthData authData(asrv->authData());
-        asrv->deleteLater();
-        SignOn::AuthSession *session = ident->createSession(authData.method());
-        QVariantMap sessionData = authData.parameters();
-        sessionData.insert(QLatin1String("UiPolicy"), SignOn::NoUserInteractionPolicy);
-        connect(session, SIGNAL(error(SignOn::Error)), this, SLOT(signOnError(SignOn::Error)));
-        connect(session, SIGNAL(response(SignOn::SessionData)), this, SLOT(signOnResponse(SignOn::SessionData)));
-        QVariant identVar = QVariant::fromValue<SignOn::Identity*>(ident);
-        session->setProperty("ident", identVar);
-        session->setProperty("accountId", uid);
-        session->process(sessionData, authData.mechanism());
-    }
-}
-
-void FacebookNotificationSyncAdaptor::signOnError(const SignOn::Error &err)
-{
-    SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession *>(sender());
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
-            .arg(session->property("accountId").toInt()) << err.message());
-    SignOn::Identity *ident = session->property("ident").value<SignOn::Identity*>();
-    ident->destroySession(session); // XXX: is this safe?  Does it deleteLater()?
-    ident->deleteLater();
-}
-
-void FacebookNotificationSyncAdaptor::signOnResponse(const SignOn::SessionData &sdata)
-{
-    QVariantMap data;
-    QStringList sdpns = sdata.propertyNames();
-    foreach (const QString &sdpn, sdpns) {
-        data.insert(sdpn, sdata.getProperty(sdpn));
-    }    
-
-    SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession *>(sender());
-    int accountId = static_cast<int>(session->property("accountId").toUInt());
-
-    if (data.contains(QLatin1String("AccessToken"))) {
-        QString accessToken = data.value(QLatin1String("AccessToken")).toString();
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("signon response for account %1 contained access token %2"))
-                .arg(accountId).arg(accessToken));
-        requestNotifications(accountId, accessToken);
-    } else {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("signon response for account with id %1 contained no access token"))
-                .arg(accountId));
-    }
-
-    SignOn::Identity *ident = session->property("ident").value<SignOn::Identity*>();
-    ident->destroySession(session); // XXX: is this safe?  Does it deleteLater()?
-    ident->deleteLater();
+    requestNotifications(accountId, accessToken);
 }
 
 void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const QString &accessToken, const QString &until, const QString &pagingToken)
@@ -333,7 +153,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     QUrl url(QLatin1String("https://graph.facebook.com/me/notifications"));
     url.setQueryItems(queryItems);
-    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -341,6 +161,9 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
         connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
         connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslErrorsHandler(QList<QSslError>)));
         connect(reply, SIGNAL(finished()), this, SLOT(finishedHandler()));
+
+        // we're requesting data.  Increment the semaphore so that we know we're still busy.
+        incrementSemaphore(accountId);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request notifications from Facebook account with id %1"))
@@ -348,34 +171,9 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     }
 }
 
-void FacebookNotificationSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
-{
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: notification request with account %1 experienced error: %2"))
-            .arg(sender()->property("accountId").toInt()).arg(err)); // incomprehensible enum value, but doesn't matter to users.
-}
-
-void FacebookNotificationSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
-{
-    QString sslerrs;
-    foreach (const QSslError &e, errs) {
-        sslerrs += e.errorString() + "; ";
-    }
-    if (errs.size() > 0) {
-        sslerrs.chop(2);
-    }
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: notification request with account %1 experienced ssl errors: %2"))
-            .arg(sender()->property("accountId").toInt()).arg(sslerrs));
-}
-
 void FacebookNotificationSyncAdaptor::finishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
-    if (!reply) {
-        return; // weird error.
-    }
-
     int accountId = reply->property("accountId").toInt();
     QString accessToken = reply->property("accessToken").toString();
     QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Notifications), QString::number(accountId));
@@ -384,7 +182,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = parseReplyData(replyData, &ok);
+    QVariantMap parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("summary"))) {
         // we expect "data" and "summary"
         QVariantList data = parsed.value(QLatin1String("data")).toList();
@@ -395,6 +193,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("no notifications received for account %1"))
                     .arg(accountId));
+            decrementSemaphore(accountId);
             return;
         }
 
@@ -499,15 +298,6 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
             // request the next page of results.
             requestNotifications(accountId, accessToken, until, pagingToken);
-        } else {
-            // finished sync for this account.
-            updateLastSyncTimestamp(QLatin1String("facebook"),
-                                    SyncService::dataType(SyncService::Notifications),
-                                    QString::number(accountId),
-                                    QDateTime::currentDateTime());
-            TRACE(SOCIALD_INFORMATION,
-                    QString(QLatin1String("finished sync of facebook notifications for account %1"))
-                    .arg(accountId));
         }
     } else {
         // error occurred during request.
@@ -515,6 +305,9 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                 QString(QLatin1String("error: unable to parse notification data from request with account %1; got: %2"))
                 .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
     }
+
+    // we're finished this request.  Decrement our busy semaphore.
+    decrementSemaphore(accountId);
 }
 
 void FacebookNotificationSyncAdaptor::contactFetchStateChangedHandler(QContactAbstractRequest::State newState)
@@ -585,22 +378,59 @@ bool FacebookNotificationSyncAdaptor::haveAlreadyPostedNotification(const QStrin
     return (whenSyncedDatum(QLatin1String("facebook"), notificationId).isValid());
 }
 
-QVariantMap FacebookNotificationSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
+void FacebookNotificationSyncAdaptor::incrementSemaphore(int accountId)
 {
-    QVariant parsed;
+    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
+    semaphoreValue += 1;
+    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
+    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    QJson::Parser jsonParser;
-    parsed = jsonParser.parse(replyData, ok);
-#else
-    QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
-    *ok = !doc.isEmpty();
-    parsed = doc.toVariant();
-#endif
-
-    if (*ok && parsed.type() == QVariant::Map) {
-        return parsed.toMap();
+    if (m_status == SocialNetworkSyncAdaptor::Inactive) {
+        m_status = SocialNetworkSyncAdaptor::Busy;
+        emit statusChanged();
     }
-    *ok = false;
-    return QVariantMap();
+}
+
+void FacebookNotificationSyncAdaptor::decrementSemaphore(int accountId)
+{
+    if (!m_accountSyncSemaphores.contains(accountId)) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
+        return;
+    }
+
+    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
+    semaphoreValue -= 1;
+    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
+    if (semaphoreValue < 0) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
+        return;
+    }
+    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
+
+    if (semaphoreValue == 0) {
+        // finished all outstanding requests for Notifications sync for this account.
+        // update the sync time for this user's Notifications in the global sociald database.
+        updateLastSyncTimestamp(QLatin1String("facebook"),
+                                SyncService::dataType(SyncService::Notifications),
+                                QString::number(accountId),
+                                QDateTime::currentDateTime());
+
+        // if all outstanding requests for all accounts have finished,
+        // then update our status to Inactive / ready to handle more sync requests.
+        bool allAreZero = true;
+        QList<int> semaphores = m_accountSyncSemaphores.values();
+        foreach (int sv, semaphores) {
+            if (sv != 0) {
+                allAreZero = false;
+                break;
+            }
+        }
+
+        if (allAreZero) {
+            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Notifications sync at: %1"))
+                                       .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
+            m_status = SocialNetworkSyncAdaptor::Inactive;
+            emit statusChanged();
+        }
+    }
 }

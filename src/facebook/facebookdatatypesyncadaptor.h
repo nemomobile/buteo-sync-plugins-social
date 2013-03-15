@@ -29,71 +29,55 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
  */
 
-#ifndef FACEBOOKNOTIFICATIONSYNCADAPTOR_H
-#define FACEBOOKNOTIFICATIONSYNCADAPTOR_H
+#ifndef FACEBOOKDATATYPESYNCADAPTOR_H
+#define FACEBOOKDATATYPESYNCADAPTOR_H
 
-#include "facebookdatatypesyncadaptor.h"
+#include "socialnetworksyncadaptor.h"
+#include "syncservice.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
-#include <QtCore/QDateTime>
-#include <QtCore/QVariantMap>
-#include <QtCore/QList>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
 
-//QtMobility
-#include <qmobilityglobal.h>
-#include <QtContacts/QContactManager>
-#include <QtContacts/QContactAbstractRequest>
-#include <QtContacts/QContactFetchRequest>
-#include <QtContacts/QContactFetchHint>
-#include <QtContacts/QContact>
+//libaccounts-qt
+#include <Accounts/Manager>
 
 //libsignon-qt
 #include <SignOn/SessionData>
 #include <SignOn/Error>
 
-class MEventFeed;
-
 class FacebookSyncAdaptor;
 
-QTM_USE_NAMESPACE
+/*
+    Abstract interface for all of the data-specific sync adaptors
+    which pull data from the Facebook social network.
+*/
 
-class FacebookNotificationSyncAdaptor : public FacebookDataTypeSyncAdaptor
+class FacebookDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
 {
     Q_OBJECT
 
 public:
-    FacebookNotificationSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa);
-    ~FacebookNotificationSyncAdaptor();
+    FacebookDataTypeSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa, SyncService::DataType dataType);
+    virtual ~FacebookDataTypeSyncAdaptor();
+    virtual void sync(const QString &dataType);
 
-    void sync(const QString &dataType);
+protected:
+    static QVariantMap parseReplyData(const QByteArray &replyData, bool *ok);
+    virtual void updateDataForAccounts(const QList<int> &accountIds);
+    virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0;    // must at least implement these two
+    virtual void beginSync(int accountId, const QString &accessToken) = 0; // must at least implement these two
+    FacebookSyncAdaptor *m_fbsa;
+    SyncService::DataType m_dataType;
 
-protected: // implementing FacebookDataTypeSyncAdaptor interface
-    void purgeDataForOldAccounts(const QList<int> &oldIds);
-    void beginSync(int accountId, const QString &accessToken);
-
-private:
-    void requestNotifications(int accountId, const QString &accessToken,
-                              const QString &until = QString(), const QString &pagingToken = QString());
-    bool haveAlreadyPostedNotification(const QString &notificationId, const QString &title, const QDateTime &createdTime);
-    QContact findMatchingContact(const QString &nameString) const;
+protected Q_SLOTS:
+    virtual void errorHandler(QNetworkReply::NetworkError err);
+    virtual void sslErrorsHandler(const QList<QSslError> &errs);
 
 private Q_SLOTS:
-    void finishedHandler();
-    void contactFetchStateChangedHandler(QContactAbstractRequest::State newState);
-
-private:
-    QContactManager m_contactManager;
-    QList<QContact> m_contacts;
-    QContactFetchRequest *m_contactFetchRequest;
-    MEventFeed *m_eventFeed;
-
-    // for busy/inactive detection.
-    void decrementSemaphore(int accountId);
-    void incrementSemaphore(int accountId);
-    QMap<int, int> m_accountSyncSemaphores;
+    void signOnError(const SignOn::Error &err);
+    void signOnResponse(const SignOn::SessionData &sdata);
 };
 
-#endif // FACEBOOKNOTIFICATIONSYNCADAPTOR_H
+#endif // FACEBOOKDATATYPESYNCADAPTOR_H
