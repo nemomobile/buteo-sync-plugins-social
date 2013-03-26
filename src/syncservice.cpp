@@ -51,9 +51,10 @@
 #define SOCIALD_POLLING_INTERVAL_1_HOUR       3600000
 #define SOCIALD_POLLING_INTERVAL_HALF_HOUR    1800000
 #define SOCIALD_POLLING_INTERVAL_QUARTER_HOUR 900000
+#define SOCIALD_POLLING_INTERVAL_3_MINUTES    180000
 #define SOCIALD_POLLING_INTERVAL_MINUTE       60000
 #define SOCIALD_POLLING_INTERVAL_DEFAULT      SOCIALD_POLLING_INTERVAL_24_HOURS
-#define SOCIALD_POLLING_INTERVAL_DEBUG        SOCIALD_POLLING_INTERVAL_MINUTE
+#define SOCIALD_POLLING_INTERVAL_DEBUG        SOCIALD_POLLING_INTERVAL_3_MINUTES
 
 SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     : QObject(parent), q(parent)
@@ -75,7 +76,7 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     }
 
     // open the database in which we store our sync event information
-    m_db = QSqlDatabase::addDatabase("QSQLITE");
+    m_db = QSqlDatabase::addDatabase("QSQLITE", QLatin1String("sociald"));
     m_db.setDatabaseName(QString("%1/%2").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(QLatin1String(SOCIALD_DATABASE_NAME)));
     if (!m_db.open()) {
         TRACE(SOCIALD_ERROR,
@@ -87,7 +88,7 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     // create the sociald db tables
     // syncedData = service, accountIdentifier, dataType, createdTimestamp, syncTimestamp, datumIdentifier
     // syncTimestamps = service, accountIdentifier, dataType, syncTimestamp
-    QSqlQuery query;
+    QSqlQuery query(m_db);
     query.prepare( "CREATE TABLE IF NOT EXISTS syncedData (id VARCHAR(50) PRIMARY KEY, serviceName VARCHAR(20), accountIdentifier VARCHAR(50), dataType VARCHAR(16), createdTimestamp VARCHAR(30), syncTimestamp VARCHAR(30), datumIdentifier VARCHAR(50))");
     if (!query.exec()) {
         TRACE(SOCIALD_ERROR,
@@ -117,7 +118,7 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
         // Notifications
         {
             QTimer *fbnt = new QTimer(this);
-            fbnt->setInterval(SOCIALD_POLLING_INTERVAL_1_HOUR);
+            fbnt->setInterval(SOCIALD_POLLING_INTERVAL_DEBUG);
             fbnt->setSingleShot(false);
             fbnt->setProperty("socialService", QLatin1String("facebook"));
             fbnt->setProperty("dataType", SyncService::dataType(SyncService::Notifications));
@@ -125,6 +126,19 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
             fbnt->start();
             facebookTimers.insert(SyncService::dataType(SyncService::Notifications),
                                   QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_1_HOUR, fbnt));
+        }
+
+        // Images
+        {
+            QTimer *fbit = new QTimer(this);
+            fbit->setInterval(SOCIALD_POLLING_INTERVAL_DEBUG);
+            fbit->setSingleShot(false);
+            fbit->setProperty("socialService", QLatin1String("facebook"));
+            fbit->setProperty("dataType", SyncService::dataType(SyncService::Images));
+            connect(fbit, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
+            fbit->start();
+            facebookTimers.insert(SyncService::dataType(SyncService::Images),
+                                  QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_6_HOURS, fbit));
         }
 
         // Contacts

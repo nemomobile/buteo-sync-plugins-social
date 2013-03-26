@@ -42,10 +42,9 @@
 class QSqlDatabase;
 
 class SyncServicePrivate;
-class SyncService : public QObject, protected QDBusContext
+class SyncService : public QObject
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "com.jolla.sociald.syncinterface")
 
 public:    
     enum DataType {

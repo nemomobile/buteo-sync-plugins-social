@@ -29,8 +29,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
  */
 
-#ifndef FACEBOOKNOTIFICATIONSYNCADAPTOR_H
-#define FACEBOOKNOTIFICATIONSYNCADAPTOR_H
+#ifndef FACEBOOKIMAGESYNCADAPTOR_H
+#define FACEBOOKIMAGESYNCADAPTOR_H
 
 #include "facebookdatatypesyncadaptor.h"
 
@@ -39,6 +39,8 @@
 #include <QtCore/QDateTime>
 #include <QtCore/QVariantMap>
 #include <QtCore/QList>
+#include <QtSql/QSqlDatabase>
+#include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
 
@@ -50,23 +52,16 @@
 #include <QtContacts/QContactFetchHint>
 #include <QtContacts/QContact>
 
-//libsignon-qt
-#include <SignOn/SessionData>
-#include <SignOn/Error>
-
-class MEventFeed;
-
+class SyncService;
 class FacebookSyncAdaptor;
 
-QTM_USE_NAMESPACE
-
-class FacebookNotificationSyncAdaptor : public FacebookDataTypeSyncAdaptor
+class FacebookImageSyncAdaptor : public FacebookDataTypeSyncAdaptor
 {
     Q_OBJECT
 
 public:
-    FacebookNotificationSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa);
-    ~FacebookNotificationSyncAdaptor();
+    FacebookImageSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa);
+    ~FacebookImageSyncAdaptor();
 
     void sync(const QString &dataType);
 
@@ -75,20 +70,34 @@ protected: // implementing FacebookDataTypeSyncAdaptor interface
     void beginSync(int accountId, const QString &accessToken);
 
 private:
-    void requestNotifications(int accountId, const QString &accessToken,
-                              const QString &until = QString(), const QString &pagingToken = QString());
-    bool haveAlreadyPostedNotification(const QString &notificationId, const QString &title, const QDateTime &createdTime);
-    QContact findMatchingContact(const QString &nameString) const;
+    void requestData(int accountId, const QString &accessToken, const QString &continuationUrl,
+                     const QString &fbUserId, const QString &fbAlbumId);
+    bool haveAlreadyCachedAlbum(const QString &fbAlbumId, const QDateTime &updatedTime);
+    bool haveAlreadyCachedImage(const QString &fbPhotoId, const QString &imageUrl, int accountId);
+    void cacheImage(const QString &fbPhotoId, const QString &fbAlbumId,
+                    const QString &fbUserId, const QString &createdTime,
+                    const QString &updatedTime, const QString &thumbnailUrl,
+                    const QString &imageUrl, const QString &photoName,
+                    int width, int height);
+    void possiblyAddNewUser(const QString &fbUserId, const QString &fbUserName,
+                            int accountId, const QString &accessToken);
+    void possiblyAddNewAlbum(const QString &fbAlbumId, const QString &fbUserId,
+                             const QString &fbUserName, const QString &createdTime,
+                             const QString &updatedTime, const QString &albumName,
+                             const QString &photoCountStr, const QString &coverPhotoId,
+                             int accountId, const QString &accessToken);
+
+    QStringList queryDatabaseRow(const QString &fbPhotoId);
+    void updateAccountsTable(int accountId, const QString &fbUserId);
+    void purgeAccount(int accountId);
 
 private Q_SLOTS:
-    void finishedHandler();
-    void contactFetchStateChangedHandler(QContactAbstractRequest::State newState);
+    void albumsFinishedHandler();
+    void photosFinishedHandler();
+    void userFinishedHandler();
 
 private:
-    QContactManager m_contactManager;
-    QList<QContact> m_contacts;
-    QContactFetchRequest *m_contactFetchRequest;
-    MEventFeed *m_eventFeed;
+    QSqlDatabase m_imgdb;
 
     // for busy/inactive detection.
     void decrementSemaphore(int accountId);
@@ -96,4 +105,4 @@ private:
     QMap<int, int> m_accountSyncSemaphores;
 };
 
-#endif // FACEBOOKNOTIFICATIONSYNCADAPTOR_H
+#endif // FACEBOOKIMAGESYNCADAPTOR_H
