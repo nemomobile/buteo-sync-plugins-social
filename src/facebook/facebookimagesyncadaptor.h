@@ -99,6 +99,18 @@ private Q_SLOTS:
 private:
     QSqlDatabase m_imgdb;
 
+    // for server-side removal detection.
+    void initRemovalDetectionLists();
+    void clearRemovalDetectionLists();
+    QStringList photosInAlbum(const QString &fbAlbumId);
+    bool purgeAlbum(const QString &fbAlbumId);
+    bool purgePhoto(const QString &fbPhotoId);
+    void purgeDetectedRemovals();
+    QStringList m_cachedAlbumIds;
+    QStringList m_cachedPhotoIds;
+    QStringList m_serverAlbumIds;
+    QStringList m_serverPhotoIds;
+
     // for busy/inactive detection.
     void decrementSemaphore(int accountId);
     void incrementSemaphore(int accountId);

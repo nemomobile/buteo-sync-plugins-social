@@ -169,6 +169,9 @@ FacebookImageSyncAdaptor::~FacebookImageSyncAdaptor()
 
 void FacebookImageSyncAdaptor::sync(const QString &dataType)
 {
+    // get ready for sync
+    initRemovalDetectionLists();
+
     // call superclass impl.
     FacebookDataTypeSyncAdaptor::sync(dataType);
 }
@@ -239,6 +242,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId, const QString &accessT
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request data from Facebook account with id %1"))
                 .arg(accountId));
+        clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
     }
 }
 
@@ -260,6 +264,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read albums response for Facebook account with id %1"))
                 .arg(accountId));
+        clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
         decrementSemaphore(accountId);
         return;
     }
@@ -292,6 +297,11 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
             fbAlbumId = albumId;
         }
 
+        if (!m_serverAlbumIds.contains(albumId)) {
+            // for removal detection.  Don't remove this one from cache, it still exists on the server.
+            m_serverAlbumIds.append(albumId);
+        }
+
         QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Images), QString::number(accountId));
         QString userName = album.value(QLatin1String("from")).toMap().value(QLatin1String("name")).toString();
         QString albumName = album.value(QLatin1String("name")).toString();
@@ -306,6 +316,13 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("album with id %1 by user %2 from Facebook account with id %3 doesn't need sync"))
                     .arg(albumId).arg(userId).arg(accountId));
+            // it hasn't been modified, so none of its photos have been removed.
+            QStringList serverPhotoIdsInAlbum = photosInAlbum(fbAlbumId);
+            foreach (const QString &pid, serverPhotoIdsInAlbum) {
+                if (!m_serverPhotoIds.contains(pid)) {
+                    m_serverPhotoIds.append(pid);
+                }
+            }
             continue;
         }
 
@@ -324,14 +341,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
                 QString(QLatin1String("performing continuation request for more albums for Facebook account with id %1: %2"))
                 .arg(accountId).arg(nextUrl));
         requestData(accountId, accessToken, nextUrl, fbUserId, QString());
-    } else {
-
     }
-
-    // XXX TODO: we need to store the list of fbAlbumIds seen during this sync for this user
-    // and then _remove_ any albums (and associated photos) which did not appear.
-    // That is, remove any albums from our cache which have been removed from the Facebook server.
-
 
     // Finally, reduce our semaphore.
     decrementSemaphore(accountId);
@@ -356,6 +366,7 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read photos response for Facebook account with id %1"))
                 .arg(accountId));
+        clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
         decrementSemaphore(accountId);
         return;
     }
@@ -387,6 +398,11 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
         int width = photo.value(QLatin1String("width")).toString().toInt(&ok);
         int height = photo.value(QLatin1String("height")).toString().toInt(&ok);
 
+        if (!m_serverPhotoIds.contains(photoId)) {
+            // for removal detection.  Don't remove this one from cache, it still exists on the server.
+            m_serverPhotoIds.append(photoId);
+        }
+
         // we need to sync.  Write to the database.
         if (haveAlreadyCachedImage(photoId, imageSrcUrl, accountId)) {
             TRACE(SOCIALD_DEBUG,
@@ -410,10 +426,6 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
                 .arg(accountId).arg(nextUrl));
         requestData(accountId, accessToken, nextUrl, fbUserId, fbAlbumId);
     }
-
-    // XXX TODO: we need to store a list of fbPhotoIds seen during this sync run,
-    // and remove any entries in our local cache which we didn't see.
-
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
@@ -922,6 +934,190 @@ void FacebookImageSyncAdaptor::purgeAccount(int accountId)
     TRACE(SOCIALD_INFORMATION, QString(QLatin1String("successully deleted account %1 along with cached data")).arg(accountId));
 }
 
+bool FacebookImageSyncAdaptor::purgeAlbum(const QString &fbAlbumId)
+{
+    // first, grab ids of photos in this album, so we can remove them from the m_cachedPhotoIds list.
+    QSqlQuery query(m_imgdb);
+    query.prepare("SELECT DISTINCT fbPhotoId FROM photos WHERE fbAlbumId = :fbaid");
+    query.bindValue(":fbaid", fbAlbumId);
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to query photo ids during album %1 purge: %2")).arg(fbAlbumId).arg(query.lastError().text()));
+        return false;
+    } else {
+        while (query.next()) {
+            QString pid = query.value(0).toString();
+            if (m_cachedPhotoIds.contains(pid)) {
+                m_cachedPhotoIds.removeAll(pid);
+            }
+        }
+    }
+
+    // then remove the album
+    query.prepare("DELETE FROM albums WHERE fbAlbumId = :fbaid");
+    query.bindValue(":fbaid", fbAlbumId);
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete album %1: %2")).arg(fbAlbumId).arg(query.lastError().text()));
+        return false;
+    }
+
+    // remove images/thumbnails
+    query.prepare("SELECT thumbnailFile, imageFile FROM photos WHERE fbAlbumId = :fbaid");
+    query.bindValue(":fbaid", fbAlbumId);
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to query cache files while deleting album %1: %2")).arg(fbAlbumId).arg(query.lastError().text()));
+        return false;
+    }
+
+    while (query.next()) {
+        QString thumb = query.value(0).toString();
+        QString image = query.value(1).toString();
+        if (!thumb.isEmpty() && QFile::exists(thumb)) {
+            QFile::remove(thumb);
+        }
+        if (!image.isEmpty() && QFile::exists(image)) {
+            QFile::remove(image);
+        }
+    }
+
+    // remove photos
+    query.prepare("DELETE FROM photos WHERE fbAlbumId = :fbaid");
+    query.bindValue(":fbaid", fbAlbumId);
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete photos while deleting album %1: %2")).arg(fbAlbumId).arg(query.lastError().text()));
+        return false;
+    }
+
+    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("successully deleted album %1 along with cached data")).arg(fbAlbumId));
+    return true;
+}
+
+bool FacebookImageSyncAdaptor::purgePhoto(const QString &fbPhotoId)
+{
+    // remove images/thumbnails
+    QSqlQuery query(m_imgdb);
+    query.prepare("SELECT thumbnailFile, imageFile FROM photos WHERE fbPhotoId = :fbpid");
+    query.bindValue(":fbpid", fbPhotoId);
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to query cache files while deleting photo %1: %2")).arg(fbPhotoId).arg(query.lastError().text()));
+        return false;
+    }
+
+    while (query.next()) {
+        QString thumb = query.value(0).toString();
+        QString image = query.value(1).toString();
+        if (!thumb.isEmpty() && QFile::exists(thumb)) {
+            QFile::remove(thumb);
+        }
+        if (!image.isEmpty() && QFile::exists(image)) {
+            QFile::remove(image);
+        }
+    }
+
+    // remove photo
+    query.prepare("DELETE FROM photos WHERE fbPhotoId = :fbpid");
+    query.bindValue(":fbpid", fbPhotoId);
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete photo %1: %2")).arg(fbPhotoId).arg(query.lastError().text()));
+        return false;
+    }
+
+    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("successully deleted photo %1 along with cached data")).arg(fbPhotoId));
+    return true;
+}
+
+void FacebookImageSyncAdaptor::initRemovalDetectionLists()
+{
+    // This function should be called as part of the ::sync() preamble.
+    // Clear our internal state variables which we use to track server-side deletions.
+    // We have to do it this way, as results can be spread across multiple requests
+    // if Facebook returns results in paginated form.
+    m_cachedAlbumIds = QStringList();
+    m_cachedPhotoIds = QStringList();
+    m_serverAlbumIds = QStringList();
+    m_serverPhotoIds = QStringList();
+
+    QSqlQuery query(m_imgdb);
+    query.prepare("SELECT DISTINCT fbAlbumId FROM photos");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute album ids query: %1")).arg(query.lastError().text()));
+        return;
+    } else {
+        while (query.next()) {
+            m_cachedAlbumIds.append(query.value(0).toString());
+        }
+    }
+
+    query.prepare("SELECT DISTINCT fbPhotoId FROM photos");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute photo ids query: %1")).arg(query.lastError().text()));
+        return;
+    } else {
+        while (query.next()) {
+            m_cachedPhotoIds.append(query.value(0).toString());
+        }
+    }
+}
+
+void FacebookImageSyncAdaptor::clearRemovalDetectionLists()
+{
+    // This function should be called if a request errors out.
+    // If the lists are empty, we won't purge anything.
+    m_cachedAlbumIds = QStringList();
+    m_cachedPhotoIds = QStringList();
+}
+
+QStringList FacebookImageSyncAdaptor::photosInAlbum(const QString &fbAlbumId)
+{
+    QStringList retn;
+    QSqlQuery query(m_imgdb);
+    query.prepare("SELECT DISTINCT fbPhotoId FROM photos WHERE fbAlbumId = :fbaid");
+    query.bindValue(":fbaid", fbAlbumId);
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute photo ids query from album %1: %2")).arg(fbAlbumId).arg(query.lastError().text()));
+        clearRemovalDetectionLists(); // in this case, we shouldn't clear synced data because it's probably still valid.
+    } else {
+        while (query.next()) {
+            retn.append(query.value(0).toString());
+        }
+    }
+
+    return retn;
+}
+
+void FacebookImageSyncAdaptor::purgeDetectedRemovals()
+{
+    // This function should be called once the synchronization process is completed.
+    int expectedPurgeAlbumCount = 0; // can't just subtract the counts for this, as add+remove = 0.
+    int actualPurgeAlbumCount = 0;
+    foreach (const QString &cachedId, m_cachedAlbumIds) {
+        if (!m_serverAlbumIds.contains(cachedId)) {
+            expectedPurgeAlbumCount += 1;
+            if (purgeAlbum(cachedId)) {
+                actualPurgeAlbumCount += 1;
+            }
+        }
+    }
+
+    int expectedPurgePhotoCount = 0; // can't just subtract the counts for this, as add+remove = 0.
+    int actualPurgePhotoCount = 0;
+    foreach (const QString &cachedId, m_cachedPhotoIds) {
+        if (!m_serverPhotoIds.contains(cachedId)) {
+            expectedPurgePhotoCount += 1;
+            if (purgePhoto(cachedId)) {
+                actualPurgePhotoCount += 1;
+            }
+        }
+    }
+
+    if (expectedPurgeAlbumCount != actualPurgeAlbumCount
+            || expectedPurgePhotoCount != actualPurgePhotoCount) {
+        TRACE(SOCIALD_INFORMATION, QString(QLatin1String("unable to purge all albums or photos: expected to remove %1 and %2, removed %3 and %4 respectively"))
+                                   .arg(expectedPurgeAlbumCount).arg(expectedPurgePhotoCount).arg(actualPurgeAlbumCount).arg(actualPurgePhotoCount));
+    } else if (actualPurgeAlbumCount != 0 || actualPurgePhotoCount != 0) {
+        TRACE(SOCIALD_DEBUG, QString(QLatin1String("successfully purged %1 albums and %2 photos")).arg(actualPurgeAlbumCount).arg(actualPurgePhotoCount));
+    }
+}
+
 void FacebookImageSyncAdaptor::incrementSemaphore(int accountId)
 {
     int semaphoreValue = m_accountSyncSemaphores.value(accountId);
@@ -971,6 +1167,7 @@ void FacebookImageSyncAdaptor::decrementSemaphore(int accountId)
         }
 
         if (allAreZero) {
+            purgeDetectedRemovals(); // purge anything which has been deleted server-side.
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Images sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
             m_status = SocialNetworkSyncAdaptor::Inactive;
