@@ -118,7 +118,7 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
         // Notifications
         {
             QTimer *fbnt = new QTimer(this);
-            fbnt->setInterval(SOCIALD_POLLING_INTERVAL_DEBUG);
+            fbnt->setInterval(SOCIALD_POLLING_INTERVAL_1_HOUR);
             fbnt->setSingleShot(false);
             fbnt->setProperty("socialService", QLatin1String("facebook"));
             fbnt->setProperty("dataType", SyncService::dataType(SyncService::Notifications));
@@ -131,7 +131,7 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
         // Images
         {
             QTimer *fbit = new QTimer(this);
-            fbit->setInterval(SOCIALD_POLLING_INTERVAL_DEBUG);
+            fbit->setInterval(SOCIALD_POLLING_INTERVAL_6_HOURS);
             fbit->setSingleShot(false);
             fbit->setProperty("socialService", QLatin1String("facebook"));
             fbit->setProperty("dataType", SyncService::dataType(SyncService::Images));
