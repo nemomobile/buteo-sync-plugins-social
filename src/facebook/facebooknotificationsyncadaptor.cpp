@@ -46,23 +46,19 @@
 #include <QtContacts/QContactPresence>
 #include <QtContacts/QContactAvatar>
 
-//meegotouchevents/meventfeed
-#include <meventfeed.h>
+//nemo-qml-plugins/notifications
+#include <notification.h>
 
+#define SOCIALD_FACEBOOK_NOTIFICATIONS_ID_PREFIX QLatin1String("facebook-notifications-")
 #define SOCIALD_FACEBOOK_NOTIFICATIONS_GROUPNAME QLatin1String("sociald-sync-facebook-notifications")
+#define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
 
-// currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
+// currently, we integrate with the device notifications via nemo-qml-plugin-notification
 
 FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
     : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Notifications)
     , m_contactFetchRequest(new QContactFetchRequest(this))
-    , m_eventFeed(MEventFeed::instance())
 {
-    if (!m_eventFeed) {
-        m_enabled = false;
-        return; // can't sync to the local device's event feed, so not enabled.
-    }
-
     // can sync, enabled
     m_enabled = true;
     m_status = SocialNetworkSyncAdaptor::Inactive;
@@ -111,20 +107,23 @@ void FacebookNotificationSyncAdaptor::sync(const QString &dataType)
 void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
     foreach (int pid, purgeIds) {
-        // first, purge all data from libeventfeed
+        // first, purge all data from nemo notifications
         QStringList purgeDataIds = syncedDatumLocalIdentifiers(QLatin1String("facebook"),
                 SyncService::dataType(SyncService::Notifications),
                 QString::number(pid)); // XXX TODO: use fb id instead of QString::number(accountId)
 
         bool ok = true;
+        int prefixSize = QString(SOCIALD_FACEBOOK_NOTIFICATIONS_ID_PREFIX).size();
         foreach (const QString &pdi, purgeDataIds) {
-            QString eventIdStr = pdi.mid(23); // pdi is of form: "facebook-notifications-EVENTID"
-            qlonglong eventId = eventIdStr.toLongLong(&ok);
+            QString notifIdStr = pdi.mid(prefixSize); // pdi is of form: "facebook-notifications-NOTIFICATIONID"
+            qlonglong notificationId = notifIdStr.toLongLong(&ok);
             if (ok) {
-                m_eventFeed->removeItem(eventId);
+                TRACE(SOCIALD_INFORMATION,
+                        QString(QLatin1String("TODO: purge notifications for deleted account %1: %2"))
+                        .arg(pid).arg(pdi));
             } else {
                 TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to convert event id string to int: %1"))
+                        QString(QLatin1String("error: unable to convert notification id string to int: %1"))
                         .arg(pdi));
             }
         }
@@ -207,7 +206,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
             QString notificationId = currData.value(QLatin1String("id")).toString();
             QVariantMap from = currData.value(QLatin1String("from")).toMap();
 
-            // check to see if we need to post it to the event feed
+            // check to see if we need to post it to the notifications feed
             if (lastSync.isValid() && createdTime < lastSync) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("notification for account %1 came after last sync:"))
@@ -226,7 +225,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                         .arg(accountId) << "    " << createdTime << ":" << title);
             } else {
                 // attempt to scrape the contact name from the notification title.
-                // TODO: use fbid to look up the contact directly, instead of heuristic detection.
+                // XXX TODO: use fbid to look up the contact directly, instead of heuristic detection.
                 QString nameString;
                 if (!from.isEmpty() && !from.value(QLatin1String("name")).toString().isEmpty()) {
                     // grab the name string from the "from" data in the notification.
@@ -246,7 +245,20 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                     } else if (!matchingContact.detail<QContactName>().customLabel().isEmpty()) {
                         nameString = matchingContact.detail<QContactName>().customLabel();
                     }
-                    if (!matchingContact.detail<QContactAvatar>().imageUrl().toString().isEmpty()) {
+
+                    QList<QContactAvatar> allAvatars = matchingContact.details<QContactAvatar>();
+                    bool foundFacebookPicture = false;
+                    foreach (const QContactAvatar &avat, allAvatars) {
+                        if (avat.value(QTCONTACTS_SQLITE_AVATAR_METADATA) == QLatin1String("picture")
+                                && !avat.imageUrl().toString().isEmpty()) {
+                            // found avatar synced from Facebook sociald sync adaptor
+                            avatar = avat.imageUrl().toString();
+                            foundFacebookPicture = true;
+                            break;
+                        }
+                    }
+                    if (!foundFacebookPicture && !matchingContact.detail<QContactAvatar>().imageUrl().toString().isEmpty()) {
+                        // fallback.
                         avatar = matchingContact.detail<QContactAvatar>().imageUrl().toString();
                     }
 
@@ -255,27 +267,39 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                             .arg(originalNameString).arg(nameString).arg(avatar));
                 }
 
-                // post the notification to the event feed.
-                qlonglong localId = m_eventFeed->addItem(
-                        avatar,                                   // icon
-                        nameString,                               // title
-                        title,                                    // body
-                        QStringList(),                            // imageList
-                        createdTime,                              // timestamp
-                        QString(),                                // footer
-                        false,                                    // isVideo
-                        link,                                     // url
-                        SOCIALD_FACEBOOK_NOTIFICATIONS_GROUPNAME, // sourceName
-                        QLatin1String("Facebook"));               // sourceDisplayName // XXX TODO: per-account?
-
-                // and store the fact that we have synced it to the event feed.
-                markSyncedDatum(QString(QLatin1String("facebook-notifications-%1")).arg(QString::number(localId)),
-                                QLatin1String("facebook"), SyncService::dataType(SyncService::Notifications),
-                                QString::number(accountId), createdTime, QDateTime::currentDateTime(),
-                                notificationId); // XXX TODO: instead of QString::number(accountId) use fb user id.
+                // post the notification to the notifications feed.
+                Notification *notif = new Notification;
+                notif->setCategory(QLatin1String("x-nemo.social.notification")); // XXX TODO: install this category?
+                notif->setSummary(title);
+                notif->setBody(title);
+                notif->setPreviewSummary(nameString);
+                notif->setPreviewBody(title);
+                notif->setItemCount(1);
+                notif->setTimestamp(createdTime);
+                notif->setRemoteDBusCallServiceName("org.sailfishos.browser");
+                notif->setRemoteDBusCallObjectPath("/");
+                notif->setRemoteDBusCallInterface("org.sailfishos.browser");
+                notif->setRemoteDBusCallMethodName("openUrl");
+                QStringList openUrlArgs; openUrlArgs << link;
+                notif->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
+                notif->publish();
+                qlonglong localId = (0 + notif->replacesId());
+                if (localId == 0) {
+                    // failed.
+                    TRACE(SOCIALD_ERROR,
+                            QString(QLatin1String("error: failed to publish notification: %1"))
+                            .arg(title));
+                } else {
+                    // and store the fact that we have synced it to the notifications feed.
+                    markSyncedDatum(QString(QLatin1String("facebook-notifications-%1")).arg(QString::number(localId)),
+                                    QLatin1String("facebook"), SyncService::dataType(SyncService::Notifications),
+                                    QString::number(accountId), createdTime, QDateTime::currentDateTime(),
+                                    notificationId); // XXX TODO: instead of QString::number(accountId) use fb user id.
+                }
 
                 // if we didn't post anything new, we don't try to fetch more.
                 postedNew = true;
+                delete notif;
             }
         }
 
@@ -360,7 +384,7 @@ QContact FacebookNotificationSyncAdaptor::findMatchingContact(const QString &nam
         }
     }
 
-    // this isn't a "hard error" since we can still post the notification event
+    // this isn't a "hard error" since we can still post the notification
     // but it is a "soft error" since we _should_ have the contact in our db.
     TRACE(SOCIALD_INFORMATION,
             QString(QLatin1String("unable to find matching contact with name: %1"))
@@ -371,7 +395,6 @@ QContact FacebookNotificationSyncAdaptor::findMatchingContact(const QString &nam
 
 bool FacebookNotificationSyncAdaptor::haveAlreadyPostedNotification(const QString &notificationId, const QString &title, const QDateTime &createdTime)
 {
-    // TODO: also read notifications from libeventfeed and check that someone else hasn't posted it using the title/createdTime.
     Q_UNUSED(title);
     Q_UNUSED(createdTime);
 

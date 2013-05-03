@@ -18,6 +18,7 @@ BuildRequires:  pkgconfig(systemd)
 BuildRequires:  pkgconfig(QJson)
 BuildRequires:  pkgconfig(libsignon-qt)
 BuildRequires:  pkgconfig(accounts-qt)
+BuildRequires:  nemo-qml-plugin-notifications-devel
 BuildRequires:  eventfeed-devel
 BuildRequires:  libmeegotouchevents-devel
 Requires: lipstick-jolla-home
