@@ -32,6 +32,7 @@
 #include "facebooksyncadaptor.h"
 #include "facebooknotificationsyncadaptor.h"
 #include "facebookimagesyncadaptor.h"
+#include "facebookpostsyncadaptor.h"
 
 #include "syncservice.h"
 #include "socialnetworksyncadaptor.h"
@@ -49,6 +50,7 @@ FacebookSyncAdaptor::FacebookSyncAdaptor(SyncService *parent)
 {
     m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new FacebookNotificationSyncAdaptor(parent, this));
     m_adaptors.insert(SyncService::dataType(SyncService::Images), new FacebookImageSyncAdaptor(parent, this));
+    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new FacebookPostSyncAdaptor(parent, this));
     // TODO: Contacts / Calendar / etc.
 
     // TODO: actually subscribe to account changes and set enabled accordingly

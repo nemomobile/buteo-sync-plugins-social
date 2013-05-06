@@ -151,6 +151,19 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
             // TODO
         }
 
+        // Feed Posts
+        {
+            QTimer *fbpt = new QTimer(this);
+            fbpt->setInterval(SOCIALD_POLLING_INTERVAL_1_HOUR);
+            fbpt->setSingleShot(false);
+            fbpt->setProperty("socialService", QLatin1String("facebook"));
+            fbpt->setProperty("dataType", SyncService::dataType(SyncService::Posts));
+            connect(fbpt, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
+            fbpt->start();
+            facebookTimers.insert(SyncService::dataType(SyncService::Posts),
+                                  QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_1_HOUR, fbpt));
+        }
+
         m_pollingTimers.insert(QLatin1String("facebook"), facebookTimers);
     }
 

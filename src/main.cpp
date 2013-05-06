@@ -36,6 +36,7 @@
 #include <QtCore/QString>
 #include <QtDBus/QDBusConnection>
 
+#include <QTranslator>
 #include <QtDebug>
 
 int main(int argc, char *argv[])
@@ -59,6 +60,15 @@ int main(int argc, char *argv[])
                    << "sync service:" << syncServiceName
                    << "object path:"  << syncObjectPath;
     }
+
+    QString translationPath("/usr/share/translations/");
+    QTranslator engineeringEnglish;
+    engineeringEnglish.load("sociald_eng_en", translationPath);
+    qApp->installTranslator(&engineeringEnglish);
+
+    QTranslator translator;
+    translator.load(QLocale(), "sociald", "-", translationPath);
+    qApp->installTranslator(&translator);
 
     int retn = app.exec();
 

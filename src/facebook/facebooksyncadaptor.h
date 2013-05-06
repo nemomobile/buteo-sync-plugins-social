@@ -48,6 +48,7 @@ class QNetworkAccessManager;
 class FacebookDataTypeSyncAdaptor;
 class FacebookImageSyncAdaptor;
 class FacebookNotificationSyncAdaptor;
+class FacebookPostSyncAdaptor;
 
 class FacebookSyncAdaptor : public SocialNetworkSyncAdaptor
 {
@@ -66,6 +67,7 @@ protected:
     friend class FacebookDataTypeSyncAdaptor;
     friend class FacebookImageSyncAdaptor;
     friend class FacebookNotificationSyncAdaptor;
+    friend class FacebookPostSyncAdaptor;
 
 private:
     // In the future, we should use a plugin system.
