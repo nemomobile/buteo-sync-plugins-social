@@ -66,4 +66,8 @@ service.path = /usr/share/dbus-1/services/
 interface.files = org.nemomobile.sociald.sync.xml
 interface.path = /usr/share/dbus-1/interfaces/
 
-INSTALLS = target service interface ts_install engineering_english_install
+# lipstick notification categories
+notification_categories.files = facebook/x-nemo.social.facebook.notification.conf
+notification_categories.path = /usr/share/lipstick/notificationcategories/
+
+INSTALLS = target service interface notification_categories ts_install engineering_english_install
