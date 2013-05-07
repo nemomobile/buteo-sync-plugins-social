@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.5
+Version:    0.0.6
 Release:    1
 Group:      System/Applications
 License:    TBD
@@ -22,6 +22,7 @@ BuildRequires:  nemo-qml-plugin-notifications-devel
 BuildRequires:  eventfeed-devel
 BuildRequires:  libmeegotouchevents-devel
 Requires: lipstick-jolla-home
+Requires: nemo-qml-plugin-notifications
 
 %description
 A daemon process which provides data synchronization with various social services.
@@ -31,6 +32,7 @@ A daemon process which provides data synchronization with various social service
 %{_bindir}/sociald
 %{_datadir}/dbus-1/services/org.nemomobile.sociald.sync.service
 %{_datadir}/dbus-1/interfaces/org.nemomobile.sociald.sync.xml
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
 %{_libdir}/systemd/user/sociald.service
 %{_libdir}/systemd/user/jolla-session.target.wants/sociald.service
 %config /etc/xdg/autostart/sociald.desktop

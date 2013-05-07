@@ -59,6 +59,10 @@ FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *pa
     : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Notifications)
     , m_contactFetchRequest(new QContactFetchRequest(this))
 {
+    //: The text displayed for Facebook notifications on the lock screen
+    //% "New Facebook notification!"
+    QString NOTIFICATION_CATEGORY_TRANSLATED_TEXT = qtTrId("qtn_social_notifications_new_facebook");
+
     // can sync, enabled
     m_enabled = true;
     m_status = SocialNetworkSyncAdaptor::Inactive;
@@ -269,7 +273,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
                 // post the notification to the notifications feed.
                 Notification *notif = new Notification;
-                notif->setCategory(QLatin1String("x-nemo.social.notification")); // XXX TODO: install this category?
+                notif->setCategory(QLatin1String("x-nemo.social.facebook.notification"));
                 notif->setSummary(title);
                 notif->setBody(title);
                 notif->setPreviewSummary(nameString);
