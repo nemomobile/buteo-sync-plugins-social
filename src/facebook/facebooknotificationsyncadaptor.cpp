@@ -236,7 +236,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                     int indexOfSecondSpace = title.indexOf(' ', indexOfFirstSpace);
                     nameString = title.mid(0, indexOfSecondSpace);
                 }
-                QString avatar = QLatin1String("image://theme/icon-s-service-facebook"); // default.
+                QString avatar = QLatin1String("icon-s-service-facebook"); // default.
                 QContact matchingContact = findMatchingContact(nameString);
                 if (matchingContact != QContact()) {
                     QString originalNameString = nameString;

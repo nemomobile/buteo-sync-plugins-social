@@ -489,7 +489,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             } else {
                 // publish the post to the events feed.
                 qlonglong eventId = m_eventFeed->addItem(
-                        QLatin1String("image://theme/icon-s-service-facebook"),
+                        QLatin1String("icon-s-service-facebook"),
                         eventTitle,
                         eventBody,
                         eventImageList,
