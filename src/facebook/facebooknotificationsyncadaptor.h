@@ -54,8 +54,6 @@
 #include <SignOn/SessionData>
 #include <SignOn/Error>
 
-class MEventFeed;
-
 class FacebookSyncAdaptor;
 
 QTM_USE_NAMESPACE
@@ -88,7 +86,6 @@ private:
     QContactManager m_contactManager;
     QList<QContact> m_contacts;
     QContactFetchRequest *m_contactFetchRequest;
-    MEventFeed *m_eventFeed;
 
     // for busy/inactive detection.
     void decrementSemaphore(int accountId);

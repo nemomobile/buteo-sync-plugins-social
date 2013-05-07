@@ -118,14 +118,14 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
         // Notifications
         {
             QTimer *fbnt = new QTimer(this);
-            fbnt->setInterval(SOCIALD_POLLING_INTERVAL_1_HOUR);
+            fbnt->setInterval(SOCIALD_POLLING_INTERVAL_QUARTER_HOUR);
             fbnt->setSingleShot(false);
             fbnt->setProperty("socialService", QLatin1String("facebook"));
             fbnt->setProperty("dataType", SyncService::dataType(SyncService::Notifications));
             connect(fbnt, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
             fbnt->start();
             facebookTimers.insert(SyncService::dataType(SyncService::Notifications),
-                                  QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_1_HOUR, fbnt));
+                                  QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_QUARTER_HOUR, fbnt));
         }
 
         // Images
