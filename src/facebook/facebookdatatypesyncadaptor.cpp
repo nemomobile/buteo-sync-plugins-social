@@ -85,7 +85,7 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
     // 3) for existing accounts, pull new data for the existing account
 
     QList<int> newIds, purgeIds, updateIds;
-    m_fbsa->checkAccounts(SyncService::Images, &newIds, &purgeIds, &updateIds);
+    m_fbsa->checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
     purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
     updateDataForAccounts(newIds);
     updateDataForAccounts(updateIds);
