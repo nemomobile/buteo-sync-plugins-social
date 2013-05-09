@@ -33,6 +33,7 @@ A daemon process which provides data synchronization with various social service
 %{_datadir}/dbus-1/services/org.nemomobile.sociald.sync.service
 %{_datadir}/dbus-1/interfaces/org.nemomobile.sociald.sync.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.mention.conf
 %{_libdir}/systemd/user/sociald.service
 %{_libdir}/systemd/user/jolla-session.target.wants/sociald.service
 %config /etc/xdg/autostart/sociald.desktop

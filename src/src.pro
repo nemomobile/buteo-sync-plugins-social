@@ -12,6 +12,7 @@ QT += \
     sql
 
 include(facebook/facebook.pri)
+include(twitter/twitter.pri)
 
 # if you change this, you need to modify jolla-gallery-facebook too!
 DEFINES += 'SOCIALD_DATABASE_DIR=\'\"/home/nemo/.config/sociald\"\''
@@ -67,7 +68,7 @@ interface.files = org.nemomobile.sociald.sync.xml
 interface.path = /usr/share/dbus-1/interfaces/
 
 # lipstick notification categories
-notification_categories.files = facebook/x-nemo.social.facebook.notification.conf
+notification_categories.files = facebook/x-nemo.social.facebook.notification.conf twitter/x-nemo.social.twitter.mention.conf
 notification_categories.path = /usr/share/lipstick/notificationcategories/
 
 INSTALLS = target service interface notification_categories ts_install engineering_english_install
