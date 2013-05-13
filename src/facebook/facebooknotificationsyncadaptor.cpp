@@ -271,6 +271,9 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                             .arg(originalNameString).arg(nameString).arg(avatar));
                 }
 
+                // Set timespec to make conversion to local time to work properly
+                createdTime.setTimeSpec(Qt::UTC);
+
                 // post the notification to the notifications feed.
                 Notification *notif = new Notification;
                 notif->setCategory(QLatin1String("x-nemo.social.facebook.notification"));
