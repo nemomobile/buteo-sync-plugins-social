@@ -220,8 +220,8 @@ void FacebookImageSyncAdaptor::requestData(int accountId, const QString &accessT
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
         url.setQueryItems(queryItems);
     }
+
     QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
-    
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -393,6 +393,23 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
         QString createdTimeStr = photo.value(QLatin1String("created_time")).toString();
         QString updatedTimeStr = photo.value(QLatin1String("updated_time")).toString();
         QString photoName = photo.value(QLatin1String("name")).toString();
+
+        // Find the correct thumbnail size. The fallback will be the "picture" which usually
+        // is too small so this is sort of best guess what sizes FB might returns. We can't
+        // also hardcode the exact sizes here, because we can't be sure that certains sizes
+        // will stay for ever.
+        QVariantList images = photo.value(QLatin1String("images")).toList();
+        for (int j = 0; j < images.size(); j++) {
+            QVariantMap image = images.at(j).toMap();
+            qulonglong width = image.value(QLatin1String("width")).toULongLong();
+            qulonglong height= image.value(QLatin1String("height")).toULongLong();
+            if (160 <= width && width <= 350 &&
+                160 <= height && height <= 350) {
+                thumbnailUrl = image.value(QLatin1String("source")).toString();
+                break;
+            }
+        }
+
 
         bool ok = false;
         int width = photo.value(QLatin1String("width")).toString().toInt(&ok);
