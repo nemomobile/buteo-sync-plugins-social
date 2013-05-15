@@ -34,6 +34,7 @@
 #include "trace.h"
 
 #include "facebook/facebooksyncadaptor.h"
+#include "twitter/twittersyncadaptor.h"
 
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -170,6 +171,41 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     // Google+
     {
         // TODO
+    }
+
+    // Twitter
+    {
+        TwitterSyncAdaptor *tsa = new TwitterSyncAdaptor(parent);
+        m_adaptors.insert(QLatin1String("twitter"), tsa);
+        QMap<QString, QPair<int, QTimer*> > twitterTimers;
+
+        // Mentions Timeline (Notifications)
+        {
+            QTimer *tnt = new QTimer(this);
+            tnt->setInterval(SOCIALD_POLLING_INTERVAL_QUARTER_HOUR);
+            tnt->setSingleShot(false);
+            tnt->setProperty("socialService", QLatin1String("twitter"));
+            tnt->setProperty("dataType", SyncService::dataType(SyncService::Notifications));
+            connect(tnt, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
+            tnt->start();
+            twitterTimers.insert(SyncService::dataType(SyncService::Notifications),
+                                 QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_QUARTER_HOUR, tnt));
+        }
+
+        // Home Timeline (Posts)
+        {
+            QTimer *tpt = new QTimer(this);
+            tpt->setInterval(SOCIALD_POLLING_INTERVAL_1_HOUR);
+            tpt->setSingleShot(false);
+            tpt->setProperty("socialService", QLatin1String("twitter"));
+            tpt->setProperty("dataType", SyncService::dataType(SyncService::Posts));
+            connect(tpt, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
+            tpt->start();
+            twitterTimers.insert(SyncService::dataType(SyncService::Posts),
+                                 QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_1_HOUR, tpt));
+        }
+
+        m_pollingTimers.insert(QLatin1String("twitter"), twitterTimers);
     }
 }
 
