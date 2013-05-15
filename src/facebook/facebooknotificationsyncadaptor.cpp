@@ -49,6 +49,9 @@
 //nemo-qml-plugins/notifications
 #include <notification.h>
 
+//meegotouchevents/meventfeed
+#include <meventfeed.h>
+
 #define SOCIALD_FACEBOOK_NOTIFICATIONS_ID_PREFIX QLatin1String("facebook-notifications-")
 #define SOCIALD_FACEBOOK_NOTIFICATIONS_GROUPNAME QLatin1String("sociald-sync-facebook-notifications")
 #define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
@@ -58,10 +61,12 @@
 FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
     : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Notifications)
     , m_contactFetchRequest(new QContactFetchRequest(this))
+    , m_eventFeed(MEventFeed::instance())
 {
-    //: The text displayed for Facebook notifications on the lock screen
-    //% "New Facebook notification!"
-    QString NOTIFICATION_CATEGORY_TRANSLATED_TEXT = qtTrId("qtn_social_notifications_new_facebook");
+    if (!m_eventFeed) {
+        m_enabled = false;
+        return; // can't sync to the local device's event feed, so not enabled.
+    }
 
     // can sync, enabled
     m_enabled = true;
@@ -104,6 +109,9 @@ void FacebookNotificationSyncAdaptor::sync(const QString &dataType)
         m_contactFetchRequest->start();
     }
 
+    // clear our count of notifications synced per account for this sync run
+    m_notificationsCount.clear();
+
     // call superclass impl.
     FacebookDataTypeSyncAdaptor::sync(dataType);
 }
@@ -114,17 +122,16 @@ void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
         // first, purge all data from nemo notifications
         QStringList purgeDataIds = syncedDatumLocalIdentifiers(QLatin1String("facebook"),
                 SyncService::dataType(SyncService::Notifications),
-                QString::number(pid)); // XXX TODO: use fb id instead of QString::number(accountId)
+                QString::number(pid));
 
         bool ok = true;
         int prefixSize = QString(SOCIALD_FACEBOOK_NOTIFICATIONS_ID_PREFIX).size();
         foreach (const QString &pdi, purgeDataIds) {
-            QString notifIdStr = pdi.mid(prefixSize); // pdi is of form: "facebook-notifications-NOTIFICATIONID"
-            qlonglong notificationId = notifIdStr.toLongLong(&ok);
+            QString notifEventIdStr = pdi.mid(prefixSize); // pdi is of form: "facebook-notifications-NOTIFICATIONID"
+            qlonglong notificationEventId = notifEventIdStr.toLongLong(&ok);
             if (ok) {
-                TRACE(SOCIALD_INFORMATION,
-                        QString(QLatin1String("TODO: purge notifications for deleted account %1: %2"))
-                        .arg(pid).arg(pdi));
+                m_eventFeed->removeItem(notificationEventId);
+                // XXX TODO: remove the notification from the notifications feed also?  How?
             } else {
                 TRACE(SOCIALD_ERROR,
                         QString(QLatin1String("error: unable to convert notification id string to int: %1"))
@@ -135,7 +142,7 @@ void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
         // second, purge all data from our database
         removeAllData(QLatin1String("facebook"),
                 SyncService::dataType(SyncService::Notifications),
-                QString::number(pid)); // XXX TODO: use fb id instead of QString::number(accountId)
+                QString::number(pid));
     }
 }
 
@@ -274,31 +281,35 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                 // Set timespec to make conversion to local time to work properly
                 createdTime.setTimeSpec(Qt::UTC);
 
-                // post the notification to the notifications feed.
-                Notification *notif = new Notification;
-                notif->setCategory(QLatin1String("x-nemo.social.facebook.notification"));
-                notif->setSummary(title);
-                notif->setBody(title);
-                notif->setPreviewSummary(nameString);
-                notif->setPreviewBody(title);
-                notif->setItemCount(1);
-                notif->setTimestamp(createdTime);
-                notif->setRemoteDBusCallServiceName("org.sailfishos.browser");
-                notif->setRemoteDBusCallObjectPath("/");
-                notif->setRemoteDBusCallInterface("org.sailfishos.browser");
-                notif->setRemoteDBusCallMethodName("openUrl");
-                QStringList openUrlArgs; openUrlArgs << link;
-                notif->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
-                notif->publish();
-                qlonglong localId = (0 + notif->replacesId());
-                if (localId == 0) {
+                //: The title text displayed for Facebook notifications in the events view
+                //% "New Facebook notification!"
+                QString NOTIFICATION_CATEGORY_TRANSLATED_TEXT = qtTrId("qtn_social_notifications_new_facebook");
+
+                // publish the notification to the events feed.
+                qlonglong eventId = m_eventFeed->addItem(
+                        QLatin1String("icon-s-service-facebook"),
+                        NOTIFICATION_CATEGORY_TRANSLATED_TEXT,
+                        title,
+                        QStringList(),
+                        createdTime,
+                        QString(),
+                        false,
+                        link,
+                        SOCIALD_FACEBOOK_NOTIFICATIONS_GROUPNAME, // sourceName
+                        QLatin1String("Facebook Notifications")); // sourceDisplayName // XXX TODO: per-account?
+
+                if (eventId == 0) {
                     // failed.
                     TRACE(SOCIALD_ERROR,
                             QString(QLatin1String("error: failed to publish notification: %1"))
                             .arg(title));
                 } else {
+                    // increment our count of notifications synced for this account
+                    int nCount = m_notificationsCount.value(accountId) + 1;
+                    m_notificationsCount.insert(accountId, nCount);
+
                     // and store the fact that we have synced it to the notifications feed.
-                    markSyncedDatum(QString(QLatin1String("facebook-notifications-%1")).arg(QString::number(localId)),
+                    markSyncedDatum(QString(QLatin1String("facebook-notifications-%1")).arg(QString::number(eventId)),
                                     QLatin1String("facebook"), SyncService::dataType(SyncService::Notifications),
                                     QString::number(accountId), createdTime, QDateTime::currentDateTime(),
                                     notificationId); // XXX TODO: instead of QString::number(accountId) use fb user id.
@@ -306,7 +317,6 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
                 // if we didn't post anything new, we don't try to fetch more.
                 postedNew = true;
-                delete notif;
             }
         }
 
@@ -438,6 +448,25 @@ void FacebookNotificationSyncAdaptor::decrementSemaphore(int accountId)
     m_accountSyncSemaphores.insert(accountId, semaphoreValue);
 
     if (semaphoreValue == 0) {
+        // now post a notification to the notifications feed about the FB notifications.
+        int notificationsCount = m_notificationsCount.value(accountId);
+        m_notificationsCount.insert(accountId, 0);
+        if (notificationsCount > 0) {
+            //: The title of the Facebook Notifications device notification
+            //% "You have %1 new Facebook notification(s)!"
+            QString title = qtTrId("sociald_facebook_posts-notification_title").arg(notificationsCount);
+            Notification *notif = new Notification;
+            notif->setCategory(QLatin1String("x-nemo.social.facebook.notification"));
+            notif->setSummary(title);
+            notif->setBody(QString());
+            notif->setPreviewSummary(title);
+            notif->setPreviewBody(QString());
+            notif->setItemCount(notificationsCount);
+            notif->setTimestamp(QDateTime::currentDateTime());
+            notif->publish();
+            delete notif;
+        }
+
         // finished all outstanding requests for Notifications sync for this account.
         // update the sync time for this user's Notifications in the global sociald database.
         updateLastSyncTimestamp(QLatin1String("facebook"),

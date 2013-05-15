@@ -177,7 +177,7 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
 
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
-    QUrl url(QLatin1String("https://graph.facebook.com/me/feed"));
+    QUrl url(QLatin1String("https://graph.facebook.com/me/home"));
     url.setQueryItems(queryItems);
     QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
     
@@ -192,7 +192,7 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
         incrementSemaphore(accountId);
     } else {
         TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request feed posts from Facebook account with id %1"))
+                QString(QLatin1String("error: unable to request home posts from Facebook account with id %1"))
                 .arg(accountId));
     }
 }
@@ -243,7 +243,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 
         if (!data.size()) {
             TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("no feed posts received for account %1"))
+                    QString(QLatin1String("no home posts received for account %1"))
                     .arg(accountId));
             decrementSemaphore(accountId);
             return;
@@ -295,7 +295,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 } else {
                     //: Title of Facebook post in event feed where a friend posted a photo
                     //% "%1 posted a photo"
-                    eventTitle = QString("%1 %2").arg(fromName).arg(qtTrId("sociald_facebook_posts-friend_posted_photo"));
+                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_photo").arg(fromName);
                 }
                 eventBody = message; // XXX TODO: or should this be the link / source?  libeventfeed is ... bad.
                 eventImageList << picture;
@@ -318,7 +318,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 } else {
                     //: Title of Facebook post in event feed where a friend posted a video
                     //% "%1 posted a video"
-                    eventTitle = QString("%1 %2").arg(fromName).arg(qtTrId("sociald_facebook_posts-friend_posted_video"));
+                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_video").arg(fromName);
                 }
                 eventBody = message; // XXX TODO: or should this be the link / source?  libeventfeed is ... bad.
                 eventImageList << picture;
@@ -346,7 +346,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 eventTimestamp = createdTime;
                 eventIsVideo = false;
                 eventUrl = actionLink.isEmpty() ? link : actionLink;
-            } else if (postType == QLatin1String("photo") && statusType == QLatin1String("added_photos")) {
+            } else if (postType == QLatin1String("photo") && (statusType == QLatin1String("added_photos") || statusType == QLatin1String("mobile_status_update"))) {
                 // this is a photo or album uploaded by the current user
                 QString message = currData.value(QLatin1String("message")).toString();
                 QString picture = currData.value(QLatin1String("picture")).toString();
@@ -373,11 +373,11 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                     if (moreThanOnePhoto) {
                         //: Title of Facebook post in event feed where a friend uploaded multiple photos
                         //% "%1 uploaded photos"
-                        eventTitle = QString("%1 %2").arg(fromName).arg(qtTrId("sociald_facebook_posts-friend_uploaded_photos"));
+                        eventTitle = qtTrId("sociald_facebook_posts-friend_uploaded_photos").arg(fromName);
                     } else {
                         //: Title of Facebook post in event feed where a friend uploaded a photo (or album)
                         //% "%1 uploaded a photo"
-                        eventTitle = QString("%1 %2").arg(fromName).arg(qtTrId("sociald_facebook_posts-friend_uploaded_photo"));
+                        eventTitle = qtTrId("sociald_facebook_posts-friend_uploaded_photo").arg(fromName);
                     }
                 }
                 eventBody = message; // XXX TODO: or should this be the link / source?  libeventfeed is ... bad.
@@ -409,15 +409,35 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 } else {
                     //: Title of Facebook post in event feed where a friend posted on the device's user's wall
                     //% "%1 posted on your wall"
-                    eventTitle = QString("%1 %2").arg(fromName).arg(qtTrId("sociald_facebook_posts-friend_posted_wall"));
+                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_wall").arg(fromName);
                 };
                 eventBody = story;
+                eventTimestamp = createdTime;
+                eventIsVideo = false;
+                eventUrl = actionLink;
+            } else if (postType == QLatin1String("status") && statusType == QLatin1String("mobile_status_update")) {
+                // this is a status posted by someone from a mobile phone
+                QString story = currData.value(QLatin1String("story")).toString();
+                QString message = currData.value(QLatin1String("message")).toString();
+
+                // build the event fields
+                if (fromSelfContact) {
+                    //: Title of Facebook status in event feed where the device's user posted a mobile status update
+                    //% "You posted a status update"
+                    eventTitle = qtTrId("sociald_facebook_posts-you_posted_status");
+                } else {
+                    //: Title of Facebook status in event feed where a friend posted a mobile status update
+                    //% "%1 posted a status update"
+                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_status").arg(fromName);
+                };
+                eventBody = message.isEmpty() ? story : message;
                 eventTimestamp = createdTime;
                 eventIsVideo = false;
                 eventUrl = actionLink;
             } else if (postType == QLatin1String("status") && statusType.isEmpty()) {
                 // this is a comment/like on a status update, or on an application-specific post
                 QString story = currData.value(QLatin1String("story")).toString();
+                QString message = currData.value(QLatin1String("message")).toString();
 
                 // build the event fields
                 if (fromSelfContact) {
@@ -438,7 +458,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                     eventTitle = story; // we can't build a meaningful title... use the story text.
                 }
 
-                eventBody = story;
+                eventBody = message.isEmpty() ? story : message;
                 eventTimestamp = createdTime;
                 eventIsVideo = false;
                 eventUrl = actionLink; // this is empty for some things (eg likes on other peoples' statuses)
@@ -456,8 +476,8 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                     eventTitle = qtTrId("sociald_facebook_posts-you_posted_link_other");
                 } else {
                     //: Title of Facebook post in event feed where a friend posted a link on the device's user's wall
-                    //% "posted on your wall"
-                    eventTitle = QString("%1 %2").arg(fromName).arg(qtTrId("sociald_facebook_posts-friend_posted_link_other"));
+                    //% "%1 posted on your wall"
+                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_link_other").arg(fromName);
                 };
                 eventBody = message;
                 eventTimestamp = createdTime;
