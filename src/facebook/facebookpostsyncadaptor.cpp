@@ -265,6 +265,8 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             QVariantMap currData = data.at(i).toMap();
             QDateTime createdTime = QDateTime::fromString(currData.value(QLatin1String("created_time")).toString(), Qt::ISODate);
             QDateTime updatedTime = QDateTime::fromString(currData.value(QLatin1String("updated_time")).toString(), Qt::ISODate);
+            createdTime.setTimeSpec(Qt::UTC);
+            updatedTime.setTimeSpec(Qt::UTC);
             QString postId = currData.value(QLatin1String("id")).toString();
             QString postType = currData.value(QLatin1String("type")).toString();
             QString statusType = currData.value(QLatin1String("status_type")).toString(); // won't always exist.
