@@ -217,7 +217,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedMeHandler()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     if (!reply) {
         // shouldn't happen, but just in case.
-        decrementSemaphore(accountId);
+        TRACE(SOCIALD_ERROR,
+                QString(QLatin1String("error: invalid reply in finished me - unable to decrement semaphore!")));
         return;
     }
     int accountId = reply->property("accountId").toInt();
@@ -252,7 +253,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     if (!reply) {
         // shouldn't happen, but just in case
-        decrementSemaphore(accountId);
+        TRACE(SOCIALD_ERROR,
+                QString(QLatin1String("error: invalid reply in finished posts - unable to decrement semaphore!")));
         return;
     }
 
