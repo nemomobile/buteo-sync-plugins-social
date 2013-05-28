@@ -118,6 +118,7 @@ FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *parent, Facebook
                    "updatedTime VARCHAR(30),"
                    "albumName VARCHAR(100),"
                    "photoCount INTEGER,"
+                   "coverPhotoId VARCHAR(50),"
                    "thumbnailUrl VARCHAR(100),"
                    "imageUrl VARCHAR(100),"
                    "thumbnailFile VARCHAR(100),"
@@ -198,7 +199,11 @@ void FacebookImageSyncAdaptor::beginSync(int accountId, const QString &accessTok
     requestData(accountId, accessToken, QString(), QString(), QString());
 }
 
-void FacebookImageSyncAdaptor::requestData(int accountId, const QString &accessToken, const QString &continuationUrl, const QString &fbUserId, const QString &fbAlbumId)
+void FacebookImageSyncAdaptor::requestData(int accountId,
+                                           const QString &accessToken,
+                                           const QString &continuationUrl,
+                                           const QString &fbUserId,
+                                           const QString &fbAlbumId)
 {
     QUrl url;
     if (!continuationUrl.isEmpty()) {
@@ -227,7 +232,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId, const QString &accessT
         reply->setProperty("accessToken", accessToken);
         reply->setProperty("fbUserId", fbUserId);
         reply->setProperty("fbAlbumId", fbAlbumId);
-        reply->setProperty("continuationUrl", continuationUrl);
+        reply->setProperty("continuationUrl", continuationUrl);        
         connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
         connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslErrorsHandler(QList<QSslError>)));
         if (fbAlbumId.isEmpty()) {
@@ -430,7 +435,6 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
                     QString(QLatin1String("caching new photo %1: %2"))
                     .arg(photoId).arg(imageSrcUrl));
         }
-
         cacheImage(photoId, fbAlbumId, fbUserId, createdTimeStr, updatedTimeStr, thumbnailUrl, imageSrcUrl, photoName, width, height);
     }
 
@@ -525,11 +529,13 @@ void FacebookImageSyncAdaptor::possiblyAddNewAlbum(const QString &fbAlbumId, con
     if (query.next()) {
         // already exists.  Don't need to add it.  But, can update the updated time + album name (might have changed).
         QSqlQuery insertQuery(m_imgdb);
-        insertQuery.prepare("UPDATE albums SET updatedTime = :ut, albumName = :an, photoCount = :pc WHERE fbAlbumId = :fbaid");
+        insertQuery.prepare("UPDATE albums SET updatedTime = :ut, albumName = :an, photoCount = :pc, coverPhotoId = :cid WHERE fbAlbumId = :fbaid");
         insertQuery.bindValue(":ut", updatedTime);
         insertQuery.bindValue(":an", albumName);
         insertQuery.bindValue(":pc", photoCount);
         insertQuery.bindValue(":fbaid", fbAlbumId);
+        insertQuery.bindValue(":cid", coverPhotoId);
+
         if (!insertQuery.exec()) {
             TRACE(SOCIALD_ERROR, QLatin1String("error updating albums table:") << query.lastError());
             return;
@@ -537,13 +543,15 @@ void FacebookImageSyncAdaptor::possiblyAddNewAlbum(const QString &fbAlbumId, con
     } else {
         // new album.  Add it to the table.
         QSqlQuery insertQuery(m_imgdb);
-        insertQuery.prepare("INSERT INTO albums (fbAlbumId, fbUserId, createdTime, updatedTime, albumName, photoCount, thumbnailUrl, imageUrl, thumbnailFile, imageFile) VALUES (:fbaid, :fbuid, :ct, :ut, :an, :pc, :tu, :iu, :tf, :if)");
+        insertQuery.prepare("INSERT INTO albums (fbAlbumId, fbUserId, createdTime, updatedTime, albumName, photoCount, coverPhotoId, thumbnailUrl, imageUrl, thumbnailFile, imageFile)"
+                            "VALUES (:fbaid, :fbuid, :ct, :ut, :an, :pc, :cid, :tu, :iu, :tf, :if)");
         insertQuery.bindValue(":fbaid", fbAlbumId);
         insertQuery.bindValue(":fbuid", fbUserId);
         insertQuery.bindValue(":ct", createdTime);
         insertQuery.bindValue(":ut", updatedTime);
         insertQuery.bindValue(":an", albumName);
         insertQuery.bindValue(":pc", photoCount);
+        insertQuery.bindValue(":cid", coverPhotoId);
         insertQuery.bindValue(":tu", QString());
         insertQuery.bindValue(":iu", QString());
         insertQuery.bindValue(":tf", QString());
