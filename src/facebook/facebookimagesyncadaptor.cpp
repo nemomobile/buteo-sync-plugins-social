@@ -1286,7 +1286,7 @@ bool FacebookImageSyncAdaptor::dbDropTables()
     query.prepare("DROP TABLE IF EXISTS users");
     if (!query.exec()) {
         TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: failed to delete uses table: %1"))
+              QString(QLatin1String("error: failed to delete user table: %1"))
               .arg(query.lastError().text()));
         m_imgdb.close();
         return false;
