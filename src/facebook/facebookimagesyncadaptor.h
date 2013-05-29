@@ -91,6 +91,11 @@ private:
     void updateAccountsTable(int accountId, const QString &fbUserId);
     void purgeAccount(int accountId);
 
+    int dbUserVersion();
+    bool dbCreateTables();
+    bool dbDropTables();
+
+
 private Q_SLOTS:
     void albumsFinishedHandler();
     void photosFinishedHandler();

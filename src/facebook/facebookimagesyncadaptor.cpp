@@ -42,8 +42,17 @@
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
+#include <QtSql/QSqlRecord>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
+
+
+
+// Update the following version if database schema changes e.g. new
+// fields are added to the existing tables.
+// It will make old tables dropped and creates new ones.
+#define USER_VERSION 1
+#define PRAGMA_USER_VERSION   QString("PRAGMA user_version=%1").arg(USER_VERSION)
 
 // Currently, we integrate with the device image gallery via saving thumbnails to the
 // ~/.config/sociald/images directory, and filling the ~/.config/sociald/images/facebook.db
@@ -85,75 +94,18 @@ FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *parent, Facebook
         return;
     }
 
-    // create the facebook image db tables
-    // photos = fbPhotoId, fbAlbumId, fbUserId, createdTime, updatedTime, photoName, width, height, thumbnailUrl, imageUrl, thumbnailFile, imageFile
-    // albums = fbAlbumId, fbUserId, createdTime, updatedTime, albumName, photoCount, thumbnailUrl, imageUrl, thumbnailFile, imageFile
-    // users = fbUserId, updatedTime, userName, thumbnailUrl, imageUrl, thumbnailFile, imageFile
-    QSqlQuery query(m_imgdb);
-    query.prepare( "CREATE TABLE IF NOT EXISTS photos ("
-                   "fbPhotoId VARCHAR(50) UNIQUE PRIMARY KEY,"
-                   "fbAlbumId VARCHAR(50),"
-                   "fbUserId VARCHAR(50),"
-                   "createdTime VARCHAR(30),"
-                   "updatedTime VARCHAR(30),"
-                   "photoName VARCHAR(100),"
-                   "width INTEGER,"
-                   "height INTEGER,"
-                   "thumbnailUrl VARCHAR(100),"
-                   "imageUrl VARCHAR(100),"
-                   "thumbnailFile VARCHAR(100),"
-                   "imageFile VARCHAR(100))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create photos table: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
-        return;
+    if (dbUserVersion() < USER_VERSION) {
+        // DB needs to be recreated
+        if (!dbDropTables()) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("error: failed to update database! Remove it manually and restart sociald")));
+            return;
+        }
     }
 
-    query.prepare( "CREATE TABLE IF NOT EXISTS albums ("
-                   "fbAlbumId VARCHAR(50) UNIQUE PRIMARY KEY,"
-                   "fbUserId VARCHAR(50),"
-                   "createdTime VARCHAR(30),"
-                   "updatedTime VARCHAR(30),"
-                   "albumName VARCHAR(100),"
-                   "photoCount INTEGER,"
-                   "thumbnailUrl VARCHAR(100),"
-                   "imageUrl VARCHAR(100),"
-                   "thumbnailFile VARCHAR(100),"
-                   "imageFile VARCHAR(100))");
-    if (!query.exec()) {
+    if (!dbCreateTables()) {
         TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create albums table: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
-        return;
-    }
-
-    query.prepare( "CREATE TABLE IF NOT EXISTS users ("
-                   "fbUserId VARCHAR(50) UNIQUE PRIMARY KEY,"
-                   "updatedTime VARCHAR(30),"
-                   "userName VARCHAR(100),"
-                   "thumbnailUrl VARCHAR(100),"
-                   "imageUrl VARCHAR(100),"
-                   "thumbnailFile VARCHAR(100),"
-                   "imageFile VARCHAR(100))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create users table: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
-        return;
-    }
-
-    query.prepare( "CREATE TABLE IF NOT EXISTS accounts ("
-                   "accountId INTEGER UNIQUE PRIMARY KEY,"
-                   "fbUserId VARCHAR(50))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create accounts table: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
+              QString(QLatin1String("error: failed to create tables to the database!")));
         return;
     }
 
@@ -161,6 +113,7 @@ FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *parent, Facebook
     m_enabled = true;
     m_status = SocialNetworkSyncAdaptor::Inactive;
 }
+
 
 FacebookImageSyncAdaptor::~FacebookImageSyncAdaptor()
 {
@@ -198,7 +151,11 @@ void FacebookImageSyncAdaptor::beginSync(int accountId, const QString &accessTok
     requestData(accountId, accessToken, QString(), QString(), QString());
 }
 
-void FacebookImageSyncAdaptor::requestData(int accountId, const QString &accessToken, const QString &continuationUrl, const QString &fbUserId, const QString &fbAlbumId)
+void FacebookImageSyncAdaptor::requestData(int accountId,
+                                           const QString &accessToken,
+                                           const QString &continuationUrl,
+                                           const QString &fbUserId,
+                                           const QString &fbAlbumId)
 {
     QUrl url;
     if (!continuationUrl.isEmpty()) {
@@ -430,7 +387,6 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
                     QString(QLatin1String("caching new photo %1: %2"))
                     .arg(photoId).arg(imageSrcUrl));
         }
-
         cacheImage(photoId, fbAlbumId, fbUserId, createdTimeStr, updatedTimeStr, thumbnailUrl, imageSrcUrl, photoName, width, height);
     }
 
@@ -525,11 +481,13 @@ void FacebookImageSyncAdaptor::possiblyAddNewAlbum(const QString &fbAlbumId, con
     if (query.next()) {
         // already exists.  Don't need to add it.  But, can update the updated time + album name (might have changed).
         QSqlQuery insertQuery(m_imgdb);
-        insertQuery.prepare("UPDATE albums SET updatedTime = :ut, albumName = :an, photoCount = :pc WHERE fbAlbumId = :fbaid");
+        insertQuery.prepare("UPDATE albums SET updatedTime = :ut, albumName = :an, photoCount = :pc, coverPhotoId = :cid WHERE fbAlbumId = :fbaid");
         insertQuery.bindValue(":ut", updatedTime);
         insertQuery.bindValue(":an", albumName);
         insertQuery.bindValue(":pc", photoCount);
         insertQuery.bindValue(":fbaid", fbAlbumId);
+        insertQuery.bindValue(":cid", coverPhotoId);
+
         if (!insertQuery.exec()) {
             TRACE(SOCIALD_ERROR, QLatin1String("error updating albums table:") << query.lastError());
             return;
@@ -537,13 +495,15 @@ void FacebookImageSyncAdaptor::possiblyAddNewAlbum(const QString &fbAlbumId, con
     } else {
         // new album.  Add it to the table.
         QSqlQuery insertQuery(m_imgdb);
-        insertQuery.prepare("INSERT INTO albums (fbAlbumId, fbUserId, createdTime, updatedTime, albumName, photoCount, thumbnailUrl, imageUrl, thumbnailFile, imageFile) VALUES (:fbaid, :fbuid, :ct, :ut, :an, :pc, :tu, :iu, :tf, :if)");
+        insertQuery.prepare("INSERT INTO albums (fbAlbumId, fbUserId, createdTime, updatedTime, albumName, photoCount, coverPhotoId, thumbnailUrl, imageUrl, thumbnailFile, imageFile)"
+                            "VALUES (:fbaid, :fbuid, :ct, :ut, :an, :pc, :cid, :tu, :iu, :tf, :if)");
         insertQuery.bindValue(":fbaid", fbAlbumId);
         insertQuery.bindValue(":fbuid", fbUserId);
         insertQuery.bindValue(":ct", createdTime);
         insertQuery.bindValue(":ut", updatedTime);
         insertQuery.bindValue(":an", albumName);
         insertQuery.bindValue(":pc", photoCount);
+        insertQuery.bindValue(":cid", coverPhotoId);
         insertQuery.bindValue(":tu", QString());
         insertQuery.bindValue(":iu", QString());
         insertQuery.bindValue(":tf", QString());
@@ -1191,4 +1151,155 @@ void FacebookImageSyncAdaptor::decrementSemaphore(int accountId)
             emit statusChanged();
         }
     }
+}
+
+int FacebookImageSyncAdaptor::dbUserVersion()
+{
+    const QString queryStr = QString("PRAGMA user_version");
+
+    QSqlQuery query(m_imgdb);
+    if (!query.exec(queryStr)) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: unable to query db version: %1 - Facebook image sync will be inactive"))
+              .arg(query.lastError().text()));
+        return -1;
+    }
+    QSqlRecord rec = query.record();
+    if (query.isActive() && query.isSelect()) {
+        query.first();
+        QString v = query.value(rec.indexOf("user_version")).toString();
+        if (v.isEmpty()) {
+            return -1;
+        }
+        return v.toInt();
+    }
+    return -1;
+}
+
+bool FacebookImageSyncAdaptor::dbCreateTables()
+{
+    // create the facebook image db tables
+    // photos = fbPhotoId, fbAlbumId, fbUserId, createdTime, updatedTime, photoName, width, height, thumbnailUrl, imageUrl, thumbnailFile, imageFile
+    // albums = fbAlbumId, fbUserId, createdTime, updatedTime, albumName, photoCount, thumbnailUrl, imageUrl, thumbnailFile, imageFile
+    // users = fbUserId, updatedTime, userName, thumbnailUrl, imageUrl, thumbnailFile, imageFile
+    QSqlQuery query(m_imgdb);
+    query.prepare( "CREATE TABLE IF NOT EXISTS photos ("
+                   "fbPhotoId VARCHAR(50) UNIQUE PRIMARY KEY,"
+                   "fbAlbumId VARCHAR(50),"
+                   "fbUserId VARCHAR(50),"
+                   "createdTime VARCHAR(30),"
+                   "updatedTime VARCHAR(30),"
+                   "photoName VARCHAR(100),"
+                   "width INTEGER,"
+                   "height INTEGER,"
+                   "thumbnailUrl VARCHAR(100),"
+                   "imageUrl VARCHAR(100),"
+                   "thumbnailFile VARCHAR(100),"
+                   "imageFile VARCHAR(100))");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create photos table: %1 - Facebook image sync will be inactive"))
+            .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+
+    query.prepare( "CREATE TABLE IF NOT EXISTS albums ("
+                   "fbAlbumId VARCHAR(50) UNIQUE PRIMARY KEY,"
+                   "fbUserId VARCHAR(50),"
+                   "createdTime VARCHAR(30),"
+                   "updatedTime VARCHAR(30),"
+                   "albumName VARCHAR(100),"
+                   "photoCount INTEGER,"
+                   "coverPhotoId VARCHAR(50),"
+                   "thumbnailUrl VARCHAR(100),"
+                   "imageUrl VARCHAR(100),"
+                   "thumbnailFile VARCHAR(100),"
+                   "imageFile VARCHAR(100))");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create albums table: %1 - Facebook image sync will be inactive"))
+            .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+
+    query.prepare( "CREATE TABLE IF NOT EXISTS users ("
+                   "fbUserId VARCHAR(50) UNIQUE PRIMARY KEY,"
+                   "updatedTime VARCHAR(30),"
+                   "userName VARCHAR(100),"
+                   "thumbnailUrl VARCHAR(100),"
+                   "imageUrl VARCHAR(100),"
+                   "thumbnailFile VARCHAR(100),"
+                   "imageFile VARCHAR(100))");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create users table: %1 - Facebook image sync will be inactive"))
+            .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+
+    query.prepare( "CREATE TABLE IF NOT EXISTS accounts ("
+                   "accountId INTEGER UNIQUE PRIMARY KEY,"
+                   "fbUserId VARCHAR(50))");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create accounts table: %1 - Facebook image sync will be inactive"))
+            .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+
+    query.prepare(PRAGMA_USER_VERSION);
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create pragma user_version: %1 - Facebook image sync will be inactive"))
+            .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+    return true;
+}
+
+bool FacebookImageSyncAdaptor::dbDropTables()
+{
+    QSqlQuery query(m_imgdb);
+    query.prepare("DROP TABLE IF EXISTS photos");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: failed to delete photos table: %1"))
+              .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+
+    query.prepare("DROP TABLE IF EXISTS albums");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: failed to delete albums table: %1"))
+              .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+
+    query.prepare("DROP TABLE IF EXISTS users");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: failed to delete user table: %1"))
+              .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+
+    query.prepare("DROP TABLE IF EXISTS accounts");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: failed to delete accounts table: %1"))
+              .arg(query.lastError().text()));
+        m_imgdb.close();
+        return false;
+    }
+
+    return true;
 }
