@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.8
+Version:    0.0.11
 Release:    1
 Group:      System/Applications
 License:    TBD
@@ -18,6 +18,7 @@ BuildRequires:  pkgconfig(systemd)
 BuildRequires:  pkgconfig(QJson)
 BuildRequires:  pkgconfig(libsignon-qt)
 BuildRequires:  pkgconfig(accounts-qt)
+BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  nemo-qml-plugin-notifications-devel
 BuildRequires:  eventfeed-devel
 BuildRequires:  libmeegotouchevents-devel
