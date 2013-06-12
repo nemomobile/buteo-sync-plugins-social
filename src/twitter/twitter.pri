@@ -1,5 +1,5 @@
 CONFIG += link_pkgconfig
-PKGCONFIG += accounts-qt libsignon-qt nemonotifications
+PKGCONFIG += accounts-qt libsignon-qt nemonotifications libsailfishkeyprovider
 lessThan(QT_MAJOR_VERSION, 5) {
     PKGCONFIG += QJson
 }

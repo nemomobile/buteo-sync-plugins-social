@@ -49,6 +49,9 @@
 #include <QJsonDocument>
 #endif
 
+//libsailfishkeyprovider
+#include <sailfishkeyprovider.h>
+
 //libaccounts-qt
 #include <Accounts/Manager>
 #include <Accounts/Service>
@@ -272,9 +275,19 @@ static QString hmacSha1(const QString &signingKey, const QString &baseString)
 QString TwitterDataTypeSyncAdaptor::authorizationHeader(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &requestMethod, const QString &requestUrl, const QList<QPair<QString, QString> > &parameters)
 {
     // Twitter requires all requests to be signed with an authorization header.
-    // XXX TODO: get the consumer key from the secure storage / dynamic library containing our keys!
-    QString consumerSecret = QLatin1String("yxfwTU17VXcrtYPqWD941bQRsaHvgKdje6RlqOq07yA");
-    QString oauthConsumerKey = QLatin1String("FxVs00m3hPvdC4tpla1yHA");
+    char *cConsumerKey = NULL;
+    char *cConsumerSecret = NULL;
+    int ckSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_key", &cConsumerKey);
+    int csSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_secret", &cConsumerSecret);
+
+    if (ckSuccess != 0 || cConsumerKey == NULL || csSuccess != 0 || cConsumerSecret == NULL) {
+        qWarning() << Q_FUNC_INFO << "No valid OAuth2 keys found";
+        return QString();
+    }
+
+    QString consumerSecret = QLatin1String(cConsumerSecret);
+    QString oauthConsumerKey = QLatin1String(cConsumerKey);
+
     QString oauthNonce = QString::fromLatin1(QUuid::createUuid().toByteArray().toBase64());
     QString oauthSignature;
     QString oauthSigMethod = QLatin1String("HMAC-SHA1");
