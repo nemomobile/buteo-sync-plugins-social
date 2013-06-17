@@ -21,8 +21,8 @@ BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  nemo-qml-plugin-notifications-devel
 BuildRequires:  eventfeed-devel
 BuildRequires:  libmeegotouchevents-devel
-Requires: lipstick-jolla-home
 Requires: nemo-qml-plugin-notifications
+Requires: eventfeed-viewer
 
 %description
 A daemon process which provides data synchronization with various social services.
