@@ -6,7 +6,6 @@ Group:      System/Applications
 License:    TBD
 URL:        https://bitbucket.org/jolla/base-sociald
 Source0:    %{name}-%{version}.tar.bz2
-Source1:    sociald.desktop
 Source2:    sociald.service
 BuildRequires:  pkgconfig(QtCore)
 BuildRequires:  pkgconfig(QtDBus)
@@ -22,8 +21,8 @@ BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  nemo-qml-plugin-notifications-devel
 BuildRequires:  eventfeed-devel
 BuildRequires:  libmeegotouchevents-devel
-Requires: lipstick-jolla-home
 Requires: nemo-qml-plugin-notifications
+Requires: eventfeed-viewer
 
 %description
 A daemon process which provides data synchronization with various social services.
@@ -37,7 +36,6 @@ A daemon process which provides data synchronization with various social service
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.mention.conf
 %{_libdir}/systemd/user/sociald.service
 %{_libdir}/systemd/user/jolla-session.target.wants/sociald.service
-%config /etc/xdg/autostart/sociald.desktop
 %{_datadir}/translations/sociald_eng_en.qm
 
 
@@ -65,6 +63,5 @@ rm -rf %{buildroot}
 %qmake_install
 mkdir -p %{buildroot}%{_libdir}/systemd/user/
 cp -a %{SOURCE2} %{buildroot}%{_libdir}/systemd/user/
-install -D -m 644 %{SOURCE1} %{buildroot}/etc/xdg/autostart/sociald.desktop
 mkdir -p %{buildroot}%{_libdir}/systemd/user/jolla-session.target.wants/
 ln -sf ../sociald.service %{buildroot}%{_libdir}/systemd/user/jolla-session.target.wants/
