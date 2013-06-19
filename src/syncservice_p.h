@@ -52,12 +52,9 @@ public:
 
     SyncService *q;
     QMap<QString, SocialNetworkSyncAdaptor*> m_adaptors;
-    QMap<QString, QMap<QString, QPair<int, QTimer*> > > m_pollingTimers;
+    QMap<QString, QStringList> m_supportedDataTypes;
 
     QSqlDatabase m_db;
-
-public Q_SLOTS:
-    void pollingTimerTriggered();
 };
 
 #endif // SYNCSERVICE_P_H

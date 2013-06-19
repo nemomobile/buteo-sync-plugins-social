@@ -68,10 +68,6 @@ public:
     QStringList enabledSocialServices() const;   // the subset of supported services for which we have an enabled account.
     QStringList supportedDataTypes(const QString &socialService) const; // the sync data types supported for the service.
 
-    QMap<QString, int> pollingIntervals(const QString &socialService) const;
-    void setPollingIntervals(const QString &socialService, const QMap<QString, int> &intervals);
-    void setPollingInterval(const QString &socialService, const QString &dataType, int interval);
-
     void sync(const QString &socialService, const QStringList &types); // manual sync.
 
 private:

@@ -43,20 +43,6 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 
-// all intervals are in milliseconds
-#define SOCIALD_POLLING_INTERVAL_48_HOURS     172800000
-#define SOCIALD_POLLING_INTERVAL_24_HOURS     86400000
-#define SOCIALD_POLLING_INTERVAL_12_HOURS     43200000
-#define SOCIALD_POLLING_INTERVAL_6_HOURS      21600000
-#define SOCIALD_POLLING_INTERVAL_2_HOURS      7200000
-#define SOCIALD_POLLING_INTERVAL_1_HOUR       3600000
-#define SOCIALD_POLLING_INTERVAL_HALF_HOUR    1800000
-#define SOCIALD_POLLING_INTERVAL_QUARTER_HOUR 900000
-#define SOCIALD_POLLING_INTERVAL_3_MINUTES    180000
-#define SOCIALD_POLLING_INTERVAL_MINUTE       60000
-#define SOCIALD_POLLING_INTERVAL_DEFAULT      SOCIALD_POLLING_INTERVAL_24_HOURS
-#define SOCIALD_POLLING_INTERVAL_DEBUG        SOCIALD_POLLING_INTERVAL_3_MINUTES
-
 SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     : QObject(parent), q(parent)
 {
@@ -113,59 +99,13 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     // Facebook
     {
         FacebookSyncAdaptor *fbsa = new FacebookSyncAdaptor(parent);
-        m_adaptors.insert(QLatin1String("facebook"), fbsa);
-        QMap<QString, QPair<int, QTimer*> > facebookTimers;
-
-        // Notifications
-        {
-            QTimer *fbnt = new QTimer(this);
-            fbnt->setInterval(SOCIALD_POLLING_INTERVAL_QUARTER_HOUR);
-            fbnt->setSingleShot(false);
-            fbnt->setProperty("socialService", QLatin1String("facebook"));
-            fbnt->setProperty("dataType", SyncService::dataType(SyncService::Notifications));
-            connect(fbnt, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
-            fbnt->start();
-            facebookTimers.insert(SyncService::dataType(SyncService::Notifications),
-                                  QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_QUARTER_HOUR, fbnt));
-        }
-
-        // Images
-        {
-            QTimer *fbit = new QTimer(this);
-            fbit->setInterval(SOCIALD_POLLING_INTERVAL_6_HOURS);
-            fbit->setSingleShot(false);
-            fbit->setProperty("socialService", QLatin1String("facebook"));
-            fbit->setProperty("dataType", SyncService::dataType(SyncService::Images));
-            connect(fbit, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
-            fbit->start();
-            facebookTimers.insert(SyncService::dataType(SyncService::Images),
-                                  QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_6_HOURS, fbit));
-        }
-
-        // Contacts
-        {
-            // TODO
-        }
-
-        // Calendar Events
-        {
-            // TODO
-        }
-
-        // Feed Posts
-        {
-            QTimer *fbpt = new QTimer(this);
-            fbpt->setInterval(SOCIALD_POLLING_INTERVAL_1_HOUR);
-            fbpt->setSingleShot(false);
-            fbpt->setProperty("socialService", QLatin1String("facebook"));
-            fbpt->setProperty("dataType", SyncService::dataType(SyncService::Posts));
-            connect(fbpt, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
-            fbpt->start();
-            facebookTimers.insert(SyncService::dataType(SyncService::Posts),
-                                  QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_1_HOUR, fbpt));
-        }
-
-        m_pollingTimers.insert(QLatin1String("facebook"), facebookTimers);
+        QLatin1String facebookService("facebook");
+        m_adaptors.insert(facebookService, fbsa);
+        m_supportedDataTypes.insert(facebookService, QStringList() <<
+                                    SyncService::dataType(SyncService::Notifications) <<
+                                    SyncService::dataType(SyncService::Images) <<
+                                    SyncService::dataType(SyncService::Posts));
+        // TODO: Contacts, Calendar Events
     }
 
     // Google+
@@ -176,36 +116,11 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     // Twitter
     {
         TwitterSyncAdaptor *tsa = new TwitterSyncAdaptor(parent);
-        m_adaptors.insert(QLatin1String("twitter"), tsa);
-        QMap<QString, QPair<int, QTimer*> > twitterTimers;
-
-        // Mentions Timeline (Notifications)
-        {
-            QTimer *tnt = new QTimer(this);
-            tnt->setInterval(SOCIALD_POLLING_INTERVAL_QUARTER_HOUR);
-            tnt->setSingleShot(false);
-            tnt->setProperty("socialService", QLatin1String("twitter"));
-            tnt->setProperty("dataType", SyncService::dataType(SyncService::Notifications));
-            connect(tnt, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
-            tnt->start();
-            twitterTimers.insert(SyncService::dataType(SyncService::Notifications),
-                                 QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_QUARTER_HOUR, tnt));
-        }
-
-        // Home Timeline (Posts)
-        {
-            QTimer *tpt = new QTimer(this);
-            tpt->setInterval(SOCIALD_POLLING_INTERVAL_1_HOUR);
-            tpt->setSingleShot(false);
-            tpt->setProperty("socialService", QLatin1String("twitter"));
-            tpt->setProperty("dataType", SyncService::dataType(SyncService::Posts));
-            connect(tpt, SIGNAL(timeout()), this, SLOT(pollingTimerTriggered()));
-            tpt->start();
-            twitterTimers.insert(SyncService::dataType(SyncService::Posts),
-                                 QPair<int, QTimer*>(SOCIALD_POLLING_INTERVAL_1_HOUR, tpt));
-        }
-
-        m_pollingTimers.insert(QLatin1String("twitter"), twitterTimers);
+        QLatin1String twitterService("twitter");
+        m_adaptors.insert(twitterService, tsa);
+        m_supportedDataTypes.insert(twitterService, QStringList() <<
+                                    SyncService::dataType(SyncService::Notifications) <<
+                                    SyncService::dataType(SyncService::Posts));
     }
 }
 
@@ -214,17 +129,6 @@ SyncServicePrivate::~SyncServicePrivate()
     if (m_db.isOpen()) {
         m_db.close();
     }
-}
-
-void SyncServicePrivate::pollingTimerTriggered()
-{
-    QTimer *t = qobject_cast<QTimer*>(sender());
-    QString socialService = t->property("socialService").toString();
-    QString dataType = t->property("dataType").toString();
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("triggering sync of %1 from %2 due to polling timer"))
-            .arg(dataType).arg(socialService));
-    q->sync(socialService, QStringList() << dataType);
 }
 
 // --------------------------------------------------
@@ -282,91 +186,7 @@ QStringList SyncService::supportedDataTypes(const QString &socialService) const
         return QStringList(); // invalid social service parameter.
     }
 
-    return d->m_pollingTimers.value(socialService).keys();
-}
-
-/*
-    The sync service will automatically perform sync()
-    requests at a particular polling interval.
-
-    Sync requests for each data type are done separately,
-    and the polling interval for each data type may be
-    set separately (for example, to allow faster polling
-    of Notifications than of Contacts).
-*/
-QMap<QString, int> SyncService::pollingIntervals(const QString &socialService) const
-{
-    QMap<QString, int> retn;
-    QMap<QString, QPair<int, QTimer*> > pt = d->m_pollingTimers.value(socialService);
-    foreach (const QString &dataType, pt.keys()) {
-        retn.insert(dataType, pt.value(dataType).first);
-    }
-
-    return retn;
-}
-
-void SyncService::setPollingIntervals(const QString &socialService, const QMap<QString, int> &intervals)
-{
-    if (!supportedSocialServices().contains(socialService)) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("%1 is not a supported social service"))
-                .arg(socialService));
-        return;
-    }
-
-    foreach (const QString &dataType, intervals.keys()) {
-        setPollingInterval(socialService, dataType, intervals.value(dataType));
-    }
-}
-
-/*
-    Sets the polling interval for syncing data of the given \a dataType
-    from the given \a socialService to the specified \a interval which
-    is specified in milliseconds.
-
-    Uses the default interval if the interval given is less than zero,
-    and disables polling if the interval is zero.
-*/
-void SyncService::setPollingInterval(const QString &socialService, const QString &dataType, int interval)
-{
-    if (!supportedSocialServices().contains(socialService)) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("%1 is not a supported social service"))
-                .arg(socialService));
-        return;
-    }
-
-    if (!supportedDataTypes(socialService).contains(dataType)) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("%1 is not a supported data type"))
-                .arg(dataType));
-        return;
-    }
-
-    int newInterval = interval;
-    if (newInterval < 0) {
-        newInterval = SOCIALD_POLLING_INTERVAL_DEFAULT;
-    }
-    QMap<QString, QPair<int, QTimer*> > existingTimers = d->m_pollingTimers.value(socialService);
-    if (existingTimers.value(dataType).first != newInterval) {
-        QTimer *timerValue = existingTimers.value(dataType).second;
-        existingTimers.insert(dataType, QPair<int, QTimer*>(newInterval, timerValue));
-        d->m_pollingTimers.insert(socialService, existingTimers); // update the internal data structure.
-        if (timerValue) { // should never be null, but checking just in case.
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("setting polling interval for %1 from %2 to %3 milliseconds"))
-                    .arg(dataType).arg(socialService).arg(newInterval));
-            if (newInterval == 0) {
-                // Polling interval of zero means "stop polling"
-                timerValue->stop();
-            } else {
-                timerValue->setInterval(newInterval);
-                if (!timerValue->isActive()) {
-                    timerValue->start();
-                }
-            }
-        }
-    }
+    return d->m_supportedDataTypes.value(socialService);
 }
 
 /*
