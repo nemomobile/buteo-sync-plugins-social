@@ -47,8 +47,6 @@
 #include <SignOn/SessionData>
 #include <SignOn/Error>
 
-class TwitterSyncAdaptor;
-
 /*
     Abstract interface for all of the data-specific sync adaptors
     which pull data from the Twitter social network.
@@ -59,7 +57,7 @@ class TwitterDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterDataTypeSyncAdaptor(SyncService *parent, TwitterSyncAdaptor *tsa, SyncService::DataType dataType);
+    TwitterDataTypeSyncAdaptor(SyncService *parent, SyncService::DataType dataType);
     virtual ~TwitterDataTypeSyncAdaptor();
     virtual void sync(const QString &dataType);
 
@@ -70,7 +68,6 @@ protected:
     virtual void updateDataForAccounts(const QList<int> &accountIds);
     virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0; // must at least implement these two
     virtual void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret) = 0; // must at least implement these two
-    TwitterSyncAdaptor *m_tsa;
     SyncService::DataType m_dataType;
 
 protected Q_SLOTS:

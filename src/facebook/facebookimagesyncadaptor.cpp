@@ -30,7 +30,6 @@
  */
 
 #include "facebookimagesyncadaptor.h"
-#include "facebooksyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
 
@@ -60,8 +59,8 @@
 // ~/.config/sociald/images directory, and filling the ~/.config/sociald/images/facebook.db
 // with appropriate data.
 
-FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
-    : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Images)
+FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *parent)
+    : FacebookDataTypeSyncAdaptor(parent, SyncService::Images)
 {
     m_enabled = false;
 
@@ -186,7 +185,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
 #endif
     }
 
-    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -570,7 +569,7 @@ void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, const
         query.setQueryItems(queryItems);
         url.setQuery(query);
 #endif
-        QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+        QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
         if (reply) {
             reply->setProperty("accountId", accountId);
             reply->setProperty("accessToken", accessToken);

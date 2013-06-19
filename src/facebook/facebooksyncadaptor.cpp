@@ -43,14 +43,12 @@
 #include <Accounts/Service>
 #include <Accounts/Account>
 
-FacebookSyncAdaptor::FacebookSyncAdaptor(SyncService *parent)
-    : SocialNetworkSyncAdaptor(parent)
-    , m_accountManager(new Accounts::Manager(QLatin1String("sync"), this))
-    , m_qnam(new QNetworkAccessManager(this))
+FacebookSyncAdaptor::FacebookSyncAdaptor(QLatin1String serviceName, SyncService *parent)
+    : SocialNetworkSyncAdaptor(serviceName, parent)
 {
-    m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new FacebookNotificationSyncAdaptor(parent, this));
-    m_adaptors.insert(SyncService::dataType(SyncService::Images), new FacebookImageSyncAdaptor(parent, this));
-    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new FacebookPostSyncAdaptor(parent, this));
+    m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new FacebookNotificationSyncAdaptor(parent));
+    m_adaptors.insert(SyncService::dataType(SyncService::Images), new FacebookImageSyncAdaptor(parent));
+    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new FacebookPostSyncAdaptor(parent));
     // TODO: Contacts / Calendar / etc.
 
     // TODO: actually subscribe to account changes and set enabled accordingly
@@ -83,47 +81,5 @@ void FacebookSyncAdaptor::sync(const QString &dataType)
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("no enabled facebook sync adaptor for %1"))
                 .arg(dataType));
-    }
-}
-
-void FacebookSyncAdaptor::checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds)
-{
-    QList<int> knownIds;
-    QStringList knownIdStrings = accountIdsWithSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(dataType));
-    foreach (const QString &kis, knownIdStrings) {
-        // XXX TODO: instead of QString::number(accountId) use fb user id.
-        bool ok = true;
-        int intId = kis.toInt(&ok);
-        if (ok) {
-            knownIds.append(intId);
-        } else {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: unable to convert known id string to int: %1"))
-                    .arg(kis));
-        }
-    }
-
-    Accounts::AccountIdList currentIds = m_accountManager->accountList();
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
-            .arg(currentIds.size()));
-    for (int i = 0; i < currentIds.size(); ++i) {
-        int currId = currentIds.at(i);
-        Accounts::Account *act = m_accountManager->account(currId);
-        if (!act || act->providerName() != QLatin1String("facebook")) {
-            continue; // not a facebook account.  Ignore it.
-        }
-
-        if (knownIds.contains(currId)) {
-            knownIds.removeOne(currId);
-            updateIds->append(currId);
-        } else {
-            newIds->append(currId);
-        }
-    }
-
-    // anything left in knownIds must belong to an old, removed account.
-    for (int i = 0; i < knownIds.size(); ++i) {
-        purgeIds->append(knownIds.at(i));
     }
 }

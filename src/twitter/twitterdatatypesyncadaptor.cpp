@@ -30,7 +30,6 @@
  */
 
 #include "twitterdatatypesyncadaptor.h"
-#include "twittersyncadaptor.h"
 #include "trace.h"
 
 #include <QtCore/QVariantMap>
@@ -66,9 +65,8 @@
 
 Q_DECLARE_METATYPE(SignOn::Identity*)
 
-TwitterDataTypeSyncAdaptor::TwitterDataTypeSyncAdaptor(SyncService *parent, TwitterSyncAdaptor *tsa, SyncService::DataType dataType)
-    : SocialNetworkSyncAdaptor(parent)
-    , m_tsa(tsa)
+TwitterDataTypeSyncAdaptor::TwitterDataTypeSyncAdaptor(SyncService *parent, SyncService::DataType dataType)
+    : SocialNetworkSyncAdaptor("twitter", parent)
     , m_dataType(dataType)
 {
 }
@@ -92,7 +90,7 @@ void TwitterDataTypeSyncAdaptor::sync(const QString &dataType)
     // 3) for existing accounts, pull new data for the existing account
 
     QList<int> newIds, purgeIds, updateIds;
-    m_tsa->checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
+    checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
     purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
     updateDataForAccounts(newIds);
     updateDataForAccounts(updateIds);
@@ -105,7 +103,7 @@ void TwitterDataTypeSyncAdaptor::sync(const QString &dataType)
 void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
-        Accounts::Account *act = m_tsa->m_accountManager->account(accountId);
+        Accounts::Account *act = m_accountManager->account(accountId);
         if (!act) {
             TRACE(SOCIALD_ERROR,
                     QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))

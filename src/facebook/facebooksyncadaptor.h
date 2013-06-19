@@ -55,19 +55,10 @@ class FacebookSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    FacebookSyncAdaptor(SyncService *parent = 0);
+    FacebookSyncAdaptor(QLatin1String serviceName, SyncService *parent = 0);
     ~FacebookSyncAdaptor();
 
     void sync(const QString &dataType);
-
-protected:
-    void checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds);
-    Accounts::Manager *m_accountManager;
-    QNetworkAccessManager *m_qnam;
-    friend class FacebookDataTypeSyncAdaptor;
-    friend class FacebookImageSyncAdaptor;
-    friend class FacebookNotificationSyncAdaptor;
-    friend class FacebookPostSyncAdaptor;
 
 private:
     // In the future, we should use a plugin system.

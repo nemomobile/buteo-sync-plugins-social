@@ -30,7 +30,6 @@
  */
 
 #include "twitterhometimelinesyncadaptor.h"
-#include "twittersyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
 
@@ -55,8 +54,8 @@
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
-TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *parent, TwitterSyncAdaptor *tsa)
-    : TwitterDataTypeSyncAdaptor(parent, tsa, SyncService::Posts)
+TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *parent)
+    : TwitterDataTypeSyncAdaptor(parent, SyncService::Posts)
     , m_contactFetchRequest(new QContactFetchRequest(this))
     , m_eventFeed(MEventFeed::instance())
 {
@@ -169,7 +168,7 @@ void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oau
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = m_tsa->m_qnam->get(nreq);
+    QNetworkReply *reply = m_qnam->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -212,7 +211,7 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = m_tsa->m_qnam->get(nreq);
+    QNetworkReply *reply = m_qnam->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);

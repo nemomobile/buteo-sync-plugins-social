@@ -42,13 +42,11 @@
 #include <Accounts/Service>
 #include <Accounts/Account>
 
-TwitterSyncAdaptor::TwitterSyncAdaptor(SyncService *parent)
-    : SocialNetworkSyncAdaptor(parent)
-    , m_accountManager(new Accounts::Manager(QLatin1String("sync"), this))
-    , m_qnam(new QNetworkAccessManager(this))
+TwitterSyncAdaptor::TwitterSyncAdaptor(QLatin1String serviceName, SyncService *parent)
+    : SocialNetworkSyncAdaptor(serviceName, parent)
 {
-    m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new TwitterMentionTimelineSyncAdaptor(parent, this));
-    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new TwitterHomeTimelineSyncAdaptor(parent, this));
+    m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new TwitterMentionTimelineSyncAdaptor(parent));
+    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new TwitterHomeTimelineSyncAdaptor(parent));
     // TODO: Contacts / Calendar / etc.
 
     // TODO: actually subscribe to account changes and set enabled accordingly
@@ -82,44 +80,4 @@ void TwitterSyncAdaptor::sync(const QString &dataType)
     }
 }
 
-void TwitterSyncAdaptor::checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds)
-{
-    QList<int> knownIds;
-    QStringList knownIdStrings = accountIdsWithSyncTimestamp(QLatin1String("twitter"), SyncService::dataType(dataType));
-    foreach (const QString &kis, knownIdStrings) {
-        // XXX TODO: instead of QString::number(accountId) use fb user id.
-        bool ok = true;
-        int intId = kis.toInt(&ok);
-        if (ok) {
-            knownIds.append(intId);
-        } else {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: unable to convert known id string to int: %1"))
-                    .arg(kis));
-        }
-    }
 
-    Accounts::AccountIdList currentIds = m_accountManager->accountList();
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
-            .arg(currentIds.size()));
-    for (int i = 0; i < currentIds.size(); ++i) {
-        int currId = currentIds.at(i);
-        Accounts::Account *act = m_accountManager->account(currId);
-        if (!act || act->providerName() != QLatin1String("twitter")) {
-            continue; // not a twitter account.  Ignore it.
-        }
-
-        if (knownIds.contains(currId)) {
-            knownIds.removeOne(currId);
-            updateIds->append(currId);
-        } else {
-            newIds->append(currId);
-        }
-    }
-
-    // anything left in knownIds must belong to an old, removed account.
-    for (int i = 0; i < knownIds.size(); ++i) {
-        purgeIds->append(knownIds.at(i));
-    }
-}

@@ -30,7 +30,6 @@
  */
 
 #include "facebookpostsyncadaptor.h"
-#include "facebooksyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
 
@@ -55,8 +54,8 @@
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
-FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
-    : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Posts)
+FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *parent)
+    : FacebookDataTypeSyncAdaptor(parent, SyncService::Posts)
     , m_contactFetchRequest(new QContactFetchRequest(this))
     , m_eventFeed(MEventFeed::instance())
 {
@@ -164,7 +163,7 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
     query.setQueryItems(queryItems);
     url.setQuery(query);
 #endif
-    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -199,7 +198,7 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
     query.setQueryItems(queryItems);
     url.setQuery(query);
 #endif
-    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);

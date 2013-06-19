@@ -1,13 +1,15 @@
 INCLUDEPATH += . ..
 
 HEADERS += \
-    $$PWD/twittersyncadaptor.h \
     $$PWD/twitterdatatypesyncadaptor.h \
     $$PWD/twittermentiontimelinesyncadaptor.h \
-    $$PWD/twitterhometimelinesyncadaptor.h
+    $$PWD/twitterhometimelinesyncadaptor.h \
+    $$PWD/twittersyncadaptor.h \
+    # CLEANUP ^
 
 SOURCES += \
-    $$PWD/twittersyncadaptor.cpp \
     $$PWD/twitterdatatypesyncadaptor.cpp \
     $$PWD/twittermentiontimelinesyncadaptor.cpp \
-    $$PWD/twitterhometimelinesyncadaptor.cpp
+    $$PWD/twitterhometimelinesyncadaptor.cpp \
+    $$PWD/twittersyncadaptor.cpp \
+    # CLEANUP ^

@@ -57,8 +57,6 @@
 #include <SignOn/SessionData>
 #include <SignOn/Error>
 
-class TwitterSyncAdaptor;
-
 USE_CONTACTS_NAMESPACE
 
 class TwitterMentionTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
@@ -66,7 +64,7 @@ class TwitterMentionTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterMentionTimelineSyncAdaptor(SyncService *parent, TwitterSyncAdaptor *tsa);
+    TwitterMentionTimelineSyncAdaptor(SyncService *parent);
     ~TwitterMentionTimelineSyncAdaptor();
 
     void sync(const QString &dataType);

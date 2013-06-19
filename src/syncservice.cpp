@@ -98,8 +98,8 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
 
     // Facebook
     {
-        FacebookSyncAdaptor *fbsa = new FacebookSyncAdaptor(parent);
         QLatin1String facebookService("facebook");
+        FacebookSyncAdaptor *fbsa = new FacebookSyncAdaptor(facebookService, parent);
         m_adaptors.insert(facebookService, fbsa);
         m_supportedDataTypes.insert(facebookService, QStringList() <<
                                     SyncService::dataType(SyncService::Notifications) <<
@@ -115,8 +115,8 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
 
     // Twitter
     {
-        TwitterSyncAdaptor *tsa = new TwitterSyncAdaptor(parent);
         QLatin1String twitterService("twitter");
+        TwitterSyncAdaptor *tsa = new TwitterSyncAdaptor(twitterService, parent);
         m_adaptors.insert(twitterService, tsa);
         m_supportedDataTypes.insert(twitterService, QStringList() <<
                                     SyncService::dataType(SyncService::Notifications) <<

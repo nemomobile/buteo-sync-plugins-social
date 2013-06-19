@@ -57,8 +57,6 @@
 
 class MEventFeed;
 
-class FacebookSyncAdaptor;
-
 USE_CONTACTS_NAMESPACE
 
 class FacebookPostSyncAdaptor : public FacebookDataTypeSyncAdaptor
@@ -66,7 +64,7 @@ class FacebookPostSyncAdaptor : public FacebookDataTypeSyncAdaptor
     Q_OBJECT
 
 public:
-    FacebookPostSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa);
+    FacebookPostSyncAdaptor(SyncService *parent);
     ~FacebookPostSyncAdaptor();
 
     void sync(const QString &dataType);

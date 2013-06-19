@@ -30,7 +30,6 @@
  */
 
 #include "facebooknotificationsyncadaptor.h"
-#include "facebooksyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
 
@@ -58,8 +57,8 @@
 
 // currently, we integrate with the device notifications via nemo-qml-plugin-notification
 
-FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
-    : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Notifications)
+FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *parent)
+    : FacebookDataTypeSyncAdaptor(parent, SyncService::Notifications)
     , m_contactFetchRequest(new QContactFetchRequest(this))
     , m_eventFeed(MEventFeed::instance())
 {
@@ -178,7 +177,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     url.setQuery(query);
 #endif
 
-    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);

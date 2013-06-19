@@ -37,8 +37,18 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 
-SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(SyncService *parent)
-    : QObject(parent), m_status(SocialNetworkSyncAdaptor::Invalid), q(parent)
+#include <QtNetwork/QNetworkAccessManager>
+
+//libaccounts-qt
+#include <Accounts/Manager>
+
+SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName, SyncService *parent)
+    : QObject(parent)
+    , m_status(SocialNetworkSyncAdaptor::Invalid)
+    , m_serviceName(serviceName.toLatin1())
+    , m_accountManager(new Accounts::Manager(QLatin1String("sync"), this))
+    , m_qnam(new QNetworkAccessManager(this))
+    , q(parent)
 {
 }
 
@@ -56,10 +66,56 @@ bool SocialNetworkSyncAdaptor::enabled() const
     return m_enabled;
 }
 
+QLatin1String SocialNetworkSyncAdaptor::serviceName() const
+{
+    return m_serviceName;
+}
+
 void SocialNetworkSyncAdaptor::sync(const QString &dataType)
 {
     Q_UNUSED(dataType)
     TRACE(SOCIALD_ERROR, QString(QLatin1String("error: should be overridden by derived types")));
+}
+
+void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds)
+{
+    QList<int> knownIds;
+    QStringList knownIdStrings = accountIdsWithSyncTimestamp(m_serviceName, SyncService::dataType(dataType));
+    foreach (const QString &kis, knownIdStrings) {
+        bool ok = true;
+        int intId = kis.toInt(&ok);
+        if (ok) {
+            knownIds.append(intId);
+        } else {
+            TRACE(SOCIALD_ERROR,
+                    QString(QLatin1String("error: unable to convert known id string to int: %1"))
+                    .arg(kis));
+        }
+    }
+
+    Accounts::AccountIdList currentIds = m_accountManager->accountList();
+    TRACE(SOCIALD_DEBUG,
+            QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
+            .arg(currentIds.size()));
+    for (int i = 0; i < currentIds.size(); ++i) {
+        int currId = currentIds.at(i);
+        Accounts::Account *act = m_accountManager->account(currId);
+        if (!act || act->providerName() != m_serviceName) {
+            continue; // not same account as m_serviceName.  Ignore it.
+        }
+
+        if (knownIds.contains(currId)) {
+            knownIds.removeOne(currId);
+            updateIds->append(currId);
+        } else {
+            newIds->append(currId);
+        }
+    }
+
+    // anything left in knownIds must belong to an old, removed account.
+    for (int i = 0; i < knownIds.size(); ++i) {
+        purgeIds->append(knownIds.at(i));
+    }
 }
 
 /*!

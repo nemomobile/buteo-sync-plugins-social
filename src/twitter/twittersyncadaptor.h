@@ -54,18 +54,10 @@ class TwitterSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterSyncAdaptor(SyncService *parent = 0);
+    TwitterSyncAdaptor(QLatin1String serviceName, SyncService *parent = 0);
     ~TwitterSyncAdaptor();
 
     void sync(const QString &dataType);
-
-protected:
-    void checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds);
-    Accounts::Manager *m_accountManager;
-    QNetworkAccessManager *m_qnam;
-    friend class TwitterDataTypeSyncAdaptor;
-    friend class TwitterMentionTimelineSyncAdaptor;
-    friend class TwitterHomeTimelineSyncAdaptor;
 
 private:
     // In the future, we should use a plugin system.

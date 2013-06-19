@@ -36,8 +36,13 @@
 #include <QtCore/QDateTime>
 #include <QtCore/QString>
 
+#include "syncservice.h"
+
 class QSqlDatabase;
 class SyncService;
+class QNetworkAccessManager;
+namespace Accounts { class Manager; }
+
 class SocialNetworkSyncAdaptor : public QObject
 {
     Q_OBJECT
@@ -54,11 +59,13 @@ public:
     };
 
 public:
-    SocialNetworkSyncAdaptor(SyncService *parent = 0);
+    SocialNetworkSyncAdaptor(QString serviceName, SyncService *parent = 0);
     virtual ~SocialNetworkSyncAdaptor();
 
     Status status() const;
     bool enabled() const;
+    QLatin1String serviceName() const;
+    void checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds);
     virtual void sync(const QString &dataType); // do we need a "queueSync"? should this function have a return value?
 
 Q_SIGNALS:
@@ -78,6 +85,9 @@ protected:
 
     Status m_status;
     bool m_enabled;
+    QLatin1String m_serviceName;
+    Accounts::Manager *m_accountManager;
+    QNetworkAccessManager *m_qnam;
 
 private:
     SyncService *q;

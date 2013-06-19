@@ -57,8 +57,6 @@
 
 class MEventFeed;
 
-class TwitterSyncAdaptor;
-
 USE_CONTACTS_NAMESPACE
 
 class TwitterHomeTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
@@ -66,7 +64,7 @@ class TwitterHomeTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterHomeTimelineSyncAdaptor(SyncService *parent, TwitterSyncAdaptor *tsa);
+    TwitterHomeTimelineSyncAdaptor(SyncService *parent);
     ~TwitterHomeTimelineSyncAdaptor();
 
     void sync(const QString &dataType);

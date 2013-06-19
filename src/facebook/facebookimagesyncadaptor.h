@@ -56,14 +56,13 @@
 #include <QtContacts/QContact>
 
 class SyncService;
-class FacebookSyncAdaptor;
 
 class FacebookImageSyncAdaptor : public FacebookDataTypeSyncAdaptor
 {
     Q_OBJECT
 
 public:
-    FacebookImageSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa);
+    FacebookImageSyncAdaptor(SyncService *parent);
     ~FacebookImageSyncAdaptor();
 
     void sync(const QString &dataType);

@@ -30,7 +30,6 @@
  */
 
 #include "facebookdatatypesyncadaptor.h"
-#include "facebooksyncadaptor.h"
 #include "trace.h"
 
 #include <QtCore/QVariantMap>
@@ -59,9 +58,8 @@
 
 Q_DECLARE_METATYPE(SignOn::Identity*)
 
-FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa, SyncService::DataType dataType)
-    : SocialNetworkSyncAdaptor(parent)
-    , m_fbsa(fbsa)
+FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *parent, SyncService::DataType dataType)
+    : SocialNetworkSyncAdaptor("facebook", parent)
     , m_dataType(dataType)
 {
 }
@@ -85,7 +83,8 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
     // 3) for existing accounts, pull new data for the existing account
 
     QList<int> newIds, purgeIds, updateIds;
-    m_fbsa->checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
+    // Implemented in socialsyncadaptor
+    checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
     purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
     updateDataForAccounts(newIds);
     updateDataForAccounts(updateIds);
@@ -98,7 +97,7 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
 void FacebookDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
-        Accounts::Account *act = m_fbsa->m_accountManager->account(accountId);
+        Accounts::Account *act = m_accountManager->account(accountId);
         if (!act) {
             TRACE(SOCIALD_ERROR,
                     QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))

@@ -30,7 +30,6 @@
  */
 
 #include "twittermentiontimelinesyncadaptor.h"
-#include "twittersyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
 
@@ -59,8 +58,8 @@
 
 // currently, we integrate with the device notifications via nemo-qml-plugin-notification
 
-TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService *parent, TwitterSyncAdaptor *fbsa)
-    : TwitterDataTypeSyncAdaptor(parent, fbsa, SyncService::Notifications)
+TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService *parent)
+    : TwitterDataTypeSyncAdaptor(parent, SyncService::Notifications)
     , m_contactFetchRequest(new QContactFetchRequest(this))
 {
     //: The text displayed for Twitter notifications on the lock screen
@@ -176,7 +175,7 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = m_tsa->m_qnam->get(nreq);
+    QNetworkReply *reply = m_qnam->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);

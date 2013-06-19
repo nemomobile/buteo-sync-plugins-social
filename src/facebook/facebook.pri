@@ -1,15 +1,17 @@
 INCLUDEPATH += . ..
 
 HEADERS += \
-    $$PWD/facebooksyncadaptor.h \
     $$PWD/facebookdatatypesyncadaptor.h \
     $$PWD/facebookimagesyncadaptor.h \
     $$PWD/facebooknotificationsyncadaptor.h \
-    $$PWD/facebookpostsyncadaptor.h
+    $$PWD/facebookpostsyncadaptor.h \
+    $$PWD/facebooksyncadaptor.h \
+    # CLEANUP ^
 
 SOURCES += \
-    $$PWD/facebooksyncadaptor.cpp \
     $$PWD/facebookdatatypesyncadaptor.cpp \
     $$PWD/facebookimagesyncadaptor.cpp \
     $$PWD/facebooknotificationsyncadaptor.cpp \
-    $$PWD/facebookpostsyncadaptor.cpp
+    $$PWD/facebookpostsyncadaptor.cpp \
+    $$PWD/facebooksyncadaptor.cpp \
+    # CLEANUP ^
