@@ -36,6 +36,10 @@
 
 #include <QtCore/QPair>
 
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+#include <QUrlQuery>
+#endif
+
 //QtMobility
 #include <QtContacts/QContactManager>
 #include <QtContacts/QContactFetchHint>
@@ -73,11 +77,19 @@ TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService
     if (m_contactFetchRequest) {
         QContactFetchHint cfh;
         cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
         cfh.setDetailDefinitionsHint(QStringList()
-                << QContactAvatar::DefinitionName
-                << QContactName::DefinitionName
-                << QContactNickname::DefinitionName
-                << QContactPresence::DefinitionName);
+                                     << QContactAvatar::DefinitionName
+                                     << QContactName::DefinitionName
+                                     << QContactNickname::DefinitionName
+                                     << QContactPresence::DefinitionName);
+#else
+        cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
+                               << QContactDetail::TypeAvatar
+                               << QContactDetail::TypeName
+                               << QContactDetail::TypeNickname
+                               << QContactDetail::TypePresence);
+#endif
         m_contactFetchRequest->setFetchHint(cfh);
         m_contactFetchRequest->setManager(&m_contactManager);
         connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
@@ -152,7 +164,13 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
     }
     QString baseUrl = QLatin1String("https://api.twitter.com/1.1/statuses/mentions_timeline.json");
     QUrl url(baseUrl);
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
     url.setQueryItems(queryItems);
+#else
+    QUrlQuery query(url);
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
+#endif
 
     QNetworkRequest nreq(url);
     nreq.setRawHeader("Authorization", authorizationHeader(
@@ -237,17 +255,34 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                 QContact matchingContact = findMatchingContact(nameString);
                 if (matchingContact != QContact()) {
                     QString originalNameString = nameString;
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
                     if (!matchingContact.displayLabel().isEmpty()) {
                         nameString = matchingContact.displayLabel();
                     } else if (!matchingContact.detail<QContactName>().customLabel().isEmpty()) {
                         nameString = matchingContact.detail<QContactName>().customLabel();
                     }
+#else
+                    QContactName contactName = matchingContact.detail<QContactName>();
+                    QString firstName = contactName.firstName();
+                    if (!firstName.isEmpty()) {
+                        nameString = firstName;
+                    }
+
+                    QString lastName = contactName.lastName();
+                    if (!lastName.isEmpty()) {
+                        nameString = (!firstName.isEmpty() ? (firstName + " ") : "") + lastName;
+                    }
+#endif
 
                     QList<QContactAvatar> allAvatars = matchingContact.details<QContactAvatar>();
                     bool foundTwitterProfileImage = false;
                     foreach (const QContactAvatar &avat, allAvatars) {
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
                         if (avat.value(QTCONTACTS_SQLITE_AVATAR_METADATA) == QLatin1String("profile")
                                 && !avat.imageUrl().toString().isEmpty()) {
+#else
+                        if (!avat.imageUrl().toString().isEmpty()) {
+#endif
                             // found avatar synced from Twitter sociald sync adaptor
                             avatar = avat.imageUrl().toString();
                             foundTwitterProfileImage = true;
@@ -341,10 +376,16 @@ QContact TwitterMentionTimelineSyncAdaptor::findMatchingContact(const QString &n
     foreach (const QContact &c, m_contacts) {
         QList<QContactName> names = c.details<QContactName>();
         foreach (const QContactName &n, names) {
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
             if (n.customLabel() == nameString ||
                     (firstAndLast.size() >= 2 &&
                      n.firstName() == firstAndLast.at(0) &&
                      n.lastName() == firstAndLast.at(firstAndLast.size()-1))) {
+#else
+            if (firstAndLast.size() >= 2 &&
+                     n.firstName() == firstAndLast.at(0) &&
+                     n.lastName() == firstAndLast.at(firstAndLast.size()-1)) {
+#endif
                 return c;
             }
         }

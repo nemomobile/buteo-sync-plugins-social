@@ -1,17 +1,46 @@
-TEMPLATE = app
+TEMPLATE = lib
 
-TARGET = sociald
+TARGET = sociald-client
 VERSION = 0.0.1
-CONFIG += eventfeed
+CONFIG += link_pkgconfig plugin
 
-target.path += /usr/bin
+equals(QT_MAJOR_VERSION, 4): {
+    # possibly temporary? use DBus API instead of meventfeed.h ?
+    CONFIG += mobility meegotouchevents eventfeed
+    PKGCONFIG += accounts-qt libsignon-qt nemonotifications QJson buteosyncfw
+    MOBILITY += contacts
+    DEFINES *= BEGIN_CONTACTS_NAMESPACE=QTM_BEGIN_NAMESPACE
+    DEFINES *= END_CONTACTS_NAMESPACE=QTM_END_NAMESPACE
+    DEFINES *= USE_CONTACTS_NAMESPACE=QTM_USE_NAMESPACE
+}
+equals(QT_MAJOR_VERSION, 5): {
+    CONFIG += meegotouchevents-qt5 eventfeed-qt5
+    PKGCONFIG += Qt5Contacts accounts-qt5 libsignon-qt5 nemonotifications-qt5 buteosyncfw5
+    DEFINES *= USING_QTPIM
+    DEFINES *= BEGIN_CONTACTS_NAMESPACE=QT_BEGIN_NAMESPACE_CONTACTS
+    DEFINES *= END_CONTACTS_NAMESPACE=QT_END_NAMESPACE_CONTACTS
+    DEFINES *= USE_CONTACTS_NAMESPACE=QTCONTACTS_USE_NAMESPACE
+}
+
+PKGCONFIG += libsailfishkeyprovider
+
+target.path += /usr/lib/buteo-plugins
+
+client.path = /etc/buteo/profiles/client
+client.files = xml/sociald.xml
+
+sync.path = /etc/buteo/profiles/sync
+sync.files = xml/sync/*
+
+service.path = /etc/buteo/profiles/service
+service.files = xml/service/*
 
 QT += \
     network \
     dbus \
     sql
 
-include(facebook/facebook.pri)
+#include(facebook/facebook.pri)
 include(twitter/twitter.pri)
 
 # if you change this, you need to modify jolla-gallery-facebook too!
@@ -19,20 +48,16 @@ DEFINES += 'SOCIALD_DATABASE_DIR=\'\"/home/nemo/.config/sociald\"\''
 DEFINES += 'SOCIALD_DATABASE_NAME=\'\"sociald.db\"\''
 
 HEADERS += \
+    $$PWD/buteosocialsync.h \
     $$PWD/socialnetworksyncadaptor.h \
     $$PWD/syncservice.h \
     $$PWD/syncservice_p.h \
     $$PWD/trace.h
 
 SOURCES += \
-    $$PWD/main.cpp \
+    $$PWD/buteosocialsync.cpp \
     $$PWD/socialnetworksyncadaptor.cpp \
     $$PWD/syncservice.cpp
-
-# autogenerate the dbus interface implementation from the interface specification
-system(qdbusxml2cpp org.nemomobile.sociald.sync.xml -a syncdbusadaptor -c SyncDBusAdaptor -l SyncService -i syncservice.h)
-HEADERS += syncdbusadaptor.h
-SOURCES += syncdbusadaptor.cpp
 
 MOC_DIR = $$PWD/../.moc
 OBJECTS_DIR = $$PWD/../.obj
@@ -61,14 +86,8 @@ engineering_english_install.CONFIG += no_check_exist
 QMAKE_EXTRA_TARGETS += ts engineering_english
 PRE_TARGETDEPS += ts engineering_english
 
-# dbus service and interface
-service.files = org.nemomobile.sociald.sync.service
-service.path = /usr/share/dbus-1/services/
-interface.files = org.nemomobile.sociald.sync.xml
-interface.path = /usr/share/dbus-1/interfaces/
-
 # lipstick notification categories
 notification_categories.files = facebook/x-nemo.social.facebook.notification.conf twitter/x-nemo.social.twitter.mention.conf
 notification_categories.path = /usr/share/lipstick/notificationcategories/
 
-INSTALLS = target service interface notification_categories ts_install engineering_english_install
+INSTALLS = target client sync service notification_categories ts_install engineering_english_install
