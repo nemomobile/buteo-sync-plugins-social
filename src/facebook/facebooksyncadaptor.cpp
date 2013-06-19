@@ -66,8 +66,10 @@ FacebookSyncAdaptor::~FacebookSyncAdaptor()
 
 void FacebookSyncAdaptor::sync(const QString &dataType)
 {
+    TRACE(SOCIALD_DEBUG, QString("FOOBAR 1"));
     SocialNetworkSyncAdaptor *s = m_adaptors.value(dataType);
     if (s && s->enabled()) {
+        TRACE(SOCIALD_DEBUG, QString("Adaptor enabled"));
         if (s->status() == SocialNetworkSyncAdaptor::Inactive) {
             m_status = SocialNetworkSyncAdaptor::Busy;
             s->sync(dataType);

@@ -237,8 +237,8 @@ QVariantMap FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyD
     parsed = jsonParser.parse(replyData, ok);
 #else
     QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
-    *ok = !doc.isEmpty();
-    parsed = doc.toVariant();
+    *ok = !jsonDocument.isEmpty();
+    parsed = jsonDocument.toVariant();
 #endif
 
     if (*ok && parsed.type() == QVariant::Map) {

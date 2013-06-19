@@ -44,8 +44,11 @@
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
 
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
 //QtMobility
 #include <qmobilityglobal.h>
+#endif
+
 #include <QtContacts/QContactManager>
 #include <QtContacts/QContactAbstractRequest>
 #include <QtContacts/QContactFetchRequest>

@@ -40,7 +40,7 @@ QT += \
     dbus \
     sql
 
-#include(facebook/facebook.pri)
+include(facebook/facebook.pri)
 include(twitter/twitter.pri)
 
 # if you change this, you need to modify jolla-gallery-facebook too!

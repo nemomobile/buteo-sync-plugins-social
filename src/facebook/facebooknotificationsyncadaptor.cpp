@@ -79,11 +79,19 @@ FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *pa
     if (m_contactFetchRequest) {
         QContactFetchHint cfh;
         cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
         cfh.setDetailDefinitionsHint(QStringList()
-                << QContactAvatar::DefinitionName
-                << QContactName::DefinitionName
-                << QContactNickname::DefinitionName
-                << QContactPresence::DefinitionName);
+                                     << QContactAvatar::DefinitionName
+                                     << QContactName::DefinitionName
+                                     << QContactNickname::DefinitionName
+                                     << QContactPresence::DefinitionName);
+#else
+        cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
+                               << QContactDetail::TypeAvatar
+                               << QContactDetail::TypeName
+                               << QContactDetail::TypeNickname
+                               << QContactDetail::TypePresence);
+#endif
         m_contactFetchRequest->setFetchHint(cfh);
         m_contactFetchRequest->setManager(&m_contactManager);
         connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
@@ -162,9 +170,16 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("include_read")), QString(QLatin1String("true"))));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     QUrl url(QLatin1String("https://graph.facebook.com/me/notifications"));
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
     url.setQueryItems(queryItems);
+#else
+    QUrlQuery query(url);
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
+#endif
+
     QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
-    
+
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -251,17 +266,35 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                 QContact matchingContact = findMatchingContact(nameString);
                 if (matchingContact != QContact()) {
                     QString originalNameString = nameString;
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
+                    // TODO: No displayLabel() or customLabel() in Qt5 Pim
                     if (!matchingContact.displayLabel().isEmpty()) {
                         nameString = matchingContact.displayLabel();
                     } else if (!matchingContact.detail<QContactName>().customLabel().isEmpty()) {
                         nameString = matchingContact.detail<QContactName>().customLabel();
                     }
+#else
+                    QContactName contactName = matchingContact.detail<QContactName>();
+                    QString firstName = contactName.firstName();
+                    if (!firstName.isEmpty()) {
+                        nameString = firstName;
+                    }
+
+                    QString lastName = contactName.lastName();
+                    if (!lastName.isEmpty()) {
+                        nameString = (!firstName.isEmpty() ? (firstName + " ") : "") + lastName;
+                    }
+#endif
 
                     QList<QContactAvatar> allAvatars = matchingContact.details<QContactAvatar>();
                     bool foundFacebookPicture = false;
                     foreach (const QContactAvatar &avat, allAvatars) {
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
                         if (avat.value(QTCONTACTS_SQLITE_AVATAR_METADATA) == QLatin1String("picture")
                                 && !avat.imageUrl().toString().isEmpty()) {
+#else
+                        if (!avat.imageUrl().toString().isEmpty()) {
+#endif
                             // found avatar synced from Facebook sociald sync adaptor
                             avatar = avat.imageUrl().toString();
                             foundFacebookPicture = true;
@@ -329,6 +362,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
             // a first request, or itself a paging request).
             QUrl prevUrl(paging.value("previous").toString());
             QUrl nextUrl(paging.value("next").toString());
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
             if (prevUrl.hasQueryItem(QLatin1String("until"))) {
                 until = prevUrl.queryItemValue(QLatin1String("until"));
                 pagingToken = prevUrl.queryItemValue(QLatin1String("__paging_token"));
@@ -336,7 +370,17 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                 until = nextUrl.queryItemValue(QLatin1String("until"));
                 pagingToken = nextUrl.queryItemValue(QLatin1String("__paging_token"));
             }
-
+#else
+            QUrlQuery prevUrlQuery(prevUrl);
+            if (prevUrlQuery.hasQueryItem(QLatin1String("until"))) {
+                until = prevUrlQuery.queryItemValue(QLatin1String("until"));
+                pagingToken = prevUrlQuery.queryItemValue(QLatin1String("__paging_token"));
+            } else {
+                QUrlQuery nextUrlQuery(nextUrl);
+                until = nextUrlQuery.queryItemValue(QLatin1String("until"));
+                pagingToken = nextUrlQuery.queryItemValue(QLatin1String("__paging_token"));
+            }
+#endif
             // request the next page of results.
             requestNotifications(accountId, accessToken, until, pagingToken);
         }
@@ -378,10 +422,16 @@ QContact FacebookNotificationSyncAdaptor::findMatchingContact(const QString &nam
     foreach (const QContact &c, m_contacts) {
         QList<QContactName> names = c.details<QContactName>();
         foreach (const QContactName &n, names) {
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
             if (n.customLabel() == nameString ||
                     (firstAndLast.size() == 2 &&
                      n.firstName() == firstAndLast.at(0) &&
                      n.lastName() == firstAndLast.at(1))) {
+#else
+            if (firstAndLast.size() == 2 &&
+                     n.firstName() == firstAndLast.at(0) &&
+                     n.lastName() == firstAndLast.at(1)) {
+#endif
                 return c;
             }
         }

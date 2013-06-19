@@ -42,8 +42,11 @@
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
 
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
 //QtMobility
 #include <qmobilityglobal.h>
+#endif
+
 #include <QtContacts/QContactManager>
 #include <QtContacts/QContact>
 #include <QtContacts/QContactFetchRequest>
@@ -56,7 +59,7 @@ class MEventFeed;
 
 class FacebookSyncAdaptor;
 
-QTM_USE_NAMESPACE
+USE_CONTACTS_NAMESPACE
 
 class FacebookPostSyncAdaptor : public FacebookDataTypeSyncAdaptor
 {
