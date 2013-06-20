@@ -80,6 +80,7 @@ bool ButeoSocial::startSync()
                   QString(QLatin1String("performing sync of %1 from %2"))
                   .arg(m_dataType).arg(m_serviceName));
             m_socialNetworkSyncAdaptor->sync(m_dataType);
+            return true;
         } else {
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("%1 sync adaptor for %2 is still busy with last sync"))
@@ -92,7 +93,7 @@ bool ButeoSocial::startSync()
               .arg(m_serviceName)
               .arg(m_dataType));
     }
-    return true;
+    return false;
 }
 
 void ButeoSocial::abortSync(Sync::SyncStatus)
