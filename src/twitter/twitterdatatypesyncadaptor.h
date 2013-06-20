@@ -80,6 +80,9 @@ protected Q_SLOTS:
 private Q_SLOTS:
     void signOnError(const SignOn::Error &err);
     void signOnResponse(const SignOn::SessionData &sdata);
+
+private:
+    bool consumerKeyAndSecret(QString &consumerKey, QString &consumerSecret);
 };
 
 #endif // TWITTERDATATYPESYNCADAPTOR_H

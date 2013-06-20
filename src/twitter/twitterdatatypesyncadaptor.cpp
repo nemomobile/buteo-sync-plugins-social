@@ -160,6 +160,16 @@ void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &account
         asrv->deleteLater();
         SignOn::AuthSession *session = ident->createSession(authData.method());
         QVariantMap sessionData = authData.parameters();
+
+        // Fetch consumer key and secret from keyprovider
+        QString oauthConsumerKey;
+        QString consumerSecret;
+        if (!consumerKeyAndSecret(oauthConsumerKey, consumerSecret)) {
+            return;
+        }
+
+        sessionData.insert(QLatin1String("ConsumerKey"), oauthConsumerKey);
+        sessionData.insert(QLatin1String("ConsumerSecret"), consumerSecret);
         sessionData.insert(QLatin1String("UiPolicy"), SignOn::NoUserInteractionPolicy);
         QVariant identVar = QVariant::fromValue<SignOn::Identity*>(ident);
         session->setProperty("ident", identVar);
@@ -275,18 +285,11 @@ static QString hmacSha1(const QString &signingKey, const QString &baseString)
 QString TwitterDataTypeSyncAdaptor::authorizationHeader(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &requestMethod, const QString &requestUrl, const QList<QPair<QString, QString> > &parameters)
 {
     // Twitter requires all requests to be signed with an authorization header.
-    char *cConsumerKey = NULL;
-    char *cConsumerSecret = NULL;
-    int ckSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_key", &cConsumerKey);
-    int csSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_secret", &cConsumerSecret);
-
-    if (ckSuccess != 0 || cConsumerKey == NULL || csSuccess != 0 || cConsumerSecret == NULL) {
-        qWarning() << Q_FUNC_INFO << "No valid OAuth2 keys found";
+    QString consumerSecret;
+    QString oauthConsumerKey;
+    if (!consumerKeyAndSecret(oauthConsumerKey, consumerSecret)) {
         return QString();
     }
-
-    QString consumerSecret = QLatin1String(cConsumerSecret);
-    QString oauthConsumerKey = QLatin1String(cConsumerKey);
 
     QString oauthNonce = QString::fromLatin1(QUuid::createUuid().toByteArray().toBase64());
     QString oauthSignature;
@@ -388,4 +391,23 @@ QVariant TwitterDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData,
 
     *ok = false;
     return QVariantMap();
+}
+
+bool TwitterDataTypeSyncAdaptor::consumerKeyAndSecret(QString &consumerKey, QString &consumerSecret)
+{
+    char *cConsumerKey = NULL;
+    char *cConsumerSecret = NULL;
+    int ckSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_key", &cConsumerKey);
+    int csSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_secret", &cConsumerSecret);
+
+    if (ckSuccess != 0 || cConsumerKey == NULL || csSuccess != 0 || cConsumerSecret == NULL) {
+        qWarning() << Q_FUNC_INFO << "No valid OAuth2 keys found";
+        return false;
+    }
+
+    consumerKey = QLatin1String(cConsumerKey);
+    consumerSecret = QLatin1String(cConsumerSecret);
+    free(cConsumerKey);
+    free(cConsumerSecret);
+    return true;
 }
