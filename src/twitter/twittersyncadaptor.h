@@ -54,7 +54,7 @@ class TwitterSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterSyncAdaptor(QLatin1String serviceName, SyncService *parent = 0);
+    TwitterSyncAdaptor(QLatin1String serviceName, SyncService *syncService, QObject *parent);
     ~TwitterSyncAdaptor();
 
     void sync(const QString &dataType);

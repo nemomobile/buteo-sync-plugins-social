@@ -66,7 +66,7 @@ class FacebookNotificationSyncAdaptor : public FacebookDataTypeSyncAdaptor
     Q_OBJECT
 
 public:
-    FacebookNotificationSyncAdaptor(SyncService *parent);
+    FacebookNotificationSyncAdaptor(SyncService *syncService, QObject *parent);
     ~FacebookNotificationSyncAdaptor();
 
     void sync(const QString &dataType);

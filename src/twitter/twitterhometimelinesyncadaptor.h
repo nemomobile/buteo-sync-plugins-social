@@ -64,7 +64,7 @@ class TwitterHomeTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterHomeTimelineSyncAdaptor(SyncService *parent);
+    TwitterHomeTimelineSyncAdaptor(SyncService *syncService, QObject *parent);
     ~TwitterHomeTimelineSyncAdaptor();
 
     void sync(const QString &dataType);

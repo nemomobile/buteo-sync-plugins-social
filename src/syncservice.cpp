@@ -33,8 +33,11 @@
 #include "syncservice_p.h"
 #include "trace.h"
 
-#include "facebook/facebooksyncadaptor.h"
-#include "twitter/twittersyncadaptor.h"
+#include "twitter/twitterhometimelinesyncadaptor.h"
+#include "twitter/twittermentiontimelinesyncadaptor.h"
+#include "facebook/facebookimagesyncadaptor.h"
+#include "facebook/facebooknotificationsyncadaptor.h"
+#include "facebook/facebookpostsyncadaptor.h"
 
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -43,7 +46,7 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 
-SyncServicePrivate::SyncServicePrivate(SyncService *parent)
+SyncServicePrivate::SyncServicePrivate(const QString &connectionName, SyncService *parent)
     : QObject(parent), q(parent)
 {
     if (!QFile::exists(QString("%1/%2").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(QLatin1String(SOCIALD_DATABASE_NAME)))) {
@@ -63,7 +66,7 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     }
 
     // open the database in which we store our sync event information
-    m_db = QSqlDatabase::addDatabase("QSQLITE", QLatin1String("sociald"));
+    m_db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
     m_db.setDatabaseName(QString("%1/%2").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(QLatin1String(SOCIALD_DATABASE_NAME)));
     if (!m_db.open()) {
         TRACE(SOCIALD_ERROR,
@@ -99,8 +102,7 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     // Facebook
     {
         QLatin1String facebookService("facebook");
-        FacebookSyncAdaptor *fbsa = new FacebookSyncAdaptor(facebookService, parent);
-        m_adaptors.insert(facebookService, fbsa);
+        m_supportedServices.append(facebookService);
         m_supportedDataTypes.insert(facebookService, QStringList() <<
                                     SyncService::dataType(SyncService::Notifications) <<
                                     SyncService::dataType(SyncService::Images) <<
@@ -116,8 +118,7 @@ SyncServicePrivate::SyncServicePrivate(SyncService *parent)
     // Twitter
     {
         QLatin1String twitterService("twitter");
-        TwitterSyncAdaptor *tsa = new TwitterSyncAdaptor(twitterService, parent);
-        m_adaptors.insert(twitterService, tsa);
+        m_supportedServices.append(twitterService);
         m_supportedDataTypes.insert(twitterService, QStringList() <<
                                     SyncService::dataType(SyncService::Notifications) <<
                                     SyncService::dataType(SyncService::Posts));
@@ -131,10 +132,36 @@ SyncServicePrivate::~SyncServicePrivate()
     }
 }
 
+SocialNetworkSyncAdaptor *SyncServicePrivate::createAdaptor(const QString &socialService, const QString &dataType, QObject *parent)
+{
+    if (socialService == "twitter") {
+        if (dataType == SyncService::dataType(SyncService::Notifications)) {
+            return new TwitterMentionTimelineSyncAdaptor(q, parent);
+        } else if (dataType == SyncService::dataType(SyncService::Posts)) {
+            return new TwitterHomeTimelineSyncAdaptor(q, parent);
+        } else {
+            return 0;
+        }
+    } else if (socialService == "facebook") {
+        if (dataType == SyncService::dataType(SyncService::Notifications)) {
+            return new FacebookNotificationSyncAdaptor(q, parent);
+        } else if (dataType == SyncService::dataType(SyncService::Images)) {
+            return new FacebookImageSyncAdaptor(q, parent);
+        } else if (dataType == SyncService::dataType(SyncService::Posts)) {
+            return new FacebookPostSyncAdaptor(q, parent);
+        } else {
+            return 0;
+        }
+    } else {
+        return 0;
+    }
+}
+
 // --------------------------------------------------
 
-SyncService::SyncService(QObject *parent)
-    : QObject(parent), d(new SyncServicePrivate(this))
+SyncService::SyncService(const QString &serviceName, QObject *parent)
+    : QObject(parent)
+    , d(new SyncServicePrivate(QString("sociald%1").arg(serviceName), this))
 {
 }
 
@@ -149,26 +176,7 @@ SyncService::~SyncService()
 */
 QStringList SyncService::supportedSocialServices() const
 {
-    return d->m_adaptors.keys();
-}
-
-/*
-    A social service's sync adaptor will be enabled if
-    a valid account with the social service exists.
-    Attempting to sync() with a supported social service
-    which is not enabled will result in a no-op.
-*/
-QStringList SyncService::enabledSocialServices() const
-{
-    QStringList retn;
-    QStringList allServices = d->m_adaptors.keys();
-    foreach (const QString &srv, allServices) {
-        if (d->m_adaptors.value(srv)->enabled()) {
-            retn.append(srv);
-        }
-    }
-
-    return retn;
+    return d->m_supportedServices;
 }
 
 /*
@@ -189,45 +197,30 @@ QStringList SyncService::supportedDataTypes(const QString &socialService) const
     return d->m_supportedDataTypes.value(socialService);
 }
 
-/*
-    Triggers sync of all data of the specified data types
-    from the specified social service.
-*/
-void SyncService::sync(const QString &socialService, const QStringList &types)
+SocialNetworkSyncAdaptor *SyncService::createAdaptor(const QString &socialService, const QString &dataType, QObject *parent)
 {
     if (!supportedSocialServices().contains(socialService)) {
         TRACE(SOCIALD_INFORMATION,
                 QString(QLatin1String("%1 is not a supported social service"))
                 .arg(socialService));
-        return;
+        return 0;
     }
 
-    if (!enabledSocialServices().contains(socialService)) {
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("%1 is not currently enabled"))
-                .arg(socialService));
-        return; // no-op.
-    }
-
-    SocialNetworkSyncAdaptor *adaptor = d->m_adaptors.value(socialService);
     QStringList allTypes = validDataTypes();
     QStringList supportedTypes = supportedDataTypes(socialService);
-    foreach (const QString &dataType, types) {
-        if (!allTypes.contains(dataType)) {
-            TRACE(SOCIALD_INFORMATION,
-                    QString(QLatin1String("%1 is not a valid data type"))
-                    .arg(dataType));
+    if (!allTypes.contains(dataType)) {
+        TRACE(SOCIALD_INFORMATION,
+              QString(QLatin1String("%1 is not a valid data type"))
+              .arg(dataType));
+        return 0;
+    } else {
+        if (supportedTypes.contains(dataType)) {
+            return d->createAdaptor(socialService, dataType, parent);
         } else {
-            if (supportedTypes.contains(dataType)) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("performing sync of %1 from %2"))
-                        .arg(dataType).arg(socialService));
-                adaptor->sync(dataType);
-            } else {
-                TRACE(SOCIALD_INFORMATION,
-                        QString(QLatin1String("%1 is not a supported data type"))
-                        .arg(dataType));
-            }
+            TRACE(SOCIALD_INFORMATION,
+                  QString(QLatin1String("%1 is not a supported data type"))
+                  .arg(dataType));
+            return 0;
         }
     }
 }

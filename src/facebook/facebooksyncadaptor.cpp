@@ -43,12 +43,12 @@
 #include <Accounts/Service>
 #include <Accounts/Account>
 
-FacebookSyncAdaptor::FacebookSyncAdaptor(QLatin1String serviceName, SyncService *parent)
-    : SocialNetworkSyncAdaptor(serviceName, parent)
+FacebookSyncAdaptor::FacebookSyncAdaptor(QLatin1String serviceName, SyncService *syncService, QObject *parent)
+    : SocialNetworkSyncAdaptor(serviceName, syncService, parent)
 {
-    m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new FacebookNotificationSyncAdaptor(parent));
-    m_adaptors.insert(SyncService::dataType(SyncService::Images), new FacebookImageSyncAdaptor(parent));
-    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new FacebookPostSyncAdaptor(parent));
+    m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new FacebookNotificationSyncAdaptor(syncService, parent));
+    m_adaptors.insert(SyncService::dataType(SyncService::Images), new FacebookImageSyncAdaptor(syncService, parent));
+    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new FacebookPostSyncAdaptor(syncService, parent));
     // TODO: Contacts / Calendar / etc.
 
     // TODO: actually subscribe to account changes and set enabled accordingly
@@ -69,7 +69,7 @@ void FacebookSyncAdaptor::sync(const QString &dataType)
     if (s && s->enabled()) {
         TRACE(SOCIALD_DEBUG, QString("Adaptor enabled"));
         if (s->status() == SocialNetworkSyncAdaptor::Inactive) {
-            m_status = SocialNetworkSyncAdaptor::Busy;
+            changeStatus(SocialNetworkSyncAdaptor::Busy);
             s->sync(dataType);
             // TODO: connect to syncFinished() signal, set status back to Inactive once all have finished?
         } else {
@@ -81,5 +81,14 @@ void FacebookSyncAdaptor::sync(const QString &dataType)
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("no enabled facebook sync adaptor for %1"))
                 .arg(dataType));
+    }
+}
+
+SocialNetworkSyncAdaptor *FacebookSyncAdaptor::adaptor(const QString &dataType)
+{
+    if (m_adaptors.contains(dataType)) {
+        return m_adaptors.value(dataType);
+    } else {
+        return 0;
     }
 }

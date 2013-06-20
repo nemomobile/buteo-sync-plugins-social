@@ -55,10 +55,11 @@ class FacebookSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    FacebookSyncAdaptor(QLatin1String serviceName, SyncService *parent = 0);
+    FacebookSyncAdaptor(QLatin1String serviceName, SyncService *syncService, QObject *parent = 0);
     ~FacebookSyncAdaptor();
 
     void sync(const QString &dataType);
+    SocialNetworkSyncAdaptor *adaptor(const QString &dataType);
 
 private:
     // In the future, we should use a plugin system.

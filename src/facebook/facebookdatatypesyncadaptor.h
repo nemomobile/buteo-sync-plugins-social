@@ -57,7 +57,7 @@ class FacebookDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    FacebookDataTypeSyncAdaptor(SyncService *parent, SyncService::DataType dataType);
+    FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent);
     virtual ~FacebookDataTypeSyncAdaptor();
     virtual void sync(const QString &dataType);
 

@@ -62,7 +62,7 @@ class FacebookImageSyncAdaptor : public FacebookDataTypeSyncAdaptor
     Q_OBJECT
 
 public:
-    FacebookImageSyncAdaptor(SyncService *parent);
+    FacebookImageSyncAdaptor(SyncService *syncService, QObject *parent);
     ~FacebookImageSyncAdaptor();
 
     void sync(const QString &dataType);

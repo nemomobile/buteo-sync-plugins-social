@@ -36,22 +36,23 @@
 #include <QtCore/QString>
 #include <QtCore/QMap>
 #include <QtCore/QPair>
-#include <QtCore/QTimer>
+#include <QtCore/QStringList>
 #include <QtSql/QSqlDatabase>
 
 class SocialNetworkSyncAdaptor;
-
 class SyncService;
 class SyncServicePrivate : public QObject
 {
     Q_OBJECT
 
 public:
-    SyncServicePrivate(SyncService *parent);
+    SyncServicePrivate(const QString &connectionName, SyncService *syncService);
     ~SyncServicePrivate();
 
+    SocialNetworkSyncAdaptor *createAdaptor(const QString &socialService, const QString &dataType, QObject *parent);
+
     SyncService *q;
-    QMap<QString, SocialNetworkSyncAdaptor*> m_adaptors;
+    QStringList m_supportedServices;
     QMap<QString, QStringList> m_supportedDataTypes;
 
     QSqlDatabase m_db;

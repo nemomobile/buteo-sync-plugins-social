@@ -57,7 +57,7 @@ class TwitterDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterDataTypeSyncAdaptor(SyncService *parent, SyncService::DataType dataType);
+    TwitterDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent);
     virtual ~TwitterDataTypeSyncAdaptor();
     virtual void sync(const QString &dataType);
 

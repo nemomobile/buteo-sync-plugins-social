@@ -59,12 +59,12 @@ public:
     };
 
 public:
-    SocialNetworkSyncAdaptor(QString serviceName, SyncService *parent = 0);
+    SocialNetworkSyncAdaptor(QString serviceName, SyncService *syncService, QObject *parent);
     virtual ~SocialNetworkSyncAdaptor();
 
     Status status() const;
     bool enabled() const;
-    QLatin1String serviceName() const;
+    QString serviceName() const;
     void checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds);
     virtual void sync(const QString &dataType); // do we need a "queueSync"? should this function have a return value?
 
@@ -82,10 +82,11 @@ protected:
     QStringList syncedDatumLocalIdentifiers(const QString &serviceName, const QString &dataType, const QString &accountId) const;
     void beginTransaction();
     void endTransaction();
+    void changeStatus(Status status);
 
     Status m_status;
     bool m_enabled;
-    QLatin1String m_serviceName;
+    QString m_serviceName;
     Accounts::Manager *m_accountManager;
     QNetworkAccessManager *m_qnam;
 

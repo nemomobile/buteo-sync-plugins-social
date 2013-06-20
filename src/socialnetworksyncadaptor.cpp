@@ -42,13 +42,13 @@
 //libaccounts-qt
 #include <Accounts/Manager>
 
-SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName, SyncService *parent)
+SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName, SyncService *syncService, QObject *parent)
     : QObject(parent)
     , m_status(SocialNetworkSyncAdaptor::Invalid)
-    , m_serviceName(serviceName.toLatin1())
+    , m_serviceName(serviceName)
     , m_accountManager(new Accounts::Manager(QLatin1String("sync"), this))
     , m_qnam(new QNetworkAccessManager(this))
-    , q(parent)
+    , q(syncService)
 {
 }
 
@@ -66,7 +66,7 @@ bool SocialNetworkSyncAdaptor::enabled() const
     return m_enabled;
 }
 
-QLatin1String SocialNetworkSyncAdaptor::serviceName() const
+QString SocialNetworkSyncAdaptor::serviceName() const
 {
     return m_serviceName;
 }
@@ -357,4 +357,16 @@ void SocialNetworkSyncAdaptor::endTransaction()
     }
 
     q->database()->commit();
+}
+
+/*!
+ * \internal
+ * Changes status if there is real change and emits statusChanged() signal.
+ */
+void SocialNetworkSyncAdaptor::changeStatus(Status status)
+{
+    if (m_status != status) {
+        m_status = status;
+        emit statusChanged();
+    }
 }

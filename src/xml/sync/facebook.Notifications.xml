@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<profile name="twitter.Posts" type="sync" >
+<profile name="facebook.Notifications" type="sync" >
    <!--This key is used for display name of the profile in UI -->
-    <key name="displayname" value="Twitter Posts"/>
+    <key name="displayname" value="Facebook Notifications"/>
     <!--This key is used to tell sync-fw if the profile is enabled or not -->
     <key name="enabled" value="true" />
     <!--This key is used if accounts fw is used -->
@@ -16,5 +16,5 @@
     <!--This is used by sync-fw to set customized scheduling information for the profile -->
     <schedule enabled="false" interval="1" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="">
     </schedule>
-    <key name="category" value="twitter.Posts" />
+    <key name="category" value="facebook.Notifications" />
 </profile>

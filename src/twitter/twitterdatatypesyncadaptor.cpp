@@ -65,8 +65,8 @@
 
 Q_DECLARE_METATYPE(SignOn::Identity*)
 
-TwitterDataTypeSyncAdaptor::TwitterDataTypeSyncAdaptor(SyncService *parent, SyncService::DataType dataType)
-    : SocialNetworkSyncAdaptor("twitter", parent)
+TwitterDataTypeSyncAdaptor::TwitterDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
+    : SocialNetworkSyncAdaptor("twitter", syncService, parent)
     , m_dataType(dataType)
 {
 }
@@ -187,6 +187,8 @@ void TwitterDataTypeSyncAdaptor::signOnError(const SignOn::Error &err)
     SignOn::Identity *ident = session->property("ident").value<SignOn::Identity*>();
     ident->destroySession(session); // XXX: is this safe?  Does it deleteLater()?
     ident->deleteLater();
+
+    changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void TwitterDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &sdata)
@@ -233,6 +235,7 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
             .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(err));
     // the error is an incomprehensible enum value, but that doesn't matter to users.
+    changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void TwitterDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)

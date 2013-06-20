@@ -58,8 +58,8 @@
 
 Q_DECLARE_METATYPE(SignOn::Identity*)
 
-FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *parent, SyncService::DataType dataType)
-    : SocialNetworkSyncAdaptor("facebook", parent)
+FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
+    : SocialNetworkSyncAdaptor("facebook", syncService, parent)
     , m_dataType(dataType)
 {
 }
@@ -171,6 +171,8 @@ void FacebookDataTypeSyncAdaptor::signOnError(const SignOn::Error &err)
     SignOn::Identity *ident = session->property("ident").value<SignOn::Identity*>();
     ident->destroySession(session); // XXX: is this safe?  Does it deleteLater()?
     ident->deleteLater();
+
+    changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void FacebookDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &sdata)
@@ -211,6 +213,7 @@ void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
             .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(err));
     // the error is an incomprehensible enum value, but that doesn't matter to users.
+    changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
@@ -225,6 +228,8 @@ void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
             .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
+
+    changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 QVariantMap FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)

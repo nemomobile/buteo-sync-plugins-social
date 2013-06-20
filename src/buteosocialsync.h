@@ -4,6 +4,8 @@
 #include <buteosyncfw/ClientPlugin.h>
 #include <buteosyncfw/SyncResults.h>
 
+class SocialNetworkSyncAdaptor;
+
 class ButeoSocial : public Buteo::ClientPlugin
 {
     Q_OBJECT
@@ -21,9 +23,15 @@ public:
 public slots:
     virtual void connectivityStateChanged(Sync::ConnectivityType type, bool state);
 
+private slots:
+    void syncStatusChanged();
+
 private:
     void updateResults(const Buteo::SyncResults &results);
-    Buteo::SyncResults syncResults;
+    Buteo::SyncResults m_syncResults;
+    SocialNetworkSyncAdaptor *m_socialNetworkSyncAdaptor;
+    QString m_dataType;
+    QString m_serviceName;
 };
 
 extern "C" ButeoSocial* createPlugin(const QString& pluginName, const Buteo::SyncProfile& profile, Buteo::PluginCbInterface *cbInterface);

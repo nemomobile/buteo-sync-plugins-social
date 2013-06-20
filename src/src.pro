@@ -32,9 +32,6 @@ client.files = xml/sociald.xml
 sync.path = /etc/buteo/profiles/sync
 sync.files = xml/sync/*
 
-service.path = /etc/buteo/profiles/service
-service.files = xml/service/*
-
 QT += \
     network \
     dbus \
@@ -90,4 +87,4 @@ PRE_TARGETDEPS += ts engineering_english
 notification_categories.files = facebook/x-nemo.social.facebook.notification.conf twitter/x-nemo.social.twitter.mention.conf
 notification_categories.path = /usr/share/lipstick/notificationcategories/
 
-INSTALLS = target client sync service notification_categories ts_install engineering_english_install
+INSTALLS = target client sync notification_categories ts_install engineering_english_install

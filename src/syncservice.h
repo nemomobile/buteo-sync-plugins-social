@@ -40,6 +40,7 @@
 #include <QtCore/QMap>
 
 class QSqlDatabase;
+class SocialNetworkSyncAdaptor;
 
 class SyncServicePrivate;
 class SyncService : public QObject
@@ -61,14 +62,13 @@ public:
     static QString dataType(DataType t);
 
 public:
-    SyncService(QObject *parent = 0);
+    SyncService(const QString &serviceName, QObject *parent = 0);
     ~SyncService();
 
     QStringList supportedSocialServices() const; // the services for which we have written a SocialNetworkSyncAdapter
-    QStringList enabledSocialServices() const;   // the subset of supported services for which we have an enabled account.
     QStringList supportedDataTypes(const QString &socialService) const; // the sync data types supported for the service.
 
-    void sync(const QString &socialService, const QStringList &types); // manual sync.
+    SocialNetworkSyncAdaptor *createAdaptor(const QString &socialService, const QString &dataType, QObject *parent);
 
 private:
     QSqlDatabase *database() const;

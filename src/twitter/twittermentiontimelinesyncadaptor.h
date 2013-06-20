@@ -64,7 +64,7 @@ class TwitterMentionTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterMentionTimelineSyncAdaptor(SyncService *parent);
+    TwitterMentionTimelineSyncAdaptor(SyncService *syncService, QObject *parent);
     ~TwitterMentionTimelineSyncAdaptor();
 
     void sync(const QString &dataType);

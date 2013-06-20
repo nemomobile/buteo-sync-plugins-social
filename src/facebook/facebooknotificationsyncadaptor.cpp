@@ -57,8 +57,8 @@
 
 // currently, we integrate with the device notifications via nemo-qml-plugin-notification
 
-FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *parent)
-    : FacebookDataTypeSyncAdaptor(parent, SyncService::Notifications)
+FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *syncService, QObject *parent)
+    : FacebookDataTypeSyncAdaptor(syncService, SyncService::Notifications, parent)
     , m_contactFetchRequest(new QContactFetchRequest(this))
     , m_eventFeed(MEventFeed::instance())
 {
@@ -475,8 +475,7 @@ void FacebookNotificationSyncAdaptor::incrementSemaphore(int accountId)
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
     if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        m_status = SocialNetworkSyncAdaptor::Busy;
-        emit statusChanged();
+        changeStatus(SocialNetworkSyncAdaptor::Busy);
     }
 }
 
@@ -537,8 +536,7 @@ void FacebookNotificationSyncAdaptor::decrementSemaphore(int accountId)
         if (allAreZero) {
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Notifications sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            m_status = SocialNetworkSyncAdaptor::Inactive;
-            emit statusChanged();
+            changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
 }

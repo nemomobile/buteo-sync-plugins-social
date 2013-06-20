@@ -58,8 +58,8 @@
 
 // currently, we integrate with the device notifications via nemo-qml-plugin-notification
 
-TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService *parent)
-    : TwitterDataTypeSyncAdaptor(parent, SyncService::Notifications)
+TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService *syncService, QObject *parent)
+    : TwitterDataTypeSyncAdaptor(syncService, SyncService::Notifications, parent)
     , m_contactFetchRequest(new QContactFetchRequest(this))
 {
     //: The text displayed for Twitter notifications on the lock screen
@@ -429,8 +429,7 @@ void TwitterMentionTimelineSyncAdaptor::incrementSemaphore(int accountId)
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
     if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        m_status = SocialNetworkSyncAdaptor::Busy;
-        emit statusChanged();
+        changeStatus(SocialNetworkSyncAdaptor::Busy);
     }
 }
 
@@ -472,8 +471,7 @@ void TwitterMentionTimelineSyncAdaptor::decrementSemaphore(int accountId)
         if (allAreZero) {
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Twitter Notifications sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            m_status = SocialNetworkSyncAdaptor::Inactive;
-            emit statusChanged();
+            changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
 }

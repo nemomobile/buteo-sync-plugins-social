@@ -54,8 +54,8 @@
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
-FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *parent)
-    : FacebookDataTypeSyncAdaptor(parent, SyncService::Posts)
+FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObject *parent)
+    : FacebookDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
     , m_contactFetchRequest(new QContactFetchRequest(this))
     , m_eventFeed(MEventFeed::instance())
 {
@@ -677,8 +677,7 @@ void FacebookPostSyncAdaptor::incrementSemaphore(int accountId)
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
     if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        m_status = SocialNetworkSyncAdaptor::Busy;
-        emit statusChanged();
+        changeStatus(SocialNetworkSyncAdaptor::Busy);
     }
 }
 
@@ -720,8 +719,7 @@ void FacebookPostSyncAdaptor::decrementSemaphore(int accountId)
         if (allAreZero) {
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Posts sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            m_status = SocialNetworkSyncAdaptor::Inactive;
-            emit statusChanged();
+            changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
 }

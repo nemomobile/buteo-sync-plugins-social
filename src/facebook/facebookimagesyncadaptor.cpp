@@ -59,8 +59,8 @@
 // ~/.config/sociald/images directory, and filling the ~/.config/sociald/images/facebook.db
 // with appropriate data.
 
-FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *parent)
-    : FacebookDataTypeSyncAdaptor(parent, SyncService::Images)
+FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QObject *parent)
+    : FacebookDataTypeSyncAdaptor(syncService, SyncService::Images, parent)
 {
     m_enabled = false;
 
@@ -1116,8 +1116,7 @@ void FacebookImageSyncAdaptor::incrementSemaphore(int accountId)
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
     if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        m_status = SocialNetworkSyncAdaptor::Busy;
-        emit statusChanged();
+        changeStatus(SocialNetworkSyncAdaptor::Busy);
     }
 }
 
@@ -1160,8 +1159,7 @@ void FacebookImageSyncAdaptor::decrementSemaphore(int accountId)
             purgeDetectedRemovals(); // purge anything which has been deleted server-side.
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Images sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            m_status = SocialNetworkSyncAdaptor::Inactive;
-            emit statusChanged();
+            changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
 }

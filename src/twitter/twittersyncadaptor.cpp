@@ -42,11 +42,11 @@
 #include <Accounts/Service>
 #include <Accounts/Account>
 
-TwitterSyncAdaptor::TwitterSyncAdaptor(QLatin1String serviceName, SyncService *parent)
-    : SocialNetworkSyncAdaptor(serviceName, parent)
+TwitterSyncAdaptor::TwitterSyncAdaptor(QLatin1String serviceName, SyncService *syncService, QObject *parent)
+    : SocialNetworkSyncAdaptor(serviceName, syncService, parent)
 {
-    m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new TwitterMentionTimelineSyncAdaptor(parent));
-    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new TwitterHomeTimelineSyncAdaptor(parent));
+    m_adaptors.insert(SyncService::dataType(SyncService::Notifications), new TwitterMentionTimelineSyncAdaptor(syncService, parent));
+    m_adaptors.insert(SyncService::dataType(SyncService::Posts), new TwitterHomeTimelineSyncAdaptor(syncService, parent));
     // TODO: Contacts / Calendar / etc.
 
     // TODO: actually subscribe to account changes and set enabled accordingly
@@ -65,7 +65,7 @@ void TwitterSyncAdaptor::sync(const QString &dataType)
     SocialNetworkSyncAdaptor *s = m_adaptors.value(dataType);
     if (s && s->enabled()) {
         if (s->status() == SocialNetworkSyncAdaptor::Inactive) {
-            m_status = SocialNetworkSyncAdaptor::Busy;
+            changeStatus(SocialNetworkSyncAdaptor::Busy);
             s->sync(dataType);
             // TODO: connect to syncFinished() signal, set status back to Inactive once all have finished?
         } else {
