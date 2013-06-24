@@ -1,3 +1,10 @@
+/****************************************************************************
+ **
+ ** Copyright (C) 2013 Jolla Ltd.
+ ** Contact: Raine Makelainen <raine.makelainen@jollamobile.com>
+ **
+ ****************************************************************************/
+
 #include <buteosyncfw/PluginCbInterface.h>
 #include <buteosyncfw/LogMacros.h>
 

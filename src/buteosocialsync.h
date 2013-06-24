@@ -1,3 +1,10 @@
+/****************************************************************************
+ **
+ ** Copyright (C) 2013 Jolla Ltd.
+ ** Contact: Raine Makelainen <raine.makelainen@jollamobile.com>
+ **
+ ****************************************************************************/
+
 #ifndef BUTEOSOCIALSYNC_H
 #define BUTEOSOCIALSYNC_H
 
