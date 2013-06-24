@@ -32,6 +32,7 @@
 #include "twitterhometimelinesyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
+#include "constants_p.h"
 
 #include <QtCore/QPair>
 
@@ -70,19 +71,11 @@ TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *sync
     if (m_contactFetchRequest) {
         QContactFetchHint cfh;
         cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-        cfh.setDetailDefinitionsHint(QStringList()
-                                     << QContactAvatar::DefinitionName
-                                     << QContactName::DefinitionName
-                                     << QContactNickname::DefinitionName
-                                     << QContactPresence::DefinitionName);
-#else
         cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
                                << QContactDetail::TypeAvatar
                                << QContactDetail::TypeName
                                << QContactDetail::TypeNickname
                                << QContactDetail::TypePresence);
-#endif
         m_contactFetchRequest->setFetchHint(cfh);
         m_contactFetchRequest->setManager(&m_contactManager);
         connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
@@ -156,13 +149,9 @@ void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oau
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("skip_status")), QString(QLatin1String("true"))));
     QString baseUrl = QLatin1String("https://api.twitter.com/1.1/account/verify_credentials.json");
     QUrl url(baseUrl);
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    url.setQueryItems(queryItems);
-#else
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-#endif
 
     QNetworkRequest nreq(url);
     nreq.setRawHeader("Authorization", authorizationHeader(
@@ -199,13 +188,9 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
     }
     QString baseUrl = QLatin1String("https://api.twitter.com/1.1/statuses/home_timeline.json");
     QUrl url(baseUrl);
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    url.setQueryItems(queryItems);
-#else
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-#endif
 
     QNetworkRequest nreq(url);
     nreq.setRawHeader("Authorization", authorizationHeader(
@@ -417,21 +402,12 @@ bool TwitterHomeTimelineSyncAdaptor::fromIsSelfContact(const QString &fromName, 
     // fall back to heuristic matching.
     QStringList firstAndLast = fromName.split(' '); // TODO: better detection of FN/LN
     QContactName scn = m_selfContact.detail<QContactName>();
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    // TODO : no customLabel() method in qt5 pim
-    if ((!fromName.isEmpty() && scn.customLabel() == fromName) ||
+    if ((!fromName.isEmpty() && scn.value<QString>(QContactName__FieldCustomLabel) == fromName) ||
             (firstAndLast.size() >= 2 &&
              scn.firstName() == firstAndLast.at(0) &&
              scn.lastName() == firstAndLast.at(firstAndLast.size()-1))) {
         return true;
     }
-#else
-    if (firstAndLast.size() >= 2 &&
-            scn.firstName() == firstAndLast.at(0) &&
-            scn.lastName() == firstAndLast.at(firstAndLast.size()-1)) {
-        return true;
-    }
-#endif
 
     QList<QContactNickname> nicknames = m_selfContact.details<QContactNickname>();
     foreach (const QContactNickname &n, nicknames) {

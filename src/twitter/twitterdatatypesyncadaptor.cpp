@@ -41,12 +41,7 @@
 #include <QtCore/qmath.h>
 
 #include <QCryptographicHash>
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-#include <qjson/parser.h>
-#else
 #include <QJsonDocument>
-#endif
 
 //libsailfishkeyprovider
 #include <sailfishkeyprovider.h>
@@ -374,16 +369,9 @@ QDateTime TwitterDataTypeSyncAdaptor::parseTwitterDateTime(const QString &tdt)
 QVariant TwitterDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
 {
     QVariant parsed;
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    QJson::Parser jsonParser;
-    parsed = jsonParser.parse(replyData, ok);
-#else
     QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
     *ok = !jsonDocument.isEmpty();
     parsed = jsonDocument.toVariant();
-#endif
-
     if (*ok && parsed.type() == QVariant::Map) {
         return parsed.toMap();
     } else if (*ok && parsed.type() == QVariant::List) {

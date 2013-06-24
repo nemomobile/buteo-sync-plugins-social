@@ -38,11 +38,7 @@
 #include <QtCore/QString>
 #include <QtCore/QByteArray>
 
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-#include <qjson/parser.h>
-#else
 #include <QJsonDocument>
-#endif
 
 //libaccounts-qt
 #include <Accounts/Manager>
@@ -235,16 +231,9 @@ void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
 QVariantMap FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
 {
     QVariant parsed;
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    QJson::Parser jsonParser;
-    parsed = jsonParser.parse(replyData, ok);
-#else
     QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
     *ok = !jsonDocument.isEmpty();
     parsed = jsonDocument.toVariant();
-#endif
-
     if (*ok && parsed.type() == QVariant::Map) {
         return parsed.toMap();
     }

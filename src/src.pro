@@ -4,24 +4,15 @@ TARGET = sociald-client
 VERSION = 0.0.1
 CONFIG += link_pkgconfig plugin
 
-equals(QT_MAJOR_VERSION, 4): {
-    # possibly temporary? use DBus API instead of meventfeed.h ?
-    CONFIG += mobility meegotouchevents eventfeed
-    PKGCONFIG += accounts-qt libsignon-qt nemonotifications QJson buteosyncfw
-    MOBILITY += contacts
-    DEFINES *= BEGIN_CONTACTS_NAMESPACE=QTM_BEGIN_NAMESPACE
-    DEFINES *= END_CONTACTS_NAMESPACE=QTM_END_NAMESPACE
-    DEFINES *= USE_CONTACTS_NAMESPACE=QTM_USE_NAMESPACE
-}
-equals(QT_MAJOR_VERSION, 5): {
-    CONFIG += meegotouchevents-qt5 eventfeed-qt5
-    PKGCONFIG += Qt5Contacts accounts-qt5 libsignon-qt5 nemonotifications-qt5 buteosyncfw5
-    DEFINES *= USING_QTPIM
-    DEFINES *= BEGIN_CONTACTS_NAMESPACE=QT_BEGIN_NAMESPACE_CONTACTS
-    DEFINES *= END_CONTACTS_NAMESPACE=QT_END_NAMESPACE_CONTACTS
-    DEFINES *= USE_CONTACTS_NAMESPACE=QTCONTACTS_USE_NAMESPACE
-}
+CONFIG += meegotouchevents-qt5 eventfeed-qt5
+PKGCONFIG += Qt5Contacts accounts-qt5 libsignon-qt5 nemonotifications-qt5 buteosyncfw5
 
+DEFINES *= USING_QTPIM
+DEFINES *= BEGIN_CONTACTS_NAMESPACE=QT_BEGIN_NAMESPACE_CONTACTS
+DEFINES *= END_CONTACTS_NAMESPACE=QT_END_NAMESPACE_CONTACTS
+DEFINES *= USE_CONTACTS_NAMESPACE=QTCONTACTS_USE_NAMESPACE
+
+HEADERS += constants_p.h
 PKGCONFIG += libsailfishkeyprovider
 
 target.path += /usr/lib/buteo-plugins

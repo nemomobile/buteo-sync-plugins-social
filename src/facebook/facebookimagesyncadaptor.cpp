@@ -38,16 +38,13 @@
 #include <QtCore/QDir>
 #include <QtCore/QVariantMap>
 #include <QtCore/QByteArray>
+#include <QtCore/QUrlQuery>
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 #include <QtSql/QSqlRecord>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
-
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-#include <QUrlQuery>
-#endif
 
 // Update the following version if database schema changes e.g. new
 // fields are added to the existing tables.
@@ -176,13 +173,9 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
     if (!url.toString().contains("access_token")) {
         QList<QPair<QString, QString> > queryItems;
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-        url.setQueryItems(queryItems);
-#else
         QUrlQuery query(url);
         query.setQueryItems(queryItems);
         url.setQuery(query);
-#endif
     }
 
     QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
@@ -562,13 +555,9 @@ void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, const
         QList<QPair<QString, QString> > queryItems;
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("fields")), QLatin1String("id,updated_time,name,picture,cover")));
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-        url.setQueryItems(queryItems);
-#else
         QUrlQuery query(url);
         query.setQueryItems(queryItems);
         url.setQuery(query);
-#endif
         QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
         if (reply) {
             reply->setProperty("accountId", accountId);

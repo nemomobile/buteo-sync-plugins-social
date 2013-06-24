@@ -32,6 +32,7 @@
 #include "facebookpostsyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
+#include "constants_p.h"
 
 #include <QtCore/QPair>
 
@@ -70,19 +71,11 @@ FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObje
     if (m_contactFetchRequest) {
         QContactFetchHint cfh;
         cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-        cfh.setDetailDefinitionsHint(QStringList()
-                                     << QContactAvatar::DefinitionName
-                                     << QContactName::DefinitionName
-                                     << QContactNickname::DefinitionName
-                                     << QContactPresence::DefinitionName);
-#else
         cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
                                << QContactDetail::TypeAvatar
                                << QContactDetail::TypeName
                                << QContactDetail::TypeNickname
                                << QContactDetail::TypePresence);
-#endif
         m_contactFetchRequest->setFetchHint(cfh);
         m_contactFetchRequest->setManager(&m_contactManager);
         connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
@@ -156,13 +149,9 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("fields")), QLatin1String("id")));
     QUrl url(QLatin1String("https://graph.facebook.com/me"));
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    url.setQueryItems(queryItems);
-#else
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-#endif
     QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     
     if (reply) {
@@ -191,13 +180,9 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     QUrl url(QLatin1String("https://graph.facebook.com/me/home"));
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    url.setQueryItems(queryItems);
-#else
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-#endif
     QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     
     if (reply) {
@@ -371,12 +356,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 QString picture = currData.value(QLatin1String("picture")).toString();
                 QString link = currData.value(QLatin1String("link")).toString();
                 bool moreThanOnePhoto = false;
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-                QUrl linkUrl(link);
-                QString relevantCount = linkUrl.queryItemValue(QLatin1String("relevant_count"));
-#else
                 QString relevantCount = QUrlQuery(link).queryItemValue(QLatin1String("relevant_count"));
-#endif
                 if (!relevantCount.isEmpty() && relevantCount.toInt() > 1) {
                     moreThanOnePhoto = true;
                 }
@@ -569,17 +549,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             // The FB api is terrible, and so we don't know in advance which paging url
             // to use (as it will change depending on whether the current request was
             // a first request, or itself a paging request).
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-            QUrl prevUrl(paging.value("previous").toString());
-            QUrl nextUrl(paging.value("next").toString());
-            if (prevUrl.hasQueryItem(QLatin1String("until"))) {
-                until = prevUrl.queryItemValue(QLatin1String("until"));
-                pagingToken = prevUrl.queryItemValue(QLatin1String("__paging_token"));
-            } else {
-                until = nextUrl.queryItemValue(QLatin1String("until"));
-                pagingToken = nextUrl.queryItemValue(QLatin1String("__paging_token"));
-            }
-#else
             QUrlQuery prevUrl(paging.value("previous").toString());
             QUrlQuery nextUrl(paging.value("next").toString());
             if (prevUrl.hasQueryItem(QLatin1String("until"))) {
@@ -589,7 +558,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 until = nextUrl.queryItemValue(QLatin1String("until"));
                 pagingToken = nextUrl.queryItemValue(QLatin1String("__paging_token"));
             }
-#endif
 
             // request the next page of results.
             requestPosts(accountId, accessToken, until, pagingToken);
@@ -627,21 +595,12 @@ bool FacebookPostSyncAdaptor::fromIsSelfContact(const QString &fromName, const Q
     // fall back to heuristic matching.
     QStringList firstAndLast = fromName.split(' '); // TODO: better detection of FN/LN
     QContactName scn = m_selfContact.detail<QContactName>();
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    // TODO: no customLabel() method
-    if ((!fromName.isEmpty() && scn.customLabel() == fromName) ||
-            (firstAndLast.size() == 2 &&
+    if ((!fromName.isEmpty() && scn.value<QString>(QContactName__FieldCustomLabel) == fromName) ||
+            (firstAndLast.size() >= 2 &&
              scn.firstName() == firstAndLast.at(0) &&
-             scn.lastName() == firstAndLast.at(1))) {
+             scn.lastName() == firstAndLast.at(firstAndLast.size()-1))) {
         return true;
     }
-#else
-    if (firstAndLast.size() == 2 &&
-            scn.firstName() == firstAndLast.at(0) &&
-            scn.lastName() == firstAndLast.at(1)) {
-        return true;
-    }
-#endif
 
     QList<QContactNickname> nicknames = m_selfContact.details<QContactNickname>();
     foreach (const QContactNickname &n, nicknames) {
