@@ -6,23 +6,22 @@ Group:      System/Applications
 License:    TBD
 URL:        https://bitbucket.org/jolla/base-sociald
 Source0:    %{name}-%{version}.tar.bz2
-BuildRequires:  pkgconfig(QtCore)
-BuildRequires:  pkgconfig(QtDBus)
-BuildRequires:  pkgconfig(QtSql)
-BuildRequires:  pkgconfig(QtNetwork)
-BuildRequires:  pkgconfig(QtContacts)
-BuildRequires:  pkgconfig(mlite)
-BuildRequires:  pkgconfig(QJson)
-BuildRequires:  pkgconfig(libsignon-qt)
-BuildRequires:  pkgconfig(accounts-qt)
+BuildRequires:  pkgconfig(Qt5Core)
+BuildRequires:  pkgconfig(Qt5DBus)
+BuildRequires:  pkgconfig(Qt5Sql)
+BuildRequires:  pkgconfig(Qt5Network)
+BuildRequires:  pkgconfig(Qt5Contacts)
+BuildRequires:  pkgconfig(mlite5)
+BuildRequires:  pkgconfig(libsignon-qt5)
+BuildRequires:  pkgconfig(accounts-qt5)
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
-BuildRequires:  nemo-qml-plugin-notifications-devel
+BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  eventfeed-devel
-BuildRequires:  libmeegotouchevents-devel
-BuildRequires:  buteo-syncfw-devel
-Requires: nemo-qml-plugin-notifications
+BuildRequires:  libmeegotouchevents-qt5-devel
+BuildRequires:  buteo-syncfw-qt5-devel
+Requires: nemo-qml-plugin-notifications-qt5
 Requires: eventfeed-viewer
-Requires: buteo-syncfw-msyncd
+Requires: buteo-syncfw-qt5-msyncd
 
 %description
 A daemon process which provides data synchronization with various social services.
@@ -53,9 +52,9 @@ Translation source for sociald
 %setup -q -n %{name}-%{version}
 
 %build
-%qmake
+%qmake5
 make %{?jobs:-j%jobs}
 
 %install
 rm -rf %{buildroot}
-%qmake_install
+%qmake5_install
