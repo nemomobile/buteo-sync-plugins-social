@@ -16,24 +16,22 @@
 
 #include <QJsonDocument>
 
-//libaccounts-qt
-#include <Accounts/Manager>
-#include <Accounts/Service>
-#include <Accounts/Account>
-#include <Accounts/AccountService>
-#include <Accounts/AuthData>
+// sailfish-components-accounts-qt5
+#include <accountmanager.h>
+#include <account.h>
+#include <signinparameters.h>
 
-//libsignon-qt
-#include <SignOn/Identity>
+//libsailfishkeyprovider
+#include <sailfishkeyprovider.h>
+
+//libsignon-qt: SignOn::NoUserInteractionPolicy
 #include <SignOn/SessionData>
-#include <SignOn/AuthSession>
-
-Q_DECLARE_METATYPE(SignOn::Identity*)
 
 FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
     : SocialNetworkSyncAdaptor("facebook", syncService, parent)
     , m_dataType(dataType)
 {
+    m_validClientId = initializeClientId();
 }
 
 FacebookDataTypeSyncAdaptor::~FacebookDataTypeSyncAdaptor()
@@ -46,6 +44,13 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: facebook %1 sync adaptor was asked to sync %2"))
                 .arg(SyncService::dataType(m_dataType)).arg(dataType));
+        changeStatus(SocialNetworkSyncAdaptor::Error);
+        return;
+    }
+
+    if (!m_validClientId) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: client id couldn't be retrieved for facebook")));
+        changeStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
 
@@ -69,96 +74,47 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
 void FacebookDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
-        Accounts::Account *act = m_accountManager->account(accountId);
-        if (!act) {
+        Account *account = m_accountManager->account(accountId);
+        if (!account) {
             TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
-                    .arg(accountId));
+                  QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
+                  .arg(accountId));
             continue;
         }
-
-        // grab out a valid identity for the sync service.
-        Accounts::ServiceList enabledSrvs = act->enabledServices();
-        if (!enabledSrvs.size()) {
-            TRACE(SOCIALD_INFORMATION,
-                    QString(QLatin1String("account with id %1 has no enabled sync service"))
-                    .arg(accountId));
-            continue;
+        if (account->status() == Account::Initialized || account->status() == Account::Synced) {
+            signIn(account);
+        } else {
+            connect(account, SIGNAL(statusChanged()), this, SLOT(accountStatusChangeHandler()));
         }
-
-        quint32 identityId = 0;
-        Accounts::AccountService *asrv = 0;
-        for (int i = 0; i < enabledSrvs.size(); ++i) {
-            asrv = new Accounts::AccountService(act, enabledSrvs.at(i));
-            if (!asrv) {
-                continue;
-            }
-            identityId = asrv->authData().credentialsId();
-            if (identityId != 0) {
-                break;
-            }
-
-            asrv->deleteLater();
-            asrv = 0;
-        }
-
-        if (identityId == 0) {
-            TRACE(SOCIALD_INFORMATION,
-                    QString(QLatin1String("account with id %1 has no valid credentials"))
-                    .arg(accountId));
-            continue;
-        }
-
-        SignOn::Identity *ident = SignOn::Identity::existingIdentity(identityId);
-        if (!ident) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved"))
-                    .arg(accountId));
-            continue;
-        }
-
-        // we need the access token to perform requests.
-        // set UiPolicy to NO_USER_INTERACTION because we don't want
-        // to show any UI if we don't already have a token.
-        Accounts::AuthData authData(asrv->authData());
-        asrv->deleteLater();
-        SignOn::AuthSession *session = ident->createSession(authData.method());
-        QVariantMap sessionData = authData.parameters();
-        sessionData.insert(QLatin1String("UiPolicy"), SignOn::NoUserInteractionPolicy);
-        QVariant identVar = QVariant::fromValue<SignOn::Identity*>(ident);
-        session->setProperty("ident", identVar);
-        session->setProperty("accountId", accountId);
-        connect(session, SIGNAL(error(SignOn::Error)), this, SLOT(signOnError(SignOn::Error)));
-        connect(session, SIGNAL(response(SignOn::SessionData)), this, SLOT(signOnResponse(SignOn::SessionData)));
-        session->process(sessionData, authData.mechanism());
     }
 }
 
-void FacebookDataTypeSyncAdaptor::signOnError(const SignOn::Error &err)
+void FacebookDataTypeSyncAdaptor::accountStatusChangeHandler()
 {
-    SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession *>(sender());
+    Account *account = qobject_cast<Account*>(sender());
+    if (account->status() == Account::Initialized || account->status() == Account::Synced)
+    {
+        // Not anymore interested about status changes of this account instance
+        account->disconnect(this);
+        signIn(account);
+    }
+}
+
+void FacebookDataTypeSyncAdaptor::signOnError(const QString &err)
+{
+    Account *account = qobject_cast<Account*>(sender());
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
-            .arg(session->property("accountId").toInt()) << err.message());
-    SignOn::Identity *ident = session->property("ident").value<SignOn::Identity*>();
-    ident->destroySession(session); // XXX: is this safe?  Does it deleteLater()?
-    ident->deleteLater();
-
+            .arg(account->identifier()) << err);
+    account->disconnect(this);
     changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
-void FacebookDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &sdata)
+void FacebookDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
 {
-    QVariantMap data;
-    QStringList sdpns = sdata.propertyNames();
-    foreach (const QString &sdpn, sdpns) {
-        data.insert(sdpn, sdata.getProperty(sdpn));
-    }    
-
     QString accessToken;
-    SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession *>(sender());
-    int accountId = static_cast<int>(session->property("accountId").toUInt());
-
+    Account *account = qobject_cast<Account*>(sender());
+    int accountId = account->identifier();
     if (data.contains(QLatin1String("AccessToken"))) {
         accessToken = data.value(QLatin1String("AccessToken")).toString();
         TRACE(SOCIALD_DEBUG,
@@ -170,10 +126,7 @@ void FacebookDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &sdat
                 .arg(accountId));
     }
 
-    SignOn::Identity *ident = session->property("ident").value<SignOn::Identity*>();
-    ident->destroySession(session); // XXX: is this safe?  Does it deleteLater()?
-    ident->deleteLater();
-
+    account->disconnect(this);
     if (!accessToken.isEmpty()) {
         beginSync(accountId, accessToken); // call the derived-class sync entrypoint.
     }
@@ -215,4 +168,36 @@ QVariantMap FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyD
     }
     *ok = false;
     return QVariantMap();
+}
+
+bool FacebookDataTypeSyncAdaptor::initializeClientId()
+{
+    char *cClientId = NULL;
+    int cSuccess = SailfishKeyProvider_storedKey("facebook", "facebook-sync", "client_id", &cClientId);
+    if (cSuccess != 0 || cClientId == NULL) {
+        return false;
+    }
+
+    m_clientId = QLatin1String(cClientId);
+    free(cClientId);
+    return true;
+}
+
+void FacebookDataTypeSyncAdaptor::signIn(Account *account)
+{
+    // grab out a valid identity for the sync service.
+    if (!account->isEnabledWithService("facebook-sync")) {
+        TRACE(SOCIALD_INFORMATION,
+              QString(QLatin1String("account with id %1 has no enabled facebook sync service"))
+              .arg(account->identifier()));
+        return;
+    }
+
+    SignInParameters *sip = account->signInParameters("facebook-sync");
+    sip->setParameter(QLatin1String("ClientId"), m_clientId);
+    sip->setParameter(QLatin1String("UiPolicy"), SignOn::NoUserInteractionPolicy);
+
+    connect(account, SIGNAL(signInError(QString)), this, SLOT(signOnError(QString)));
+    connect(account, SIGNAL(signInResponse(QVariantMap)), this, SLOT(signOnResponse(QVariantMap)));
+    account->signIn("Jolla", "Jolla", sip);
 }

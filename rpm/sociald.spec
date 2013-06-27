@@ -15,6 +15,7 @@ BuildRequires:  pkgconfig(mlite5)
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(accounts-qt5)
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
+BuildRequires:  pkgconfig(sailfishaccounts)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  eventfeed-devel
 BuildRequires:  libmeegotouchevents-qt5-devel

@@ -16,12 +16,7 @@
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
 
-//libaccounts-qt
-#include <Accounts/Manager>
-
-//libsignon-qt
-#include <SignOn/SessionData>
-#include <SignOn/Error>
+class Account;
 
 /*
     Abstract interface for all of the data-specific sync adaptors
@@ -49,8 +44,17 @@ protected Q_SLOTS:
     virtual void sslErrorsHandler(const QList<QSslError> &errs);
 
 private Q_SLOTS:
-    void signOnError(const SignOn::Error &err);
-    void signOnResponse(const SignOn::SessionData &sdata);
+    void accountStatusChangeHandler();
+    void signOnError(const QString &message);
+    void signOnResponse(const QVariantMap &data);
+
+private:
+    bool initializeClientId();
+    void signIn(Account *account);
+
+private:
+    QString m_clientId;
+    bool m_validClientId;
 };
 
 #endif // FACEBOOKDATATYPESYNCADAPTOR_H

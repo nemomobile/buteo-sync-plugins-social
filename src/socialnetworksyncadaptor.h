@@ -17,7 +17,7 @@
 class QSqlDatabase;
 class SyncService;
 class QNetworkAccessManager;
-namespace Accounts { class Manager; }
+class AccountManager;
 
 class SocialNetworkSyncAdaptor : public QObject
 {
@@ -63,7 +63,7 @@ protected:
     Status m_status;
     bool m_enabled;
     QString m_serviceName;
-    Accounts::Manager *m_accountManager;
+    AccountManager *m_accountManager;
     QNetworkAccessManager *m_qnam;
 
 private:
