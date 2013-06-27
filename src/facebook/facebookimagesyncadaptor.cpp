@@ -1,36 +1,11 @@
-/*
- * Copyright (C) 2013 Jolla Ltd. <chris.adams@jollamobile.com>
- *
- * You may use this file under the terms of the BSD license as follows:
- *
- * "Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Nemo Mobile nor the names of its contributors
- *     may be used to endorse or promote products derived from this
- *     software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
- */
+/****************************************************************************
+ **
+ ** Copyright (C) 2013 Jolla Ltd.
+ ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ **
+ ****************************************************************************/
 
 #include "facebookimagesyncadaptor.h"
-#include "facebooksyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
 
@@ -39,14 +14,13 @@
 #include <QtCore/QDir>
 #include <QtCore/QVariantMap>
 #include <QtCore/QByteArray>
+#include <QtCore/QUrlQuery>
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 #include <QtSql/QSqlRecord>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
-
-
 
 // Update the following version if database schema changes e.g. new
 // fields are added to the existing tables.
@@ -58,8 +32,8 @@
 // ~/.config/sociald/images directory, and filling the ~/.config/sociald/images/facebook.db
 // with appropriate data.
 
-FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
-    : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Images)
+FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QObject *parent)
+    : FacebookDataTypeSyncAdaptor(syncService, SyncService::Images, parent)
 {
     m_enabled = false;
 
@@ -175,10 +149,12 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
     if (!url.toString().contains("access_token")) {
         QList<QPair<QString, QString> > queryItems;
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
-        url.setQueryItems(queryItems);
+        QUrlQuery query(url);
+        query.setQueryItems(queryItems);
+        url.setQuery(query);
     }
 
-    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -555,8 +531,10 @@ void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, const
         QList<QPair<QString, QString> > queryItems;
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("fields")), QLatin1String("id,updated_time,name,picture,cover")));
-        url.setQueryItems(queryItems);
-        QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+        QUrlQuery query(url);
+        query.setQueryItems(queryItems);
+        url.setQuery(query);
+        QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
         if (reply) {
             reply->setProperty("accountId", accountId);
             reply->setProperty("accessToken", accessToken);
@@ -1103,8 +1081,7 @@ void FacebookImageSyncAdaptor::incrementSemaphore(int accountId)
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
     if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        m_status = SocialNetworkSyncAdaptor::Busy;
-        emit statusChanged();
+        changeStatus(SocialNetworkSyncAdaptor::Busy);
     }
 }
 
@@ -1147,8 +1124,7 @@ void FacebookImageSyncAdaptor::decrementSemaphore(int accountId)
             purgeDetectedRemovals(); // purge anything which has been deleted server-side.
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Images sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            m_status = SocialNetworkSyncAdaptor::Inactive;
-            emit statusChanged();
+            changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
 }

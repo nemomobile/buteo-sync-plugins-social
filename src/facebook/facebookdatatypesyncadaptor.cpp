@@ -1,36 +1,11 @@
-/*
- * Copyright (C) 2013 Jolla Ltd. <chris.adams@jollamobile.com>
- *
- * You may use this file under the terms of the BSD license as follows:
- *
- * "Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Nemo Mobile nor the names of its contributors
- *     may be used to endorse or promote products derived from this
- *     software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
- */
+/****************************************************************************
+ **
+ ** Copyright (C) 2013 Jolla Ltd.
+ ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ **
+ ****************************************************************************/
 
 #include "facebookdatatypesyncadaptor.h"
-#include "facebooksyncadaptor.h"
 #include "trace.h"
 
 #include <QtCore/QVariantMap>
@@ -39,11 +14,7 @@
 #include <QtCore/QString>
 #include <QtCore/QByteArray>
 
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-#include <qjson/parser.h>
-#else
 #include <QJsonDocument>
-#endif
 
 //libaccounts-qt
 #include <Accounts/Manager>
@@ -59,9 +30,8 @@
 
 Q_DECLARE_METATYPE(SignOn::Identity*)
 
-FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa, SyncService::DataType dataType)
-    : SocialNetworkSyncAdaptor(parent)
-    , m_fbsa(fbsa)
+FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
+    : SocialNetworkSyncAdaptor("facebook", syncService, parent)
     , m_dataType(dataType)
 {
 }
@@ -85,7 +55,8 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
     // 3) for existing accounts, pull new data for the existing account
 
     QList<int> newIds, purgeIds, updateIds;
-    m_fbsa->checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
+    // Implemented in socialsyncadaptor
+    checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
     purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
     updateDataForAccounts(newIds);
     updateDataForAccounts(updateIds);
@@ -98,7 +69,7 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
 void FacebookDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
-        Accounts::Account *act = m_fbsa->m_accountManager->account(accountId);
+        Accounts::Account *act = m_accountManager->account(accountId);
         if (!act) {
             TRACE(SOCIALD_ERROR,
                     QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
@@ -172,6 +143,8 @@ void FacebookDataTypeSyncAdaptor::signOnError(const SignOn::Error &err)
     SignOn::Identity *ident = session->property("ident").value<SignOn::Identity*>();
     ident->destroySession(session); // XXX: is this safe?  Does it deleteLater()?
     ident->deleteLater();
+
+    changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void FacebookDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &sdata)
@@ -212,6 +185,7 @@ void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
             .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(err));
     // the error is an incomprehensible enum value, but that doesn't matter to users.
+    changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
@@ -226,21 +200,16 @@ void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
             .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
+
+    changeStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 QVariantMap FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
 {
     QVariant parsed;
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-    QJson::Parser jsonParser;
-    parsed = jsonParser.parse(replyData, ok);
-#else
     QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
-    *ok = !doc.isEmpty();
-    parsed = doc.toVariant();
-#endif
-
+    *ok = !jsonDocument.isEmpty();
+    parsed = jsonDocument.toVariant();
     if (*ok && parsed.type() == QVariant::Map) {
         return parsed.toMap();
     }

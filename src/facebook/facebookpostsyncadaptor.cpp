@@ -1,38 +1,14 @@
-/*
- * Copyright (C) 2013 Jolla Ltd. <chris.adams@jollamobile.com>
- *
- * You may use this file under the terms of the BSD license as follows:
- *
- * "Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Nemo Mobile nor the names of its contributors
- *     may be used to endorse or promote products derived from this
- *     software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
- */
+/****************************************************************************
+ **
+ ** Copyright (C) 2013 Jolla Ltd.
+ ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ **
+ ****************************************************************************/
 
 #include "facebookpostsyncadaptor.h"
-#include "facebooksyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
+#include "constants_p.h"
 
 #include <QtCore/QPair>
 
@@ -55,8 +31,8 @@
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
-FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
-    : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Posts)
+FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObject *parent)
+    : FacebookDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
     , m_contactFetchRequest(new QContactFetchRequest(this))
     , m_eventFeed(MEventFeed::instance())
 {
@@ -71,11 +47,11 @@ FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *parent, FacebookSy
     if (m_contactFetchRequest) {
         QContactFetchHint cfh;
         cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-        cfh.setDetailDefinitionsHint(QStringList()
-                << QContactAvatar::DefinitionName
-                << QContactName::DefinitionName
-                << QContactNickname::DefinitionName
-                << QContactPresence::DefinitionName);
+        cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
+                               << QContactDetail::TypeAvatar
+                               << QContactDetail::TypeName
+                               << QContactDetail::TypeNickname
+                               << QContactDetail::TypePresence);
         m_contactFetchRequest->setFetchHint(cfh);
         m_contactFetchRequest->setManager(&m_contactManager);
         connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
@@ -149,8 +125,10 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("fields")), QLatin1String("id")));
     QUrl url(QLatin1String("https://graph.facebook.com/me"));
-    url.setQueryItems(queryItems);
-    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+    QUrlQuery query(url);
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
+    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -178,8 +156,10 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     QUrl url(QLatin1String("https://graph.facebook.com/me/home"));
-    url.setQueryItems(queryItems);
-    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
+    QUrlQuery query(url);
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
+    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -352,8 +332,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 QString picture = currData.value(QLatin1String("picture")).toString();
                 QString link = currData.value(QLatin1String("link")).toString();
                 bool moreThanOnePhoto = false;
-                QUrl linkUrl(link);
-                QString relevantCount = linkUrl.queryItemValue(QLatin1String("relevant_count"));
+                QString relevantCount = QUrlQuery(link).queryItemValue(QLatin1String("relevant_count"));
                 if (!relevantCount.isEmpty() && relevantCount.toInt() > 1) {
                     moreThanOnePhoto = true;
                 }
@@ -546,8 +525,8 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             // The FB api is terrible, and so we don't know in advance which paging url
             // to use (as it will change depending on whether the current request was
             // a first request, or itself a paging request).
-            QUrl prevUrl(paging.value("previous").toString());
-            QUrl nextUrl(paging.value("next").toString());
+            QUrlQuery prevUrl(paging.value("previous").toString());
+            QUrlQuery nextUrl(paging.value("next").toString());
             if (prevUrl.hasQueryItem(QLatin1String("until"))) {
                 until = prevUrl.queryItemValue(QLatin1String("until"));
                 pagingToken = prevUrl.queryItemValue(QLatin1String("__paging_token"));
@@ -592,10 +571,10 @@ bool FacebookPostSyncAdaptor::fromIsSelfContact(const QString &fromName, const Q
     // fall back to heuristic matching.
     QStringList firstAndLast = fromName.split(' '); // TODO: better detection of FN/LN
     QContactName scn = m_selfContact.detail<QContactName>();
-    if ((!fromName.isEmpty() && scn.customLabel() == fromName) ||
-            (firstAndLast.size() == 2 &&
+    if ((!fromName.isEmpty() && scn.value<QString>(QContactName__FieldCustomLabel) == fromName) ||
+            (firstAndLast.size() >= 2 &&
              scn.firstName() == firstAndLast.at(0) &&
-             scn.lastName() == firstAndLast.at(1))) {
+             scn.lastName() == firstAndLast.at(firstAndLast.size()-1))) {
         return true;
     }
 
@@ -633,8 +612,7 @@ void FacebookPostSyncAdaptor::incrementSemaphore(int accountId)
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
     if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        m_status = SocialNetworkSyncAdaptor::Busy;
-        emit statusChanged();
+        changeStatus(SocialNetworkSyncAdaptor::Busy);
     }
 }
 
@@ -676,8 +654,7 @@ void FacebookPostSyncAdaptor::decrementSemaphore(int accountId)
         if (allAreZero) {
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Posts sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            m_status = SocialNetworkSyncAdaptor::Inactive;
-            emit statusChanged();
+            changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
 }

@@ -1,47 +1,24 @@
-/*
- * Copyright (C) 2013 Jolla Ltd. <chris.adams@jollamobile.com>
- *
- * You may use this file under the terms of the BSD license as follows:
- *
- * "Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Nemo Mobile nor the names of its contributors
- *     may be used to endorse or promote products derived from this
- *     software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
- */
+/****************************************************************************
+ **
+ ** Copyright (C) 2013 Jolla Ltd.
+ ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ **
+ ****************************************************************************/
 
 #include "twittermentiontimelinesyncadaptor.h"
-#include "twittersyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
+#include "constants_p.h"
 
 #include <QtCore/QPair>
+#include <QtCore/QUrlQuery>
 
-//QtMobility
 #include <QtContacts/QContactManager>
 #include <QtContacts/QContactFetchHint>
 #include <QtContacts/QContactFetchRequest>
 #include <QtContacts/QContact>
 #include <QtContacts/QContactName>
+#include <QtContacts/QContactDisplayLabel>
 #include <QtContacts/QContactNickname>
 #include <QtContacts/QContactPresence>
 #include <QtContacts/QContactAvatar>
@@ -55,8 +32,8 @@
 
 // currently, we integrate with the device notifications via nemo-qml-plugin-notification
 
-TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService *parent, TwitterSyncAdaptor *fbsa)
-    : TwitterDataTypeSyncAdaptor(parent, fbsa, SyncService::Notifications)
+TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService *syncService, QObject *parent)
+    : TwitterDataTypeSyncAdaptor(syncService, SyncService::Notifications, parent)
     , m_contactFetchRequest(new QContactFetchRequest(this))
 {
     //: The text displayed for Twitter notifications on the lock screen
@@ -73,11 +50,11 @@ TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService
     if (m_contactFetchRequest) {
         QContactFetchHint cfh;
         cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-        cfh.setDetailDefinitionsHint(QStringList()
-                << QContactAvatar::DefinitionName
-                << QContactName::DefinitionName
-                << QContactNickname::DefinitionName
-                << QContactPresence::DefinitionName);
+        cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
+                               << QContactDetail::TypeAvatar
+                               << QContactDetail::TypeName
+                               << QContactDetail::TypeNickname
+                               << QContactDetail::TypePresence);
         m_contactFetchRequest->setFetchHint(cfh);
         m_contactFetchRequest->setManager(&m_contactManager);
         connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
@@ -152,13 +129,15 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
     }
     QString baseUrl = QLatin1String("https://api.twitter.com/1.1/statuses/mentions_timeline.json");
     QUrl url(baseUrl);
-    url.setQueryItems(queryItems);
+    QUrlQuery query(url);
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
 
     QNetworkRequest nreq(url);
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = m_tsa->m_qnam->get(nreq);
+    QNetworkReply *reply = m_qnam->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -236,18 +215,20 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                 QString avatar = QLatin1String("icon-s-service-twitter"); // default.
                 QContact matchingContact = findMatchingContact(nameString);
                 if (matchingContact != QContact()) {
+                    QContactDisplayLabel displayLabel = matchingContact.detail<QContactDisplayLabel>();
+                    QContactName contactName = matchingContact.detail<QContactName>();
                     QString originalNameString = nameString;
-                    if (!matchingContact.displayLabel().isEmpty()) {
-                        nameString = matchingContact.displayLabel();
-                    } else if (!matchingContact.detail<QContactName>().customLabel().isEmpty()) {
-                        nameString = matchingContact.detail<QContactName>().customLabel();
+                    if (!displayLabel.label().isEmpty()) {
+                        nameString = displayLabel.label();
+                    } else if (!contactName.value<QString>(QContactName__FieldCustomLabel).isEmpty()) {
+                        nameString = contactName.value<QString>(QContactName__FieldCustomLabel);
                     }
 
                     QList<QContactAvatar> allAvatars = matchingContact.details<QContactAvatar>();
                     bool foundTwitterProfileImage = false;
                     foreach (const QContactAvatar &avat, allAvatars) {
-                        if (avat.value(QTCONTACTS_SQLITE_AVATAR_METADATA) == QLatin1String("profile")
-                                && !avat.imageUrl().toString().isEmpty()) {
+                        // TODO: avat.value(QTCONTACTS_SQLITE_AVATAR_METADATA) == QLatin1String("profile")
+                        if (!avat.imageUrl().toString().isEmpty()) {
                             // found avatar synced from Twitter sociald sync adaptor
                             avatar = avat.imageUrl().toString();
                             foundTwitterProfileImage = true;
@@ -341,7 +322,7 @@ QContact TwitterMentionTimelineSyncAdaptor::findMatchingContact(const QString &n
     foreach (const QContact &c, m_contacts) {
         QList<QContactName> names = c.details<QContactName>();
         foreach (const QContactName &n, names) {
-            if (n.customLabel() == nameString ||
+            if (n.value<QString>(QContactName__FieldCustomLabel) == nameString ||
                     (firstAndLast.size() >= 2 &&
                      n.firstName() == firstAndLast.at(0) &&
                      n.lastName() == firstAndLast.at(firstAndLast.size()-1))) {
@@ -389,8 +370,7 @@ void TwitterMentionTimelineSyncAdaptor::incrementSemaphore(int accountId)
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
     if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        m_status = SocialNetworkSyncAdaptor::Busy;
-        emit statusChanged();
+        changeStatus(SocialNetworkSyncAdaptor::Busy);
     }
 }
 
@@ -432,8 +412,7 @@ void TwitterMentionTimelineSyncAdaptor::decrementSemaphore(int accountId)
         if (allAreZero) {
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Twitter Notifications sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            m_status = SocialNetworkSyncAdaptor::Inactive;
-            emit statusChanged();
+            changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
 }

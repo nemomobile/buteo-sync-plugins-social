@@ -1,38 +1,14 @@
-/*
- * Copyright (C) 2013 Jolla Ltd. <chris.adams@jollamobile.com>
- *
- * You may use this file under the terms of the BSD license as follows:
- *
- * "Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Nemo Mobile nor the names of its contributors
- *     may be used to endorse or promote products derived from this
- *     software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
- */
+/****************************************************************************
+ **
+ ** Copyright (C) 2013 Jolla Ltd.
+ ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ **
+ ****************************************************************************/
 
 #include "facebooknotificationsyncadaptor.h"
-#include "facebooksyncadaptor.h"
 #include "syncservice.h"
 #include "trace.h"
+#include "constants_p.h"
 
 #include <QtCore/QPair>
 
@@ -58,8 +34,8 @@
 
 // currently, we integrate with the device notifications via nemo-qml-plugin-notification
 
-FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *parent, FacebookSyncAdaptor *fbsa)
-    : FacebookDataTypeSyncAdaptor(parent, fbsa, SyncService::Notifications)
+FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *syncService, QObject *parent)
+    : FacebookDataTypeSyncAdaptor(syncService, SyncService::Notifications, parent)
     , m_contactFetchRequest(new QContactFetchRequest(this))
     , m_eventFeed(MEventFeed::instance())
 {
@@ -79,11 +55,11 @@ FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *pa
     if (m_contactFetchRequest) {
         QContactFetchHint cfh;
         cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-        cfh.setDetailDefinitionsHint(QStringList()
-                << QContactAvatar::DefinitionName
-                << QContactName::DefinitionName
-                << QContactNickname::DefinitionName
-                << QContactPresence::DefinitionName);
+        cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
+                               << QContactDetail::TypeAvatar
+                               << QContactDetail::TypeName
+                               << QContactDetail::TypeNickname
+                               << QContactDetail::TypePresence);
         m_contactFetchRequest->setFetchHint(cfh);
         m_contactFetchRequest->setManager(&m_contactManager);
         connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
@@ -162,9 +138,11 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("include_read")), QString(QLatin1String("true"))));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     QUrl url(QLatin1String("https://graph.facebook.com/me/notifications"));
-    url.setQueryItems(queryItems);
-    QNetworkReply *reply = m_fbsa->m_qnam->get(QNetworkRequest(url));
-    
+    QUrlQuery query(url);
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
+    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
+
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -250,18 +228,20 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                 QString avatar = QLatin1String("icon-s-service-facebook"); // default.
                 QContact matchingContact = findMatchingContact(nameString);
                 if (matchingContact != QContact()) {
+                    QContactDisplayLabel displayLabel = matchingContact.detail<QContactDisplayLabel>();
+                    QContactName contactName = matchingContact.detail<QContactName>();
                     QString originalNameString = nameString;
-                    if (!matchingContact.displayLabel().isEmpty()) {
-                        nameString = matchingContact.displayLabel();
-                    } else if (!matchingContact.detail<QContactName>().customLabel().isEmpty()) {
-                        nameString = matchingContact.detail<QContactName>().customLabel();
+                    if (!displayLabel.label().isEmpty()) {
+                        nameString = displayLabel.label();
+                    } else if (!contactName.value<QString>(QContactName__FieldCustomLabel).isEmpty()) {
+                        nameString = contactName.value<QString>(QContactName__FieldCustomLabel);
                     }
 
                     QList<QContactAvatar> allAvatars = matchingContact.details<QContactAvatar>();
                     bool foundFacebookPicture = false;
                     foreach (const QContactAvatar &avat, allAvatars) {
-                        if (avat.value(QTCONTACTS_SQLITE_AVATAR_METADATA) == QLatin1String("picture")
-                                && !avat.imageUrl().toString().isEmpty()) {
+                        // TODO: avat.value(QTCONTACTS_SQLITE_AVATAR_METADATA) == QLatin1String("picture")
+                        if (!avat.imageUrl().toString().isEmpty()) {
                             // found avatar synced from Facebook sociald sync adaptor
                             avatar = avat.imageUrl().toString();
                             foundFacebookPicture = true;
@@ -329,14 +309,15 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
             // a first request, or itself a paging request).
             QUrl prevUrl(paging.value("previous").toString());
             QUrl nextUrl(paging.value("next").toString());
-            if (prevUrl.hasQueryItem(QLatin1String("until"))) {
-                until = prevUrl.queryItemValue(QLatin1String("until"));
-                pagingToken = prevUrl.queryItemValue(QLatin1String("__paging_token"));
+            QUrlQuery prevUrlQuery(prevUrl);
+            if (prevUrlQuery.hasQueryItem(QLatin1String("until"))) {
+                until = prevUrlQuery.queryItemValue(QLatin1String("until"));
+                pagingToken = prevUrlQuery.queryItemValue(QLatin1String("__paging_token"));
             } else {
-                until = nextUrl.queryItemValue(QLatin1String("until"));
-                pagingToken = nextUrl.queryItemValue(QLatin1String("__paging_token"));
+                QUrlQuery nextUrlQuery(nextUrl);
+                until = nextUrlQuery.queryItemValue(QLatin1String("until"));
+                pagingToken = nextUrlQuery.queryItemValue(QLatin1String("__paging_token"));
             }
-
             // request the next page of results.
             requestNotifications(accountId, accessToken, until, pagingToken);
         }
@@ -378,10 +359,10 @@ QContact FacebookNotificationSyncAdaptor::findMatchingContact(const QString &nam
     foreach (const QContact &c, m_contacts) {
         QList<QContactName> names = c.details<QContactName>();
         foreach (const QContactName &n, names) {
-            if (n.customLabel() == nameString ||
-                    (firstAndLast.size() == 2 &&
+            if (n.value<QString>(QContactName__FieldCustomLabel) == nameString ||
+                    (firstAndLast.size() >= 2 &&
                      n.firstName() == firstAndLast.at(0) &&
-                     n.lastName() == firstAndLast.at(1))) {
+                     n.lastName() == firstAndLast.at(firstAndLast.size()-1))) {
                 return c;
             }
         }
@@ -426,8 +407,7 @@ void FacebookNotificationSyncAdaptor::incrementSemaphore(int accountId)
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
 
     if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        m_status = SocialNetworkSyncAdaptor::Busy;
-        emit statusChanged();
+        changeStatus(SocialNetworkSyncAdaptor::Busy);
     }
 }
 
@@ -488,8 +468,7 @@ void FacebookNotificationSyncAdaptor::decrementSemaphore(int accountId)
         if (allAreZero) {
             TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Notifications sync at: %1"))
                                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            m_status = SocialNetworkSyncAdaptor::Inactive;
-            emit statusChanged();
+            changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
 }
