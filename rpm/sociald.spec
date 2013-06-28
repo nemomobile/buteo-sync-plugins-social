@@ -28,7 +28,7 @@ A daemon process which provides data synchronization with various social service
 
 %files
 %defattr(-,root,root,-)
-/usr/lib/buteo-plugins/libsociald-client.so
+/usr/lib/buteo-plugins-qt5/libsociald-client.so
 %config %{_sysconfdir}/buteo/profiles/client/sociald.xml
 %config %{_sysconfdir}/buteo/profiles/sync/*.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf

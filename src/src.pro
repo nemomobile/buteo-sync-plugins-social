@@ -15,7 +15,7 @@ DEFINES *= USE_CONTACTS_NAMESPACE=QTCONTACTS_USE_NAMESPACE
 HEADERS += constants_p.h
 PKGCONFIG += libsailfishkeyprovider
 
-target.path += /usr/lib/buteo-plugins
+target.path += /usr/lib/buteo-plugins-qt5
 
 client.path = /etc/buteo/profiles/client
 client.files = xml/sociald.xml
