@@ -22,6 +22,8 @@ BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  eventfeed-devel
 BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
+# for lupdate
+BuildRequires:  qt5-qttools-linguist
 Requires: nemo-qml-plugin-notifications-qt5
 Requires: eventfeed-viewer
 Requires: buteo-syncfw-qt5-msyncd
