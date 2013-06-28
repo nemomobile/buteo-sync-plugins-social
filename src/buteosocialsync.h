@@ -8,8 +8,8 @@
 #ifndef BUTEOSOCIALSYNC_H
 #define BUTEOSOCIALSYNC_H
 
-#include <buteosyncfw/ClientPlugin.h>
-#include <buteosyncfw/SyncResults.h>
+#include <ClientPlugin.h>
+#include <SyncResults.h>
 
 class SocialNetworkSyncAdaptor;
 

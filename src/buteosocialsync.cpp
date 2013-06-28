@@ -5,8 +5,8 @@
  **
  ****************************************************************************/
 
-#include <buteosyncfw/PluginCbInterface.h>
-#include <buteosyncfw/LogMacros.h>
+#include <PluginCbInterface.h>
+#include <LogMacros.h>
 
 #include <QCoreApplication>
 #include <QTranslator>
