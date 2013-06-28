@@ -15,14 +15,15 @@
 
 #include <QtNetwork/QNetworkAccessManager>
 
-//libaccounts-qt
-#include <Accounts/Manager>
+// sailfish-components-accounts-qt5
+#include <accountmanager.h>
+#include <account.h>
 
 SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName, SyncService *syncService, QObject *parent)
     : QObject(parent)
     , m_status(SocialNetworkSyncAdaptor::Invalid)
     , m_serviceName(serviceName)
-    , m_accountManager(new Accounts::Manager(QLatin1String("sync"), this))
+    , m_accountManager(new AccountManager(this))
     , m_qnam(new QNetworkAccessManager(this))
     , q(syncService)
 {
@@ -69,14 +70,15 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
         }
     }
 
-    Accounts::AccountIdList currentIds = m_accountManager->accountList();
+    QList<int> currentIds = m_accountManager->accountIdentifiers();
     TRACE(SOCIALD_DEBUG,
             QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
             .arg(currentIds.size()));
     for (int i = 0; i < currentIds.size(); ++i) {
         int currId = currentIds.at(i);
-        Accounts::Account *act = m_accountManager->account(currId);
-        if (!act || act->providerName() != m_serviceName) {
+        Account *act = m_accountManager->account(currId);
+        if (!act || !(act->supportedServiceNames().size() > 0 &&
+                      act->supportedServiceNames().at(0).startsWith(m_serviceName))) {
             continue; // not same account as m_serviceName.  Ignore it.
         }
 

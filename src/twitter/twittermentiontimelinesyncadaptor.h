@@ -24,10 +24,6 @@
 #include <QtContacts/QContactFetchHint>
 #include <QtContacts/QContact>
 
-//libsignon-qt
-#include <SignOn/SessionData>
-#include <SignOn/Error>
-
 USE_CONTACTS_NAMESPACE
 
 class TwitterMentionTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor

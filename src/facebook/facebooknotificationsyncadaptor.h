@@ -24,10 +24,6 @@
 #include <QtContacts/QContactFetchHint>
 #include <QtContacts/QContact>
 
-//libsignon-qt
-#include <SignOn/SessionData>
-#include <SignOn/Error>
-
 class MEventFeed;
 
 USE_CONTACTS_NAMESPACE

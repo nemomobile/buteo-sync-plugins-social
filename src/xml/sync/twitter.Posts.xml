@@ -16,5 +16,5 @@
     <!--This is used by sync-fw to set customized scheduling information for the profile -->
     <schedule enabled="false" interval="1" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="">
     </schedule>
-    <key name="category" value="twitter.Posts" />
+    <key name="category" value="eventfeed" />
 </profile>
