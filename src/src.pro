@@ -4,7 +4,7 @@ TARGET = sociald-client
 VERSION = 0.0.1
 CONFIG += link_pkgconfig plugin
 
-CONFIG += meegotouchevents-qt5 eventfeed-qt5
+CONFIG += meegotouchevents-qt5
 PKGCONFIG += Qt5Contacts \
     libsailfishkeyprovider \
     sailfishaccounts \
