@@ -87,20 +87,33 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
     if (ok && parsed.contains(QLatin1String("summary"))) {
         QVariantList data = parsed.value(QLatin1String("data")).toList();
 
-        //: The title of the Facebook Notifications device notification
-        //% "You have %1 new Facebook notification(s)!"
-        Notification *notif = nemoNotification();
-        if (data.size() > 0) {
-            QString title = qtTrId("sociald_facebook_posts-notification_title").arg(data.size());
-            notif->setSummary(title);
-            notif->setPreviewSummary(title);
-            notif->setItemCount(data.size());
-            notif->setTimestamp(QDateTime::currentDateTime());
-            notif->publish();
-        } else {
-            notif->close();
+        int notificationCount = data.size();
+        Notification *notification = existingNemoNotification(accountId);
+        if (notificationCount > 0) {
+            // Only publish a notification if one doesn't exist or the published notification count is different
+            if (notification == 0 || notification->itemCount() != notificationCount) {
+                if (notification == 0) {
+                    notification = new Notification;
+                    notification->setCategory("x-nemo.social.facebook.notification");
+                    notification->setHintValue("x-nemo.sociald.account-id", accountId);
+                }
+
+                //: The title of the Facebook Notifications device notification
+                //% "You have %1 new Facebook notification(s)!"
+                QString title = qtTrId("sociald_facebook_posts-notification_title").arg(notificationCount);
+                notification->setSummary(title);
+                notification->setBody(QString());
+                notification->setPreviewSummary(title);
+                notification->setPreviewBody(QString());
+                notification->setItemCount(notificationCount);
+                notification->setTimestamp(QDateTime::currentDateTime());
+                notification->publish();
+            }
+        } else if (notification != 0) {
+            // Destroy any existing notification if there should be no notifications
+            notification->close();
         }
-        delete notif;
+        delete notification;
     } else {
         // error occurred during request.
         TRACE(SOCIALD_ERROR,
@@ -167,16 +180,13 @@ void FacebookNotificationSyncAdaptor::decrementSemaphore(int accountId)
     }
 }
 
-Notification *FacebookNotificationSyncAdaptor::nemoNotification()
+Notification *FacebookNotificationSyncAdaptor::existingNemoNotification(int accountId)
 {
     foreach (QObject *object, Notification::notifications()) {
         Notification *notification = static_cast<Notification *>(object);
-        if (notification->category() == "x-nemo.social.facebook.notification") {
+        if (notification->category() == "x-nemo.social.facebook.notification" && notification->hintValue("x-nemo.sociald.account-id").toInt() == accountId) {
             return notification;
         }
     }
-
-    Notification *notification = new Notification;
-    notification->setCategory("x-nemo.social.facebook.notification");
-    return notification;
+    return 0;
 }

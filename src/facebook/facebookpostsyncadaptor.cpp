@@ -26,7 +26,7 @@
 #include <meventfeed.h>
 
 #define SOCIALD_FACEBOOK_POSTS_ID_PREFIX QLatin1String("facebook-posts-")
-#define SOCIALD_FACEBOOK_POSTS_GROUPNAME QLatin1String("sociald-sync-facebook-posts")
+#define SOCIALD_FACEBOOK_POSTS_GROUPNAME QLatin1String("facebook")
 #define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
@@ -488,6 +488,10 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                         QString(QLatin1String("event for account %1 has already been posted:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << eventBody);
             } else {
+                QVariantMap metaData;
+                metaData.insert("accountId", accountId);
+                metaData.insert("nodeId", postId);
+
                 // publish the post to the events feed.
                 qlonglong eventId = m_eventFeed->addItem(
                         QLatin1String("icon-s-service-facebook"),
@@ -499,7 +503,8 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                         eventIsVideo,
                         eventUrl,
                         SOCIALD_FACEBOOK_POSTS_GROUPNAME, // sourceName
-                        QLatin1String("Facebook"));       // sourceDisplayName // XXX TODO: per-account?
+                        QLatin1String("Facebook"),        // sourceDisplayName // XXX TODO: per-account?
+                        metaData);
                 if (eventId == 0) {
                     // failed.
                     TRACE(SOCIALD_ERROR,

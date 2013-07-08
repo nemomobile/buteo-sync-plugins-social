@@ -45,7 +45,7 @@ private:
     void incrementSemaphore(int accountId);
     QMap<int, int> m_accountSyncSemaphores;
 
-    Notification *nemoNotification();
+    Notification *existingNemoNotification(int accountId);
 };
 
 #endif // FACEBOOKNOTIFICATIONSYNCADAPTOR_H

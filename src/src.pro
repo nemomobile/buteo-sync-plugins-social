@@ -57,7 +57,7 @@ OBJECTS_DIR = $$PWD/../.obj
 # translations
 TS_FILE = $$OUT_PWD/sociald.ts
 EE_QM = $$OUT_PWD/sociald_eng_en.qm
-ts.commands += lupdate $$PWD -ts $$TS_FILE
+ts.commands += lupdate -no-recursive $$PWD/facebook $$PWD/twitter -ts $$TS_FILE
 ts.CONFIG += no_check_exist
 ts.output = $$TS_FILE
 ts.input = .
@@ -82,4 +82,4 @@ PRE_TARGETDEPS += ts engineering_english
 notification_categories.files = facebook/x-nemo.social.facebook.notification.conf twitter/x-nemo.social.twitter.mention.conf
 notification_categories.path = /usr/share/lipstick/notificationcategories/
 
-INSTALLS = target client sync notification_categories ts_install engineering_english_install
+INSTALLS += target client sync notification_categories ts_install engineering_english_install

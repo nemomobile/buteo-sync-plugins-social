@@ -1,0 +1,6 @@
+Makefile
+*.so
+*.ts
+*.qm
+.moc
+.obj
