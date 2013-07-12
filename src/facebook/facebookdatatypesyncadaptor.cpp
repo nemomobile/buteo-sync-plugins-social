@@ -137,8 +137,9 @@ void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
             .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(err));
-    // the error is an incomprehensible enum value, but that doesn't matter to users.
-    changeStatus(SocialNetworkSyncAdaptor::Error);
+    // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
+    sender()->setProperty("isError", QVariant::fromValue<bool>(true));
+    // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 }
 
 void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
@@ -153,8 +154,9 @@ void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
             .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
-
-    changeStatus(SocialNetworkSyncAdaptor::Error);
+    // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
+    sender()->setProperty("isError", QVariant::fromValue<bool>(true));
+    // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 }
 
 QVariantMap FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)

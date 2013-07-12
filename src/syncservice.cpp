@@ -11,6 +11,7 @@
 
 #include "twitter/twitterhometimelinesyncadaptor.h"
 #include "twitter/twittermentiontimelinesyncadaptor.h"
+#include "facebook/facebookcontactsyncadaptor.h"
 #include "facebook/facebookimagesyncadaptor.h"
 #include "facebook/facebooknotificationsyncadaptor.h"
 #include "facebook/facebookpostsyncadaptor.h"
@@ -82,7 +83,8 @@ SyncServicePrivate::SyncServicePrivate(const QString &connectionName, SyncServic
         m_supportedDataTypes.insert(facebookService, QStringList() <<
                                     SyncService::dataType(SyncService::Notifications) <<
                                     SyncService::dataType(SyncService::Images) <<
-                                    SyncService::dataType(SyncService::Posts));
+                                    SyncService::dataType(SyncService::Posts) <<
+                                    SyncService::dataType(SyncService::Contacts));
         // TODO: Contacts, Calendar Events
     }
 
@@ -125,6 +127,8 @@ SocialNetworkSyncAdaptor *SyncServicePrivate::createAdaptor(const QString &socia
             return new FacebookImageSyncAdaptor(q, parent);
         } else if (dataType == SyncService::dataType(SyncService::Posts)) {
             return new FacebookPostSyncAdaptor(q, parent);
+        } else if (dataType == SyncService::dataType(SyncService::Contacts)) {
+            return new FacebookContactSyncAdaptor(q, parent);
         } else {
             return 0;
         }
