@@ -18,15 +18,7 @@
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
 
-#include <QtContacts/QContactManager>
-#include <QtContacts/QContactAbstractRequest>
-#include <QtContacts/QContactFetchRequest>
-#include <QtContacts/QContactFetchHint>
-#include <QtContacts/QContact>
-
-class MEventFeed;
-
-USE_CONTACTS_NAMESPACE
+class Notification;
 
 class FacebookNotificationSyncAdaptor : public FacebookDataTypeSyncAdaptor
 {
@@ -36,8 +28,6 @@ public:
     FacebookNotificationSyncAdaptor(SyncService *syncService, QObject *parent);
     ~FacebookNotificationSyncAdaptor();
 
-    void sync(const QString &dataType);
-
 protected: // implementing FacebookDataTypeSyncAdaptor interface
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
@@ -45,24 +35,17 @@ protected: // implementing FacebookDataTypeSyncAdaptor interface
 private:
     void requestNotifications(int accountId, const QString &accessToken,
                               const QString &until = QString(), const QString &pagingToken = QString());
-    bool haveAlreadyPostedNotification(const QString &notificationId, const QString &title, const QDateTime &createdTime);
-    QContact findMatchingContact(const QString &nameString) const;
 
 private Q_SLOTS:
     void finishedHandler();
-    void contactFetchStateChangedHandler(QContactAbstractRequest::State newState);
 
 private:
-    QContactManager m_contactManager;
-    QList<QContact> m_contacts;
-    QContactFetchRequest *m_contactFetchRequest;
-    MEventFeed *m_eventFeed;
-    QMap<int, int> m_notificationsCount;
-
     // for busy/inactive detection.
     void decrementSemaphore(int accountId);
     void incrementSemaphore(int accountId);
     QMap<int, int> m_accountSyncSemaphores;
+
+    Notification *existingNemoNotification(int accountId);
 };
 
 #endif // FACEBOOKNOTIFICATIONSYNCADAPTOR_H
