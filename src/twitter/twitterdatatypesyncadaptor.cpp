@@ -260,20 +260,18 @@ QString TwitterDataTypeSyncAdaptor::authorizationHeader(int accountId, const QSt
 
 QDateTime TwitterDataTypeSyncAdaptor::parseTwitterDateTime(const QString &tdt)
 {
-    // format of created_at: "DDD MMM dd hh:mm:ss +tttt yyyy"
-    QStringList parts = tdt.split(' ');
-    if (parts.count() != 6) {
-        return QDateTime(); // invalid
-    }
+    // Twitter use the following format ddd MMM dd hh:mm:ss +0000 yyyy
+    // The +0000 should always be +0000 since it relates to UTC time
+    // We are using it like that but it might break if Twitter change their
+    // API or if +0000 is not constant.
+    // Twitter use english in their date, so we need to use an english
+    // locale to parse the date
 
-    QString modTdt = parts.at(1) + QLatin1String(" ")
-                   + parts.at(2) + QLatin1String(" ")
-                   + parts.at(3) + QLatin1String(" ")
-                   + parts.at(5);
+    QLocale locale (QLocale::English, QLocale::UnitedStates);
+    QDateTime time = locale.toDateTime(tdt, "ddd MMM dd HH:mm:ss +0000 yyyy");
+    time.setTimeSpec(Qt::UTC);
 
-    QDateTime retn = QDateTime::fromString(modTdt, "MMM dd hh:mm:ss yyyy");
-    retn.setTimeSpec(Qt::UTC);
-    return retn;
+    return time;
 }
 
 QVariant TwitterDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
