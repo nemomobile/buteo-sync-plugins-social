@@ -1,18 +1,21 @@
 INCLUDEPATH += . ..
+INCLUDEPATH += /home/sk/Code/Qt/Jolla/Jolla/mkcal/src/ #TODO: REMOVE
 
 HEADERS += \
     $$PWD/facebookdatatypesyncadaptor.h \
     $$PWD/facebookcontactsyncadaptor.h \
     $$PWD/facebookimagesyncadaptor.h \
     $$PWD/facebooknotificationsyncadaptor.h \
-    $$PWD/facebookpostsyncadaptor.h
+    $$PWD/facebookpostsyncadaptor.h \
+    facebook/facebookcalendartypesyncadaptor.h
 
 SOURCES += \
     $$PWD/facebookdatatypesyncadaptor.cpp \
     $$PWD/facebookcontactsyncadaptor.cpp \
     $$PWD/facebookimagesyncadaptor.cpp \
     $$PWD/facebooknotificationsyncadaptor.cpp \
-    $$PWD/facebookpostsyncadaptor.cpp
+    $$PWD/facebookpostsyncadaptor.cpp \
+    facebook/facebookcalendartypesyncadaptor.cpp
 
 # lipstick event feed subview
 facebook_eventfeed.files = $$PWD/eventfeed/facebook.qml

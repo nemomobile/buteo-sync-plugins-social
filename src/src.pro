@@ -10,14 +10,17 @@ PKGCONFIG += Qt5Contacts \
     sailfishaccounts \
     libsignon-qt5 \
     nemonotifications-qt5 \
-    buteosyncfw5
+    buteosyncfw5 \
+    libmkcal-qt5 \
+    libkcalcoren-qt5
 
 DEFINES *= USING_QTPIM
 DEFINES *= BEGIN_CONTACTS_NAMESPACE=QT_BEGIN_NAMESPACE_CONTACTS
 DEFINES *= END_CONTACTS_NAMESPACE=QT_END_NAMESPACE_CONTACTS
 DEFINES *= USE_CONTACTS_NAMESPACE=QTCONTACTS_USE_NAMESPACE
 
-HEADERS += constants_p.h
+HEADERS += constants_p.h \
+    databasemanipulationinterface.h
 
 target.path += /usr/lib/buteo-plugins-qt5
 
@@ -50,7 +53,8 @@ HEADERS += \
 SOURCES += \
     $$PWD/buteosocialsync.cpp \
     $$PWD/socialnetworksyncadaptor.cpp \
-    $$PWD/syncservice.cpp
+    $$PWD/syncservice.cpp \
+    databasemanipulationinterface.cpp
 
 MOC_DIR = $$PWD/../.moc
 OBJECTS_DIR = $$PWD/../.obj

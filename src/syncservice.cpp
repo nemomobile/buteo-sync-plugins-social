@@ -15,6 +15,7 @@
 #include "facebook/facebookimagesyncadaptor.h"
 #include "facebook/facebooknotificationsyncadaptor.h"
 #include "facebook/facebookpostsyncadaptor.h"
+#include "facebook/facebookcalendartypesyncadaptor.h"
 
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -57,7 +58,8 @@ SyncServicePrivate::SyncServicePrivate(const QString &connectionName, SyncServic
                                     SyncService::dataType(SyncService::Notifications) <<
                                     SyncService::dataType(SyncService::Images) <<
                                     SyncService::dataType(SyncService::Posts) <<
-                                    SyncService::dataType(SyncService::Contacts));
+                                    SyncService::dataType(SyncService::Contacts) <<
+                                    SyncService::dataType(SyncService::Calendars));
         // TODO: Contacts, Calendar Events
     }
 
@@ -102,6 +104,8 @@ SocialNetworkSyncAdaptor *SyncServicePrivate::createAdaptor(const QString &socia
             return new FacebookPostSyncAdaptor(q, parent);
         } else if (dataType == SyncService::dataType(SyncService::Contacts)) {
             return new FacebookContactSyncAdaptor(q, parent);
+        } else if (dataType == SyncService::dataType(SyncService::Calendars)) {
+            return new FacebookCalendarTypeSyncAdaptor(q, parent);
         } else {
             return 0;
         }

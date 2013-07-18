@@ -17,6 +17,8 @@ BuildRequires:  pkgconfig(mlite5)
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  pkgconfig(sailfishaccounts)
+BuildRequires:  pkgconfig(libmkcal-qt5)
+BuildRequires:  pkgconfig(libkcalcoren-qt5)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
@@ -27,6 +29,7 @@ Requires: sailfish-components-textlinking
 Requires: nemo-qml-plugin-notifications-qt5
 Requires: nemo-qml-plugin-social-qt5 >= 0.0.9
 Requires: buteo-syncfw-qt5-msyncd
+Requires: mkcal-qt5
 
 %description
 A daemon process which provides data synchronization with various social services.
