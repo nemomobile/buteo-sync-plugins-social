@@ -27,6 +27,9 @@
 //meegotouchevents/meventfeed
 #include <meventfeed.h>
 
+// sailfish-components-accounts-qt5
+#include <sailfishkeyprovider.h>
+
 #define SOCIALD_FACEBOOK_POSTS_ID_PREFIX QLatin1String("facebook-posts-")
 #define SOCIALD_FACEBOOK_POSTS_GROUPNAME QLatin1String("facebook")
 #define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
@@ -57,11 +60,42 @@ static const char *FQL_QUERY = "{"\
 #define QUERY_EID_KEY QLatin1String("eid")
 static const int QUERY_SIZE = 1000;
 
+static QString storedClientId()
+{
+    char *cClientId = NULL;
+    int success = SailfishKeyProvider_storedKey("facebook", "facebook-sync", "client_id", &cClientId);
+    if (success != 0) {
+        TRACE(SOCIALD_INFORMATION,
+                QString(QLatin1String("FacebookCacheModel::clientId(): could not retrieve stored client id from SailfishKeyProvider")));
+        free(cClientId);
+        return QString();
+    }
+
+    QString retn = QLatin1String(cClientId);
+    free(cClientId);
+    return retn;
+}
+
+static QContactManager *aggregatingContactManager(QObject *parent)
+{
+    QContactManager *retn = new QContactManager(
+            QString::fromLatin1("org.nemomobile.contacts.sqlite"),
+            QMap<QString, QString>(),
+            parent);
+    if (retn->managerName() != QLatin1String("org.nemomobile.contacts.sqlite")) {
+        // the manager specified is not the aggregating manager we depend on.
+        delete retn;
+        return 0;
+    }
+
+    return retn;
+}
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
 FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
+    , m_contactManager(aggregatingContactManager(this))
     , m_contactFetchRequest(new QContactFetchRequest(this))
     , m_eventFeed(MEventFeed::instance())
 {
@@ -82,9 +116,8 @@ FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObje
                                << QContactDetail::TypeNickname
                                << QContactDetail::TypePresence);
         m_contactFetchRequest->setFetchHint(cfh);
-        m_contactFetchRequest->setManager(&m_contactManager);
+        m_contactFetchRequest->setManager(m_contactManager);
         connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
-        m_contactFetchRequest->start();
     }
 
     // can sync, enabled
@@ -223,8 +256,8 @@ void FacebookPostSyncAdaptor::finishedMeHandler()
     QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("id"))) {
         QString selfUserId = parsed.value(QLatin1String("id")).toString();
-        if (!m_selfFbuids.contains(selfUserId)) {
-            m_selfFbuids.append(selfUserId);
+        if (!m_selfFacebookUserIds.contains(accountId)) {
+            m_selfFacebookUserIds.insert(accountId, selfUserId);
         }
 
         requestPosts(accountId, accessToken);
@@ -241,7 +274,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
-    QString accessToken = reply->property("accessToken").toString();
     QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Posts), QString::number(accountId));
     QByteArray replyData = reply->readAll();
     disconnect(reply);
@@ -300,6 +332,19 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                                       nameObject.value(QUERY_NAME_KEY).toString());
                 }
             }
+        }
+
+        // Create a hash map for contacts
+        QHash<QString, QContact> contactHash;
+        foreach (QContact contact, m_contacts) {
+             QContactName contactName = contact.detail<QContactName>();
+             QStringList nameList;
+             nameList.append(contactName.firstName());
+             if (!contactName.middleName().isEmpty()) {
+                 nameList.append(contactName.middleName());
+             }
+             nameList.append(contactName.lastName());
+             contactHash.insert(nameList.join(" "), contact);
         }
 
         // We are using FQL, instead of Graph API to retrieve Facebook event feeds
@@ -362,7 +407,8 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             bool isMessagePost = false;
 
             // We discard posts with a target id (from now)
-            if (!post.value(QLatin1String("target_id")).isNull()) {
+            if (!post.value(QLatin1String("target_id")).isNull()
+                && post.value(QLatin1String("target_id")) != m_selfFacebookUserIds.value(accountId)) {
                 continue;
             }
 
@@ -424,6 +470,15 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                         continue;
                     }
 
+                    // Try to find a better image for this media
+                    if (mediumObject.contains(QLatin1String("photo"))) {
+                        QJsonArray imageList = mediumObject.value(QLatin1String("photo")).toObject().value(QLatin1String("images")).toArray();
+                        QString newImage = imageList.last().toObject().value(QLatin1String("src")).toString();
+                        if (!newImage.isEmpty()) {
+                            mediaUrlString = newImage;
+                        }
+                    }
+
                     // Patch an issue with some applications using local path instead
                     // of absolute urls
                     if (!mediaUrlString.startsWith("http")) {
@@ -438,13 +493,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 }
             }
 
-            // Check to see if we need to post it to the events feed
-            if (lastSync.isValid() && createdTime < lastSync) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("event for account %1 came after last sync:"))
-                        .arg(accountId) << "    " << createdTime << ":" << eventBody);
-                break;                 // all subsequent events will be even older.
-            } else if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
+            if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 is more than a week old:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << eventBody);
@@ -453,6 +502,8 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 has already been posted:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << eventBody);
+
+                // TODO: We should update the number of likes and comments
             } else {
                 QVariantMap metaData;
                 metaData.insert("accountId", accountId);
@@ -460,10 +511,22 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 metaData.insert("postAttachmentName", attachmentName);
                 metaData.insert("postAttachmentCaption", attachmentCaption);
                 metaData.insert("postAttachmentDescription", attachmentDescription);
+                metaData.insert("clientId", storedClientId());
+
+                QString icon = QLatin1String("icon-s-service-facebook");
+
+                // Search the portrait in the contacts
+                if (contactHash.contains(eventTitle)) {
+                    QContact contact = contactHash.value(eventTitle);
+                    QContactAvatar avatar = contact.detail<QContactAvatar>();
+                    if (!avatar.imageUrl().isEmpty()) {
+                        icon = avatar.imageUrl().toString();
+                    }
+                }
 
                 // Publish the post to the events feed.
                 qlonglong eventId = m_eventFeed->addItem(
-                        QLatin1String("icon-s-service-facebook"),
+                        icon,
                         eventTitle,
                         eventBody,
                         eventImageList,
@@ -505,7 +568,7 @@ void FacebookPostSyncAdaptor::contactFetchStateChangedHandler(QContactAbstractRe
     // update our local cache of contacts.
     if (m_contactFetchRequest && newState == QContactAbstractRequest::FinishedState) {
         m_contacts = m_contactFetchRequest->contacts();
-        m_selfContact = m_contactManager.contact(m_contactManager.selfContactId());
+        m_selfContact = m_contactManager->contact(m_contactManager->selfContactId());
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("finished refreshing local cache of contacts, have %1"))
                 .arg(m_contacts.size()));
@@ -515,7 +578,7 @@ void FacebookPostSyncAdaptor::contactFetchStateChangedHandler(QContactAbstractRe
 bool FacebookPostSyncAdaptor::fromIsSelfContact(const QString &fromName, const QString &fromFbUid) const
 {
     // XXX TODO: look this up from QtContacts database instead (saves one request round trip time)
-    if (m_selfFbuids.contains(fromFbUid)) {
+    if (m_selfFacebookUserIds.values().contains(fromFbUid)) {
         return true;
     }
 
@@ -552,7 +615,11 @@ bool FacebookPostSyncAdaptor::haveAlreadyPostedEvent(const QString &postId, cons
     Q_UNUSED(eventBody);
     Q_UNUSED(createdTime);
 
-    return (whenSyncedDatum(QLatin1String("facebook"), postId).isValid());
+    QDateTime syncedDatum = whenSyncedDatum(QLatin1String("facebook"), postId);
+
+
+
+    return (syncedDatum.isValid());
 }
 
 void FacebookPostSyncAdaptor::incrementSemaphore(int accountId)

@@ -54,6 +54,14 @@ SOURCES += \
 MOC_DIR = $$PWD/../.moc
 OBJECTS_DIR = $$PWD/../.obj
 
+# lipstick event feed subview shared components
+shared_eventfeed.files =    $$PWD/eventfeed/Face.qml \
+                            $$PWD/eventfeed/Body.qml \
+                            $$PWD/eventfeed/SocialButton.qml \
+                            $$PWD/eventfeed/MediaRow.qml
+shared_eventfeed.path = /usr/share/lipstick/eventfeed/shared/
+
+
 # translations
 TS_FILE = $$OUT_PWD/sociald.ts
 EE_QM = $$OUT_PWD/sociald_eng_en.qm
@@ -82,4 +90,4 @@ PRE_TARGETDEPS += ts engineering_english
 notification_categories.files = facebook/x-nemo.social.facebook.notification.conf twitter/x-nemo.social.twitter.mention.conf
 notification_categories.path = /usr/share/lipstick/notificationcategories/
 
-INSTALLS += target client sync notification_categories ts_install engineering_english_install
+INSTALLS += target client sync shared_eventfeed notification_categories ts_install engineering_english_install

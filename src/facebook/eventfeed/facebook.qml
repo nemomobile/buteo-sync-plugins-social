@@ -1,46 +1,52 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
 import org.nemomobile.contacts 1.0
-import org.nemomobile.accounts 1.0
-import org.nemomobile.signon 1.0
 import org.nemomobile.social 1.0
+import Sailfish.Accounts 1.0
+import "shared"
 
 Page {
-    id: page
+    id: container
 
     property variant model
 
-    property AccountManager accountManager: AccountManager { }
-    property QtObject serviceAccount
     property string accessToken
-    property string accountIdentifier
     property string myName
     property string nodeIdentifier
     property bool liked
     property string likers
 
-    property ServiceAccountIdentity serviceAccountIdentity: ServiceAccountIdentity {
-        identifier: serviceAccount.authData.identityIdentifier
-        onStatusChanged: {
-            if (serviceAccountIdentity.status == ServiceAccountIdentity.Initialized) {
-                signIn(serviceAccount.authData.method, serviceAccount.authData.mechanism, serviceAccount.authData.parameters)
-            }
-        }
-
-        onResponseReceived: {
-            var token = data["AccessToken"]
-            if (token != "") {
-                page.accessToken = token
-            }
-        }
-    }
+    property string mediaName
+    property string mediaCaption
+    property string mediaDescription
 
     onModelChanged: {
-        accountIdentifier = model.metaData["accountId"]
-        nodeIdentifier = model.metaData["nodeId"]
+        nodeIdentifier = container.model.metaData["nodeId"]
+        mediaName = container.model.metaData["postAttachmentName"]
+        mediaCaption = container.model.metaData["postAttachmentCaption"]
+        mediaDescription = container.model.metaData["postAttachmentDescription"]
     }
 
-    onAccountIdentifierChanged: serviceAccount = accountManager.serviceAccount(accountIdentifier, "facebook-sync")
+    Account {
+        identifier: container.model != null ? container.model.metaData["accountId"] : -1
+        onStatusChanged: {
+            if (status == Account.Initialized) {
+                // Sign in, and get access token.
+                var params = signInParameters("facebook-sync")
+                console.debug(container.model.metaData["clientId"])
+                params.setParameter("ClientId", container.model.metaData["clientId"])
+                params.setParameter("UiPolicy", 2) // NoUserInteractionPolicy - XXX TODO: define this in SailfishAccounts
+                signIn("Jolla", "Jolla", params)
+            }
+        }
+
+        onSignInResponse: {
+            var accessTok = data["AccessToken"]
+            if (accessTok != "") {
+                container.accessToken = accessTok
+            }
+        }
+    }
 
     // Returns true|false if user has liked this image
     function isLikedBySelf() {
@@ -89,10 +95,10 @@ Page {
         if (facebookLikes.count > 2) {
             if (likedBySelf) {
                 //% "You, %1 and %2 others like this"
-                return qsTrId("lipstick-jolla-home-facebook-la-you-and-multiple-friend-like-this").arg(users[0]).arg(users.length - 1)
+                return qsTrId("lipstick-jolla-home-facebook-la-you-and-multiple-friend-like-this").arg(users[0]).arg(facebookLikes.node.likesCount- 1)
             } else {
-                //% "%1 and %2 and %3 others like this"
-                return qsTrId("lipstick-jolla-home-facebook-la-multiple-friend-like-this").arg(users[0]).arg(users[1]).arg(users.length - 2)
+                //% "%1, %2 and %3 others like this"
+                return qsTrId("lipstick-jolla-home-facebook-la-multiple-friend-like-this").arg(users[0]).arg(users[1]).arg(facebookLikes.node.likesCount - 2)
             }
         }
         // Return an empty string for 0 likes
@@ -101,13 +107,14 @@ Page {
 
     Facebook {
         id: facebook
-        accessToken: page.accessToken
+        accessToken: container.accessToken
         onInitializedChanged: populateIfInitialized()
         onAccessTokenChanged: populateIfInitialized()
         function populateIfInitialized() {
             if (initialized && accessToken.length > 0) {
                 facebookMe.populate()
                 facebookLikes.populate()
+                facebookLikes.loading = true
                 facebookComments.populate()
             }
         }
@@ -120,22 +127,46 @@ Page {
         nodeIdentifier: "me"
         onStatusChanged: {
             if (status == SocialNetwork.Idle) {
-                page.myName = facebookMe.node.name
-                page.liked = page.isLikedBySelf()
-                page.likers = page.updateLikers()
+                container.myName = facebookMe.node.name
+                container.liked = container.isLikedBySelf()
+                container.likers = container.updateLikers()
             }
         }
     }
 
+    // If you have a lot of likes, Facebook will provide
+    // them as paginated. So it is not reliable to get
+    // the likes by counting the number of elements in
+    // this model.
+    //
+    // We still need (up to) the first 3 people who liked
+    // that photo to display the "a, b and c liked that"
+    // string. So we only need to retrieve 3 likes.
     SocialNetworkModel {
         id: facebookLikes
-        filters: [ ContentItemTypeFilter { type: Facebook.Like } ]
+        property bool loading
+        filters: ContentItemTypeFilter { type: Facebook.Like; limit: 3 }
         socialNetwork: facebook
-        nodeIdentifier: page.nodeIdentifier
+        nodeIdentifier: container.nodeIdentifier
         onStatusChanged: {
             if (status == SocialNetwork.Idle) {
-                page.liked = page.isLikedBySelf()
-                page.likers = page.updateLikers()
+                facebookLikes.loading = false
+                container.liked = container.isLikedBySelf()
+                container.likers = container.updateLikers()
+            }
+        }
+    }
+
+    Connections {
+        target: facebookLikes.node
+        onStatusChanged:  {
+            switch (facebookLikes.node.status) {
+            case Facebook.Idle:
+                facebookLikes.repopulate()
+                break
+            default:
+                facebookLikes.loading = true
+                break
             }
         }
     }
@@ -144,211 +175,155 @@ Page {
         id: facebookComments
         filters: [ ContentItemTypeFilter { type: Facebook.Comment } ]
         socialNetwork: facebook
-        nodeIdentifier: page.nodeIdentifier
-    }
-
-    Connections {
-        target: facebookComments.node
-        onLikedChanged: facebookLikes.repopulate()
+        nodeIdentifier: container.nodeIdentifier
     }
 
     Formatter {
         id: formatter
     }
 
-    Rectangle {
-        anchors.fill: parent
-        color: Theme.highlightBackgroundColor
-        opacity: 0.3
-    }
-
     SilicaListView {
-        id: commentsList
-        spacing: Theme.paddingMedium
+        id: view
         anchors.fill: parent
         model: facebookComments
+        spacing: Theme.paddingLarge
 
-        header: Item {
-            width: page.width
-            height: content.height
+        header: Column {
+            width: view.width
 
-            Rectangle {
+            // Contains the header, picture, body and social button
+            // Includes a background
+            Item {
+                height: childrenRect.height
                 anchors {
-                    fill: parent
-                    bottomMargin: imageRow.height + (footer.text.length > 0 ? footer.height : Theme.paddingLarge)
-                }
-                color: "#33ffffff"
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: model.clicked()
-                }
-            }
-
-            Column {
-                id: content
-                width: parent.width
-
-                Label {
-                    text: model.sourceDisplayName
-                    anchors {
-                        right: parent.right
-                        rightMargin: Theme.paddingLarge
-                    }
-                    color: Theme.highlightColor
-                    font: Theme.fontFamilyHeading
-                    verticalAlignment: Text.AlignVCenter
-                    height: 4 * Theme.paddingLarge
-                }
-
-                Row {
-                    width: parent.width
-                    spacing: Theme.paddingMedium
-                    Image {
-                        id: face
-                        width: Theme.itemSizeExtraLarge
-                        height: Theme.itemSizeExtraLarge
-                        sourceSize {
-                            width: Theme.itemSizeExtraLarge
-                            height: Theme.itemSizeExtraLarge
-                        }
-                        asynchronous: true
-                        fillMode: Image.PreserveAspectCrop
-                        source: {
-                            if (model.icon == "") {
-                                return model.icon
-                            } else if (model.icon == 0) {
-                                return model.icon
-                            } else if (model.icon.indexOf("/") == 0) {
-                                return "image://nemoThumbnail/" + model.icon
-                            } else {
-                                return "image://theme/" + model.icon
-                            }
-                        }
-                    }
-
-                    Column {
-                        anchors.bottom: parent.bottom
-
-                        Label {
-                            text: model.body
-                            color: Theme.highlightColor
-                            wrapMode: Text.WordWrap
-                            width: page.width - face.width - Theme.paddingLarge * 2
-                            font.pixelSize: Theme.fontSizeSmall
-                        }
-
-                        Label {
-                            id: time
-                            color: Theme.highlightColor
-                            opacity: 0.6
-                            text: formatter.formatDate(model.timestamp, Formatter.DurationElapsed)
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                        }
-
-                        MouseArea {
-                            width: parent.width
-                            height: like.height + Theme.paddingMedium
-                            onClicked: {
-                                if (!liked) {
-                                    facebookComments.node.like()
-                                } else {
-                                    facebookComments.node.unlike()
-                                }
-                            }
-
-                            Image {
-                                source: "image://theme/icon-m-like"
-                                anchors {
-                                    right: like.left
-                                    rightMargin: Theme.paddingSmall
-                                }
-                                height: 32
-                                width: 32
-                                opacity: 0.4
-                            }
-
-                            Label {
-                                id: like
-                                //% "Unlike"
-                                text: liked ? qsTrId("lipstick-jolla-home-facebook-la-unlike") :
-                                //% "Like"
-                                qsTrId("lipstick-jolla-home-facebook-la-like")
-                                anchors.right: parent.right
-                                color: liked ? Theme.highlightColor : Theme.primaryColor
-                            }
-                        }
-                    }
-                }
-
-                Item {
-                    // Filler
-                    width: 1
-                    height: Theme.paddingLarge
+                    left: parent.left
+                    right: parent.right
                 }
 
                 Rectangle {
-                    id: imageRow
-                    width: parent.width
-                    height: page.model.imageList.length > 0 ? Theme.itemSizeLarge + Theme.paddingLarge: 0
-                    color: "#1affffff"
-                    Row {
-                        Repeater {
-                            model: page.model.imageList
-                            delegate: Image {
-                                width: imageRow.height
-                                height: imageRow.height
-                                sourceSize {
-                                    width: imageRow.height
-                                    height: imageRow.height
-                                }
-                                asynchronous: true
-                                fillMode: Image.PreserveAspectCrop
-                                source: {
-                                    if (page.model.imageList[index] == "") {
-                                        return page.model.imageList[index]
-                                    } else if (page.model.imageList[index].indexOf("http") == 0) {
-                                        return page.model.imageList[index]
-                                    } else if (page.model.imageList[index].indexOf("/") == 0) {
-                                        return "image://nemoThumbnail/" + page.model.imageList[index]
+                    anchors.fill: parent
+                    color: Theme.highlightColor
+                    opacity: 0.1
+                }
+
+                PageHeader {
+                    id: header
+                    title: container.model.sourceDisplayName
+                }
+
+                // Contains the picture, body and social button
+                Item {
+                    anchors {
+                        top: header.bottom
+                        left: parent.left
+                        right: parent.right
+                        rightMargin: Theme.paddingLarge
+                    }
+                    height: childrenRect.height
+
+                    Face {
+                        id: face
+                        icon: container.model.icon
+                    }
+
+                    Column {
+                        anchors {
+                            left: face.right
+                            leftMargin: Theme.paddingMedium
+                            right: parent.right
+                        }
+
+                        Body {
+                            text: model.body
+                            time: formatter.formatDate(model.timestamp, Formatter.DurationElapsed)
+                        }
+
+                        Item {
+                            anchors {
+                                left: parent.left
+                                right: parent.right
+                            }
+                            height: childrenRect.height
+
+                            SocialButton {
+                                anchors.left: parent.left
+                                enabled: !facebookLikes.loading && container.accessToken != ""
+                                onClicked: {
+                                    if (!container.liked) {
+                                        facebookLikes.node.like()
                                     } else {
-                                        return "image://theme/" + page.model.imageList[index]
+                                        facebookLikes.node.unlike()
                                     }
+                                }
+                                icon: "image://theme/icon-m-like"
+                                //% "Unlike"
+                                text: container.liked ? qsTrId("lipstick-jolla-home-facebook-la-unlike")
+                                                        //% "Like"
+                                                      : qsTrId("lipstick-jolla-home-facebook-la-like")
+
+                            }
+
+                            SocialButton {
+                                anchors.right: parent.right
+                                enabled: !facebookLikes.loading && container.accessToken != ""
+                                icon: "image://theme/icon-m-chat"
+                                //% "Comment"
+                                text: qsTrId("lipstick-jolla-home-facebook-la-comment")
+                                onClicked: {
+                                    view.positionViewAtEnd()
+                                    // TODO: give focus to commentField
                                 }
                             }
                         }
                     }
-                    visible: page.model.imageList.length > 0
                 }
+            }
+
+            MediaRow {
+                id: mediaRow
+                imageList: container.model.imageList
+                mediaName: container.mediaName
+                mediaCaption: container.mediaCaption
+                mediaDescription: container.mediaDescription
+            }
+
+            Item {
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                }
+
+                height: container.likers != "" ? (likesLabel.height + 2 * Theme.paddingLarge)
+                                           : Theme.paddingLarge
+                opacity: container.likers != "" ? 1 : 0
 
                 Label {
-                    id: footer
-                    text: page.likers
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    height: Theme.itemSizeSmall
-                    verticalAlignment: Text.AlignVCenter
-                    anchors.left: parent.left
+                    id: likesLabel
+                    anchors {
+                        left: parent.left
+                        leftMargin: Theme.paddingMedium
+                        right: parent.right
+                        rightMargin: Theme.paddingMedium
+                        verticalCenter: parent.verticalCenter
+                    }
+                    text: container.likers
+                    font.pixelSize: Theme.fontSizeSmall
+                    wrapMode: Text.WordWrap
                 }
 
-                Item {
-                    // Filler
-                    width: 1
-                    height: page.likers.length > 0 ? 0 : Theme.paddingLarge
-                }
+                Behavior on opacity { FadeAnimation {} }
+                Behavior on height { FadeAnimation {} }
             }
         }
 
         delegate: Item {
             id: commentDelegate
-            property bool _showDelegate: commentsList.count
 
-            width: commentsList.width
-            height: commentFrom.paintedHeight
-                    + commentText.paintedHeight
-                    + (likeCount.visible ? likeText.paintedHeight : 0)
-                    + 3 * Theme.paddingSmall
+            width: view.width
+            height: commentColumn.height
 
-            opacity: _showDelegate ? 1 : 0
+            opacity: 0
+            Component.onCompleted: opacity = 1
             Behavior on opacity { FadeAnimation {} }
 
             Rectangle {
@@ -362,7 +337,7 @@ Page {
             Image {
                 id: avatar
                 // Fetch the avatar from the constructed url
-                source: _showDelegate ? "http://graph.facebook.com/"+ model.contentItem.from.objectIdentifier + "/picture" : ""
+                source: "http://graph.facebook.com/"+ model.contentItem.from.objectIdentifier + "/picture"
                 clip: true
                 anchors.fill: avatarPlaceholder
                 fillMode: Image.PreserveAspectCrop
@@ -371,7 +346,6 @@ Page {
 
             Column {
                 id: commentColumn
-                spacing: Theme.paddingSmall
                 anchors {
                     left: avatar.right
                     leftMargin: Theme.paddingMedium
@@ -381,96 +355,81 @@ Page {
                 }
 
                 Label {
-                    id: commentText
-                    text: _showDelegate ? model.contentItem.message : ""
+                    text: model.contentItem.message
                     width: parent.width
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: Theme.fontSizeSmall
                     horizontalAlignment: Text.AlignLeft
                     wrapMode: Text.Wrap
                 }
 
-                Row {
-                    spacing: Theme.paddingSmall
-
-                    Label {
-                        id: commentFrom
-                        text: _showDelegate ? model.contentItem.from.objectName : ""
-                        color: Theme.secondaryColor
-                        horizontalAlignment: Text.AlignLeft
-                        verticalAlignment: Text.AlignTop
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                    }
-
-                    Label {
-                        id: createdTime
-                        text: _showDelegate ? formatter.formatDate(model.contentItem.createdTime, Formatter.DurationElapsed) : ""
-                        color: Theme.secondaryHighlightColor
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                    }
+                Label {
+                    text: model.contentItem.from.objectName + " \u2022 "
+                          + formatter.formatDate(model.contentItem.createdTime, Formatter.DurationElapsed)
+                    color: Theme.secondaryColor
+                    width: parent.width
+                    font.pixelSize: Theme.fontSizeExtraSmall
                 }
-            }
 
-            Label {
-                id: likeCount
-                visible: _showDelegate ? model.contentItem.likeCount > 0 : ""
-                text: model.contentItem.likeCount
-                color: Theme.highlightColor
-                horizontalAlignment: Text.AlignRight
-                font.pixelSize: Theme.fontSizeExtraSmall
-                anchors {
-                    top: commentColumn.bottom
-                    topMargin: Theme.paddingSmall
-                    right: commentColumn.left
-                    rightMargin: Theme.paddingMedium
-                }
-            }
-
-            Label {
-                id: likeText
-                //: Number of likes for the comment
-                //% "Like"
-                property string like: qsTrId("lipstick-jolla-home-facebook-la-single-like-for-comment")
-                //% "Likes"
-                property string likes: qsTrId("lipstick-jolla-home-facebook-la-number-of-likes-for-comment")
-                text: _showDelegate
-                        ? model.contentItem.likeCount > 1 ? likes : like
-                        : ""
-                visible: likeCount.visible
-                font.pixelSize: Theme.fontSizeExtraSmall
-                anchors {
-                    top: commentColumn.bottom
-                    topMargin: Theme.paddingSmall
-                    left: commentColumn.left
+                Label {
+                    visible: model.contentItem.likeCount > 0
+                    //% "%n likes"
+                    text: qsTrId("lipstick-jolla-home-facebook-la-number-of-likes-for-comment",
+                                 model.contentItem.likeCount)
+                    color: Theme.secondaryColor
+                    width: parent.width
+                    font.pixelSize: Theme.fontSizeExtraSmall
                 }
             }
         }
 
         footer: Item {
             width: parent.width
-            height: Theme.iconSizeMedium + Theme.paddingMedium
+            height: commentContainer.height  + Theme.paddingMedium
+                    + (view.count != 0 ? Theme.paddingLarge : 0)
+            opacity: facebookComments.status == Facebook.Idle ? 1 : 0
+            Behavior on opacity { FadeAnimation {} }
 
-            Image {
-                id: commentAvatar
-                width: Theme.iconSizeMedium
-                height: Theme.iconSizeMedium
-                source: facebookMe.node.picture.url
-            }
-
-            TextField {
-                id: comment
+            Item {
+                id: commentContainer
+                height: childrenRect.height
                 anchors {
-                    left: commentAvatar.right
-                    leftMargin: Theme.paddingLarge + Theme.iconSizeMedium
+                    left: parent.left
                     right: parent.right
+                    bottom: parent.bottom
+                    bottomMargin: Theme.paddingMedium
                 }
 
-                //% "Write a comment"
-                placeholderText: qsTrId("lipstick-jolla-home-facebook-ph-write-comment")
+                Image {
+                    id: commentAvatar
+                    width: Theme.iconSizeMedium
+                    height: Theme.iconSizeMedium
+                    source: facebookMe.node != null && facebookMe.node.picture != null ? facebookMe.node.picture.url : ""
+                }
 
-                EnterKey.onClicked: {
-                    facebookComments.node.uploadComment(comment.text)
-                    text = ""
-                    facebookComments.repopulate()
+                TextField {
+                    id: commentField
+                    anchors {
+                        left: commentAvatar.right
+                        right: parent.right
+                    }
+
+                    //% "Write a comment"
+                    placeholderText: qsTrId("lipstick-jolla-home-facebook-ph-write-comment")
+                    enabled: facebookComments.status == Facebook.Idle
+
+                    EnterKey.onClicked: {
+                        facebookComments.node.uploadComment(comment.text)
+                        facebookComments.repopulate()
+                    }
+
+                    Connections {
+                        target: facebookComments
+                        onStatusChanged: {
+                            if (facebookComments.status == Facebook.Idle) {
+                                commentField.text = ""
+                            }
+                        }
+                    }
                 }
             }
         }
