@@ -10,6 +10,7 @@
 #include "trace.h"
 #include "constants_p.h"
 #include <QUrlQuery>
+#include <QtCore/QJsonArray>
 
 //nemo-qml-plugins/notifications
 #include <notification.h>
@@ -83,9 +84,9 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("summary"))) {
-        QVariantList data = parsed.value(QLatin1String("data")).toList();
+        QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         int notificationCount = data.size();
         Notification *notification = existingNemoNotification(accountId);

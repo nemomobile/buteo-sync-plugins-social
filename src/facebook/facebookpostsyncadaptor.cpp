@@ -11,6 +11,8 @@
 #include "constants_p.h"
 
 #include <QtCore/QPair>
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonValue>
 
 //QtMobility
 #include <QtContacts/QContactManager>
@@ -28,6 +30,33 @@
 #define SOCIALD_FACEBOOK_POSTS_ID_PREFIX QLatin1String("facebook-posts-")
 #define SOCIALD_FACEBOOK_POSTS_GROUPNAME QLatin1String("facebook")
 #define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
+
+
+static const char *FQL_QUERY = "{"\
+        "\"query1\":\"SELECT post_id,viewer_id,actor_id,target_id,message,type,attachment,"\
+                     "description,created_time,updated_time,comment_info,like_info,parent_post_id "\
+                     "FROM stream WHERE filter_key IN (SELECT filter_key FROM stream_filter "\
+                     "WHERE uid = me() AND type = 'newsfeed') AND created_time > %1 "\
+                     "ORDER BY created_time DESC LIMIT %2,%3\","\
+        "\"query2\": \"SELECT uid,name FROM user WHERE uid in (SELECT actor_id FROM #query1)\","\
+        "\"query3\": \"SELECT page_id,name FROM page WHERE page_id in (SELECT actor_id FROM #query1)\","\
+        "\"query4\": \"SELECT gid,name FROM group WHERE gid in (SELECT actor_id FROM #query1)\","\
+        "\"query5\": \"SELECT eid,name FROM event WHERE eid in (SELECT actor_id FROM #query1)\"}";
+
+#define QUERY_QUERY1 QLatin1String("query1")
+#define QUERY_QUERY2 QLatin1String("query2")
+#define QUERY_QUERY3 QLatin1String("query3")
+#define QUERY_QUERY4 QLatin1String("query4")
+#define QUERY_QUERY5 QLatin1String("query5")
+#define QUERY_DATA_KEY QLatin1String("data")
+#define QUERY_NAME_KEY QLatin1String("name")
+#define QUERY_RESULT_KEY QLatin1String("fql_result_set")
+#define QUERY_UID_KEY QLatin1String("uid")
+#define QUERY_PAGEID_KEY QLatin1String("page_id")
+#define QUERY_GID_KEY QLatin1String("gid")
+#define QUERY_EID_KEY QLatin1String("eid")
+static const int QUERY_SIZE = 1000;
+
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
@@ -146,16 +175,20 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
     }
 }
 
-void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken, const QString &until, const QString &pagingToken)
+void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
 {
-    // TODO: continuation requests need these two.  if exists, also set limit = 5000.
-    // if not set, set "since" to the timestamp value.
-    Q_UNUSED(until);
-    Q_UNUSED(pagingToken);
-
+    // No need to use paging, FB API will limit us, so we just query a huge number
+    // with a time limit and that should do the work
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
-    QUrl url(QLatin1String("https://graph.facebook.com/me/home"));
+    uint timeLimit = QDateTime::currentDateTimeUtc().toTime_t();
+    timeLimit -= 864000; // 10 days in seconds
+    QString fqlQuery = QString(QLatin1String(FQL_QUERY)).arg(QString::number(timeLimit),
+                                                             QString::number(0),
+                                                             QString::number(QUERY_SIZE));
+    queryItems.append(qMakePair<QString, QString>(QLatin1String("q"), fqlQuery));
+
+    QUrl url(QLatin1String("https://graph.facebook.com/fql"));
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
@@ -187,7 +220,7 @@ void FacebookPostSyncAdaptor::finishedMeHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("id"))) {
         QString selfUserId = parsed.value(QLatin1String("id")).toString();
         if (!m_selfFbuids.contains(selfUserId)) {
@@ -215,11 +248,10 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("data"))) {
         // we expect "data" and possible "paging"
-        QVariantList data = parsed.value(QLatin1String("data")).toList();
-        QVariantMap paging = parsed.value(QLatin1String("paging")).toMap(); // may not exist.
+        QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         if (!data.size()) {
             TRACE(SOCIALD_DEBUG,
@@ -229,259 +261,193 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             return;
         }
 
-        bool needMorePages = true;
-        bool postedNew = false;
-        for (int i = 0; i < data.size(); ++i) {
-            // these are the fields we eventually need to fill out:
-            QString eventTitle;
+        // The FQL query will return 5 query results
+        // The 1st one contains information about 30 entries of an user's home feed
+        // The 4 others contains name that relates to the actor_id (the id of the entity
+        // who post the posts listed in the 1st query)
+
+        // We should create a hashmap from the last 4 queries to make retrieving of
+        // name easier.
+        QMap<QString, QString> actorNames;
+        QJsonArray mainData;
+        foreach (QJsonValue entry, data) {
+            QJsonObject entryObject = entry.toObject();
+            QString name = entryObject.value(QUERY_NAME_KEY).toString();
+            if (name == QUERY_QUERY1) {
+                mainData = entryObject.value(QUERY_RESULT_KEY).toArray();
+            } else if (name == QUERY_QUERY2
+                       || name == QUERY_QUERY3
+                       || name == QUERY_QUERY4
+                       || name == QUERY_QUERY5) {
+                QString key;
+                if (name == QUERY_QUERY2) {
+                    key = QUERY_UID_KEY;
+                } else if(name == QUERY_QUERY3) {
+                    key = QUERY_PAGEID_KEY;
+                } else if(name == QUERY_QUERY4) {
+                    key = QUERY_GID_KEY;
+                } else if(name == QUERY_QUERY5) {
+                    key = QUERY_EID_KEY;
+                }
+
+                QJsonArray nameList = entryObject.value(QUERY_RESULT_KEY).toArray();
+                foreach (QJsonValue name, nameList) {
+                    QJsonObject nameObject = name.toObject();
+                    // We need to cast to a variant and then to a string, because
+                    // an int is handled as a double in C++ by QtJson, and
+                    // might not be precise enough
+                    actorNames.insert(nameObject.value(key).toVariant().toString(),
+                                      nameObject.value(QUERY_NAME_KEY).toString());
+                }
+            }
+        }
+
+        // We are using FQL, instead of Graph API to retrieve Facebook event feeds
+        // because FQL allows access to more data, and especially to multiple media
+        // attached to a post.
+        //
+        // However, the biggest problem with Graph still appears in FQL (in a slightly
+        // smaller scale). It is the problem about some posts carring rather
+        // useless information. Sometimes, Facebook generates "stories", to notify
+        // the user that something happened. These stories, like "Someone liked something"
+        // or "A 'comment' on someone's wall" do not carry metadata, and are hard to
+        // render in a nice way., so we should discard them.
+        //
+        // The problem is that sometimes, Facebook generates good stories as well,
+        // like "Someone shared this link", with meaningful content.
+        //
+        // We will use an algorithm to filter out these bad stories. It is a guessed
+        // algorithm and might have false positive and false negative, but in
+        // general, it should provide a good experience.
+        //
+        // The idea is the following. If the user posted a message with a given
+        // post, like if he/she wrote a status, or if he/she wrote a description of
+        // a picture, then the post is a good one.
+        // If it is Facebook that is in charge of writing a story, we have to be
+        // more cautious. The meaningless stories do not come with data, like
+        // a shared link with a caption / description, so we filter out those stories.
+        //
+        // We cannot rely on type nor on most of the attributes in the stream FQL table
+        // because most of them are just undocumented, so we are basing our algorithm
+        // on the displayed content.
+        //
+        // We also need to be careful about that "parent_post_id" property, because
+        // some posts now seems to contain other posts like: "Someone commented on this comment",
+        // containing the comment "Another one commented this post", containing the post etc.
+        // Just to be secure, we discard all posts containing a parent_post_id.
+
+        foreach (QJsonValue entry, mainData) {
+            QJsonObject post = entry.toObject();
+            // These are the fields we eventually need to fill out
+            QString actorId = post.value(QLatin1String("actor_id")).toVariant().toString();
+            QString eventTitle = actorNames.value(actorId);
             QString eventBody;
             QStringList eventImageList;
-            QDateTime eventTimestamp;
             QString eventFooter;
-            bool eventIsVideo;
-            QString eventUrl;
+            bool eventIsVideo = false;
+            QString eventUrl; // What should we put here ? TODO
 
-            // grab the data from the current post
-            QVariantMap currData = data.at(i).toMap();
-            QDateTime createdTime = QDateTime::fromString(currData.value(QLatin1String("created_time")).toString(), Qt::ISODate);
-            QDateTime updatedTime = QDateTime::fromString(currData.value(QLatin1String("updated_time")).toString(), Qt::ISODate);
+
+            // Grab the data from the current post
+            uint createdTimestamp = post.value(QLatin1String("created_time")).toVariant().toString().toUInt();
+            uint updatedTimestamp = post.value(QLatin1String("updated_time")).toVariant().toString().toUInt();
+            QDateTime createdTime = QDateTime::fromTime_t(createdTimestamp);
+            QDateTime updatedTime = QDateTime::fromTime_t(updatedTimestamp);
             createdTime.setTimeSpec(Qt::UTC);
             updatedTime.setTimeSpec(Qt::UTC);
-            QString postId = currData.value(QLatin1String("id")).toString();
-            QString postType = currData.value(QLatin1String("type")).toString();
-            QString statusType = currData.value(QLatin1String("status_type")).toString(); // won't always exist.
-            QVariantList actions = currData.value(QLatin1String("actions")).toList();
-            QString actionLink;
-            if (actions.size()) {
-                actionLink = actions.at(0).toMap().value(QLatin1String("link")).toString();
-            }
 
-            // this is usually the current user, but can be another user if they've posted on your wall.
-            QString fromName = currData.value(QLatin1String("from")).toMap().value("name").toString();
-            QString fromFbUid = currData.value(QLatin1String("from")).toMap().value("id").toString();
-            bool fromSelfContact = fromIsSelfContact(fromName, fromFbUid);
 
-            if (postType == QLatin1String("photo") && statusType == QLatin1String("shared_story")) {
-                // this is a photo shared by the current user
-                QString message = currData.value(QLatin1String("message")).toString();
-                QString link = currData.value(QLatin1String("link")).toString();
-                QString picture = currData.value(QLatin1String("picture")).toString();
+            QString postId = post.value(QLatin1String("post_id")).toVariant().toString();
 
-                // build the event fields
-                if (fromSelfContact) {
-                    //: Title of Facebook post in event feed where the device's user posted a photo
-                    //% "You posted a photo"
-                    eventTitle = qtTrId("sociald_facebook_posts-you_posted_photo");
-                } else {
-                    //: Title of Facebook post in event feed where a friend posted a photo
-                    //% "%1 posted a photo"
-                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_photo").arg(fromName);
-                }
-                eventBody = message; // XXX TODO: or should this be the link / source?  libeventfeed is ... bad.
-                eventImageList << picture;
-                eventTimestamp = createdTime;
-                eventIsVideo = false;
-                eventUrl = actionLink.isEmpty() ? link : actionLink;
-            } else if (postType == QLatin1String("video") && statusType == QLatin1String("shared_story")) {
-                // this is a video link shared by the current user
-                QString message = currData.value(QLatin1String("message")).toString(); // the post message
-                QString link = currData.value(QLatin1String("link")).toString(); // link (if any) included in the post (to the video)
-                QString source = currData.value(QLatin1String("source")).toString(); // sourceurl embedded into the feed
-                QString description = currData.value(QLatin1String("description")).toString(); // eg, the youtube description
-                QString picture = currData.value(QLatin1String("picture")).toString();
+            bool isMessagePost = false;
 
-                // build the event fields
-                if (fromSelfContact) {
-                    //: Title of Facebook post in event feed where the device's user posted a video
-                    //% "You posted a video"
-                    eventTitle = qtTrId("sociald_facebook_posts-you_posted_video");
-                } else {
-                    //: Title of Facebook post in event feed where a friend posted a video
-                    //% "%1 posted a video"
-                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_video").arg(fromName);
-                }
-                eventBody = message; // XXX TODO: or should this be the link / source?  libeventfeed is ... bad.
-                eventImageList << picture;
-                eventTimestamp = createdTime;
-                eventIsVideo = true;
-                eventUrl = actionLink.isEmpty() ? (source.isEmpty() ? link : source) : actionLink;
-            } else if (postType == QLatin1String("link") && statusType == QLatin1String("shared_story")) {
-                // this is a website/link that is shared by the user.
-                QString message = currData.value(QLatin1String("message")).toString();
-                QString link = currData.value(QLatin1String("link")).toString();
-                QString picture = currData.value(QLatin1String("picture")).toString();
-
-                // build the event fields
-                if (fromSelfContact) {
-                    //: Title of Facebook post in event feed where the device's user posted a link
-                    //% "You posted a link"
-                    eventTitle = qtTrId("sociald_facebook_posts-you_posted_link");
-                } else {
-                    //: Title of Facebook post in event feed where a friend posted a link
-                    //% "%1 posted a link"
-                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_link").arg(fromName);
-                }
-                eventBody = message; // XXX TODO: or should this be the link / source?  libeventfeed is ... bad.
-                eventImageList << picture;
-                eventTimestamp = createdTime;
-                eventIsVideo = false;
-                eventUrl = actionLink.isEmpty() ? link : actionLink;
-            } else if (postType == QLatin1String("photo") && (statusType == QLatin1String("added_photos") || statusType == QLatin1String("mobile_status_update"))) {
-                // this is a photo or album uploaded by the current user
-                QString message = currData.value(QLatin1String("message")).toString();
-                QString picture = currData.value(QLatin1String("picture")).toString();
-                QString link = currData.value(QLatin1String("link")).toString();
-                bool moreThanOnePhoto = false;
-                QString relevantCount = QUrlQuery(link).queryItemValue(QLatin1String("relevant_count"));
-                if (!relevantCount.isEmpty() && relevantCount.toInt() > 1) {
-                    moreThanOnePhoto = true;
-                }
-
-                // build the event fields
-                if (fromSelfContact) {
-                    if (moreThanOnePhoto) {
-                        //: Title of Facebook post in event feed where the device's user uploaded multiple photos
-                        //% "You uploaded photos"
-                        eventTitle = qtTrId("sociald_facebook_posts-you_uploaded_photos");
-                    } else {
-                        //: Title of Facebook post in event feed where the device's user uploaded a photo
-                        //% "You uploaded a photo"
-                        eventTitle = qtTrId("sociald_facebook_posts-you_uploaded_photo");
-                    }
-                } else {
-                    if (moreThanOnePhoto) {
-                        //: Title of Facebook post in event feed where a friend uploaded multiple photos
-                        //% "%1 uploaded photos"
-                        eventTitle = qtTrId("sociald_facebook_posts-friend_uploaded_photos").arg(fromName);
-                    } else {
-                        //: Title of Facebook post in event feed where a friend uploaded a photo (or album)
-                        //% "%1 uploaded a photo"
-                        eventTitle = qtTrId("sociald_facebook_posts-friend_uploaded_photo").arg(fromName);
-                    }
-                }
-                eventBody = message; // XXX TODO: or should this be the link / source?  libeventfeed is ... bad.
-                eventImageList << picture;
-                eventTimestamp = createdTime;
-                eventIsVideo = false;
-                eventUrl = actionLink.isEmpty() ? link : actionLink;
-            } else if (postType == QLatin1String("status") && statusType == QLatin1String("approved_friend")) {
-                // this is an approved friend request
-                QString story = currData.value(QLatin1String("story")).toString();
-
-                // build the event fields
-                //: Title of Facebook post in event feed where the device's user has a new friend
-                //% "You have a new friend"
-                eventTitle = qtTrId("sociald_facebook_posts-approved_friend");
-                eventBody = story;
-                eventTimestamp = createdTime;
-                eventIsVideo = false;
-                eventUrl = actionLink;
-            } else if (postType == QLatin1String("status") && statusType == QLatin1String("wall_post")) {
-                // this is a post on someone elses wall (eg, "happy birthday!")
-                QString story = currData.value(QLatin1String("story")).toString();
-
-                // build the event fields
-                if (fromSelfContact) {
-                    //: Title of Facebook post in event feed where the device's user posted on a friend's wall
-                    //% "You posted on someone's wall"
-                    eventTitle = qtTrId("sociald_facebook_posts-you_posted_wall");
-                } else {
-                    //: Title of Facebook post in event feed where a friend posted on the device's user's wall
-                    //% "%1 posted on your wall"
-                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_wall").arg(fromName);
-                };
-                eventBody = story;
-                eventTimestamp = createdTime;
-                eventIsVideo = false;
-                eventUrl = actionLink;
-            } else if (postType == QLatin1String("status") && statusType == QLatin1String("mobile_status_update")) {
-                // this is a status posted by someone from a mobile phone
-                QString story = currData.value(QLatin1String("story")).toString();
-                QString message = currData.value(QLatin1String("message")).toString();
-
-                // build the event fields
-                if (fromSelfContact) {
-                    //: Title of Facebook status in event feed where the device's user posted a mobile status update
-                    //% "You posted a status update"
-                    eventTitle = qtTrId("sociald_facebook_posts-you_posted_status");
-                } else {
-                    //: Title of Facebook status in event feed where a friend posted a mobile status update
-                    //% "%1 posted a status update"
-                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_status").arg(fromName);
-                };
-                eventBody = message.isEmpty() ? story : message;
-                eventTimestamp = createdTime;
-                eventIsVideo = false;
-                eventUrl = actionLink;
-            } else if (postType == QLatin1String("status") && statusType.isEmpty()) {
-                // this is a comment/like on a status update, or on an application-specific post
-                QString story = currData.value(QLatin1String("story")).toString();
-                QString message = currData.value(QLatin1String("message")).toString();
-
-                // build the event fields
-                if (fromSelfContact) {
-                    if (story == QString(QLatin1String("%1 likes a status.")).arg(fromName)) {
-                        //: Title of Facebook post in event feed where the device's user liked a status
-                        //% "You liked a status"
-                        eventTitle = qtTrId("sociald_facebook_posts-you_liked_status");
-                    } else if (story.startsWith(QString(QLatin1String("%1 posted a link ")).arg(fromName))) {
-                        //: Title of Facebook post in event feed where the device's user posted a link on a friend's wall
-                        //% "You posted a link"
-                        eventTitle = qtTrId("sociald_facebook_posts-you_posted_link_wall");
-                    } else { // it's probably a comment on another user's status
-                        //: Title of Facebook post in event feed where the device's user commented on a status
-                        //% "You added a comment"
-                        eventTitle = qtTrId("sociald_facebook_posts-you_added_comment");
-                    }
-                } else {
-                    eventTitle = story; // we can't build a meaningful title... use the story text.
-                }
-
-                eventBody = message.isEmpty() ? story : message;
-                eventTimestamp = createdTime;
-                eventIsVideo = false;
-                eventUrl = actionLink; // this is empty for some things (eg likes on other peoples' statuses)
-                                       // which is not very useful, but the Facebook graph api is terrible.
-            } else if (postType == QLatin1String("link") && statusType.isEmpty()) {
-                // this is a link someone else posted to your wall.
-                QString message = currData.value(QLatin1String("message")).toString();
-                QString link = currData.value(QLatin1String("link")).toString();
-                QString picture = currData.value(QLatin1String("picture")).toString();
-
-                // build the event fields
-                if (fromSelfContact) { // this path shouldn't ever be hit, but I don't trust the FB API
-                    //: Title of Facebook post in event feed where the device's user posted a link somewhere other than their own wall
-                    //% "You posted a link"
-                    eventTitle = qtTrId("sociald_facebook_posts-you_posted_link_other");
-                } else {
-                    //: Title of Facebook post in event feed where a friend posted a link on the device's user's wall
-                    //% "%1 posted on your wall"
-                    eventTitle = qtTrId("sociald_facebook_posts-friend_posted_link_other").arg(fromName);
-                };
-                eventBody = message;
-                eventTimestamp = createdTime;
-                eventImageList << picture;
-                eventIsVideo = false;
-                eventUrl = link;
-            } else {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("unknown feed post type: %1, status_type: %2 for account: %3"))
-                        .arg(postType).arg(statusType).arg(accountId));
+            // We discard posts with a target id (from now)
+            if (!post.value(QLatin1String("target_id")).isNull()) {
                 continue;
             }
 
-            // check to see if we need to post it to the events feed
+            // We discard posts with a parent_post_id
+            if (!post.value(QLatin1String("parent_post_id")).isNull()) {
+                continue;
+            }
+
+            // We keep posts with messages
+            QString message = post.value(QLatin1String("message")).toString();
+            isMessagePost = !message.isEmpty();
+
+            QString story = post.value(QLatin1String("description")).toString();
+
+            QJsonObject attachment = post.value(QLatin1String("attachment")).toObject();
+            // If we don't have a message post, we will check if there is
+            // a media  in the attachment. If not, we will trash the post
+            // TODO: check if the media is valid
+            if (!isMessagePost && (!attachment.contains(QLatin1String("media")))) {
+                continue;
+            }
+            // Create the event body
+            // We use the name of the attachment if the event body is empty
+            eventBody = isMessagePost ? message : story;
+            if (eventBody.isEmpty()) {
+                eventBody = attachment.value(QLatin1String("name")).toString();
+            }
+
+            // Create the event footer
+            int likes = post.value(QLatin1String("like_info")).toObject().value(QLatin1String("like_count")).toVariant().toInt();
+            int comments = post.value(QLatin1String("comment_info")).toObject().value(QLatin1String("comment_count")).toVariant().toInt();
+
+            //% "%n likes"
+            QString likesString = qtTrId("sociald_facebook_posts-n_likes", likes);
+            //% "%n comments"
+            QString commentsString = qtTrId("sociald_facebook_posts-n_comments", comments);
+
+            eventFooter = QString ("%1 \u2022 %2").arg(likesString, commentsString);
+
+            // Pass the description of the media to the subview via metadata
+            // (TODO: libeventfeed is lacking support of this, or maybe lipstick ?)
+            QString attachmentName = attachment.value(QLatin1String("name")).toString();
+            QString attachmentCaption = attachment.value(QLatin1String("caption")).toString();
+            QString attachmentDescription = attachment.value(QLatin1String("description")).toString();
+
+            if (!attachment.value("media").isNull()) {
+                bool wrongMediaFound = false;
+                QJsonArray media = attachment.value("media").toArray();
+                foreach (QJsonValue medium, media) {
+                    QJsonObject mediumObject = medium.toObject();
+                    if (mediumObject.contains(QLatin1String("video"))) {
+                        eventIsVideo = true;
+                    }
+                    QString mediaUrlString = mediumObject.value(QLatin1String("src")).toString();
+
+                    // Skip those media that do not have URL (someone went to an event)
+                    if (mediaUrlString.isEmpty()) {
+                        wrongMediaFound = true;
+                        continue;
+                    }
+
+                    // Patch an issue with some applications using local path instead
+                    // of absolute urls
+                    if (!mediaUrlString.startsWith("http")) {
+                        mediaUrlString.prepend("https://facebook.com/");
+                    }
+
+                    eventImageList.append(QUrl::fromEncoded(mediaUrlString.toLocal8Bit()).toString());
+                }
+
+                if (wrongMediaFound) {
+                    continue;
+                }
+            }
+
+            // Check to see if we need to post it to the events feed
             if (lastSync.isValid() && createdTime < lastSync) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 came after last sync:"))
                         .arg(accountId) << "    " << createdTime << ":" << eventBody);
-                needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
             } else if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 is more than a week old:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << eventBody);
-                needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
             } else if (haveAlreadyPostedEvent(postId, eventBody, createdTime)) {
                 TRACE(SOCIALD_DEBUG,
@@ -491,20 +457,24 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 QVariantMap metaData;
                 metaData.insert("accountId", accountId);
                 metaData.insert("nodeId", postId);
+                metaData.insert("postAttachmentName", attachmentName);
+                metaData.insert("postAttachmentCaption", attachmentCaption);
+                metaData.insert("postAttachmentDescription", attachmentDescription);
 
-                // publish the post to the events feed.
+                // Publish the post to the events feed.
                 qlonglong eventId = m_eventFeed->addItem(
                         QLatin1String("icon-s-service-facebook"),
                         eventTitle,
                         eventBody,
                         eventImageList,
-                        createdTime,
+                        createdTime.toLocalTime(), // We are using UTC time, we need to convert it
                         eventFooter,
                         eventIsVideo,
                         eventUrl,
                         SOCIALD_FACEBOOK_POSTS_GROUPNAME, // sourceName
                         QLatin1String("Facebook"),        // sourceDisplayName // XXX TODO: per-account?
                         metaData);
+
                 if (eventId == 0) {
                     // failed.
                     TRACE(SOCIALD_ERROR,
@@ -517,31 +487,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                                     QString::number(accountId), createdTime, QDateTime::currentDateTime(),
                                     postId); // XXX TODO: instead of QString::number(accountId) use fb user id.
                 }
-
-                // if we didn't post anything new, we don't try to fetch more.
-                postedNew = true;
             }
-        }
-
-        // paging if we need to retrieve more feed events
-        if (postedNew && needMorePages && (paging.contains("previous") || paging.contains("next"))) {
-            QString until;
-            QString pagingToken;
-            // The FB api is terrible, and so we don't know in advance which paging url
-            // to use (as it will change depending on whether the current request was
-            // a first request, or itself a paging request).
-            QUrlQuery prevUrl(paging.value("previous").toString());
-            QUrlQuery nextUrl(paging.value("next").toString());
-            if (prevUrl.hasQueryItem(QLatin1String("until"))) {
-                until = prevUrl.queryItemValue(QLatin1String("until"));
-                pagingToken = prevUrl.queryItemValue(QLatin1String("__paging_token"));
-            } else {
-                until = nextUrl.queryItemValue(QLatin1String("until"));
-                pagingToken = nextUrl.queryItemValue(QLatin1String("__paging_token"));
-            }
-
-            // request the next page of results.
-            requestPosts(accountId, accessToken, until, pagingToken);
         }
     } else {
         // error occurred during request.
