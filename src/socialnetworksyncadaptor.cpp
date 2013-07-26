@@ -74,11 +74,15 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
     TRACE(SOCIALD_DEBUG,
             QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
             .arg(currentIds.size()));
+
     for (int i = 0; i < currentIds.size(); ++i) {
         int currId = currentIds.at(i);
         Account *act = m_accountManager->account(currId);
         if (!act || !(act->supportedServiceNames().size() > 0 &&
                       act->supportedServiceNames().at(0).startsWith(m_serviceName))) {
+            TRACE(SOCIALD_DEBUG,
+                    QString(QLatin1String("account %1 does not support service %2, ignoring"))
+                    .arg(currId).arg(m_serviceName));
             continue; // not same account as m_serviceName.  Ignore it.
         }
 
