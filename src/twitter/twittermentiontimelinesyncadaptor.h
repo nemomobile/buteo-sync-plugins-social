@@ -26,6 +26,7 @@
 
 USE_CONTACTS_NAMESPACE
 
+class Notification;
 class TwitterMentionTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
 {
     Q_OBJECT
@@ -42,7 +43,6 @@ protected: // implementing TwitterDataTypeSyncAdaptor interface
 
 private:
     void requestNotifications(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &sinceTweetId = QString());
-    bool haveAlreadyPostedNotification(const QString &notificationId, const QString &title, const QDateTime &createdTime);
     QContact findMatchingContact(const QString &nameString) const;
 
 private Q_SLOTS:
@@ -57,6 +57,7 @@ private:
     // for busy/inactive detection.
     void decrementSemaphore(int accountId);
     void incrementSemaphore(int accountId);
+    Notification * createNotification(int accountId);
     QMap<int, int> m_accountSyncSemaphores;
 };
 

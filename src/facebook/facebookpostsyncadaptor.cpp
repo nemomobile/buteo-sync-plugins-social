@@ -398,8 +398,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             uint updatedTimestamp = post.value(QLatin1String("updated_time")).toVariant().toString().toUInt();
             QDateTime createdTime = QDateTime::fromTime_t(createdTimestamp);
             QDateTime updatedTime = QDateTime::fromTime_t(updatedTimestamp);
-            createdTime.setTimeSpec(Qt::UTC);
-            updatedTime.setTimeSpec(Qt::UTC);
 
 
             QString postId = post.value(QLatin1String("post_id")).toVariant().toString();
@@ -457,6 +455,12 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             if (!attachment.value("media").isNull()) {
                 bool wrongMediaFound = false;
                 QJsonArray media = attachment.value("media").toArray();
+
+                // If the media is empty (but exists) we discard
+                if (media.isEmpty()) {
+                    continue;
+                }
+
                 foreach (QJsonValue medium, media) {
                     QJsonObject mediumObject = medium.toObject();
                     if (mediumObject.contains(QLatin1String("video"))) {
@@ -493,7 +497,8 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 }
             }
 
-            if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
+            // check to see if we need to post it to the events feed
+            if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 is more than a week old:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << eventBody);

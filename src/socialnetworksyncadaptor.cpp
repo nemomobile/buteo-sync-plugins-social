@@ -19,6 +19,27 @@
 #include <accountmanager.h>
 #include <account.h>
 
+/*
+    Remarks on timestamps
+
+    The timezone issue is a pretty big one, as services might
+    provide time in different timezone, and that the user might
+    be in another timezone.
+
+    To make everything consistant, all time should be stored using
+    UTC time. It is because Qt might have some troubles storing
+    timezone in SQLITE databases. (Or is it SQLITE that have
+    some troubles with timezone ?)
+
+    Beware however, that all our APIs (eventfeed, notification)
+    uses local time. So you have to perform a conversion before
+    using date and time retrieved from the SQLITE database.
+
+    By convention, all methods in sociald returning QDateTime
+    object will return the UTC time, with their timeSpec set to
+    Qt::UTC. Be sure to perform conversion before using them.
+*/
+
 SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName, SyncService *syncService, QObject *parent)
     : QObject(parent)
     , m_status(SocialNetworkSyncAdaptor::Invalid)
@@ -114,7 +135,7 @@ QDateTime SocialNetworkSyncAdaptor::lastSyncTimestamp(const QString &serviceName
     }
 
     QSqlQuery query(*q->database());
-    query.prepare("SELECT syncTimestamp FROM syncTimestamps WHERE serviceName = :sn AND accountIdentifier = :aid AND dataType = :dt");
+    query.prepare("SELECT syncTimestamp FROM syncTimestamps WHERE serviceName = :sn AND accountIdentifier = :aid AND dataType = :dt ORDER BY syncTimestamp DESC LIMIT 1");
     query.bindValue(":sn", serviceName);
     query.bindValue(":aid", accountId);
     query.bindValue(":dt", dataType);
@@ -125,7 +146,9 @@ QDateTime SocialNetworkSyncAdaptor::lastSyncTimestamp(const QString &serviceName
     }
 
     if (query.next()) {
-        return QDateTime::fromString(query.value(0).toString(), Qt::ISODate);
+        QDateTime dateTime = QDateTime::fromString(query.value(0).toString(), Qt::ISODate);
+        dateTime.setTimeSpec(Qt::UTC);
+        return dateTime;
     }
 
     return QDateTime();
@@ -142,12 +165,19 @@ bool SocialNetworkSyncAdaptor::updateLastSyncTimestamp(const QString &serviceNam
         return false;
     }
 
+    QDateTime trueTimestamp = timestamp;
+    if (timestamp.timeSpec() == Qt::LocalTime) {
+        trueTimestamp = timestamp.toTimeSpec(Qt::UTC);
+        TRACE(SOCIALD_DEBUG, QString(QLatin1String("Using a localtime")) << timestamp);
+        TRACE(SOCIALD_DEBUG, QString(QLatin1String("Converted to UTC")) << trueTimestamp);
+    }
+
     QSqlQuery query(*q->database());
     query.prepare("INSERT INTO syncTimestamps (serviceName, accountIdentifier, dataType, syncTimestamp) VALUES (:sn, :aid, :dt, :st)");
     query.bindValue(":sn", serviceName);
     query.bindValue(":aid", accountId);
     query.bindValue(":dt", dataType);
-    query.bindValue(":st", timestamp.toString(Qt::ISODate));
+    query.bindValue(":st", trueTimestamp.toString(Qt::ISODate));
     bool success = query.exec();
     if (!success) {
         TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
@@ -178,7 +208,9 @@ QDateTime SocialNetworkSyncAdaptor::whenSyncedDatum(const QString &serviceName, 
     }
 
     if (query.next()) {
-        return QDateTime::fromString(query.value(0).toString(), Qt::ISODate);
+        QDateTime dateTime = QDateTime::fromString(query.value(0).toString(), Qt::ISODate);
+        dateTime.setTimeSpec(Qt::UTC);
+        return dateTime;
     }
 
     return QDateTime();
@@ -195,14 +227,24 @@ bool SocialNetworkSyncAdaptor::markSyncedDatum(const QString &localIdentifier, c
         return false;
     }
 
+    QDateTime trueCreatedTimestamp = createdTimestamp;
+    if (trueCreatedTimestamp.timeSpec() == Qt::LocalTime) {
+        trueCreatedTimestamp = createdTimestamp.toUTC();
+    }
+
+    QDateTime trueSyncedTimestamp = syncedTimestamp;
+    if (trueSyncedTimestamp.timeSpec() == Qt::LocalTime) {
+        trueSyncedTimestamp = syncedTimestamp.toUTC();
+    }
+
     QSqlQuery query(*q->database());
     query.prepare("INSERT INTO syncedData (id, serviceName, accountIdentifier, dataType, createdTimestamp, syncTimestamp, datumIdentifier) VALUES (:id, :sn, :aid, :dt, :ct, :st, :di)");
     query.bindValue(":id", localIdentifier);
     query.bindValue(":sn", serviceName);
     query.bindValue(":aid", accountId);
     query.bindValue(":dt", dataType);
-    query.bindValue(":st", createdTimestamp.toString(Qt::ISODate));
-    query.bindValue(":st", syncedTimestamp.toString(Qt::ISODate));
+    query.bindValue(":st", trueCreatedTimestamp.toString(Qt::ISODate));
+    query.bindValue(":st", trueSyncedTimestamp.toString(Qt::ISODate));
     query.bindValue(":di", datumIdentifier);
     bool success = query.exec();
     if (!success) {
