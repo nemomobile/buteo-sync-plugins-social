@@ -8,6 +8,8 @@
 #include "twitterdatatypesyncadaptor.h"
 #include "trace.h"
 
+#include <QtCore/QDebug>
+
 #include <QtCore/QVariantMap>
 #include <QtCore/QObject>
 #include <QtCore/QList>
@@ -254,7 +256,6 @@ QString TwitterDataTypeSyncAdaptor::authorizationHeader(int accountId, const QSt
         authHeader += key + QLatin1String("=\"") + encodedParams.value(key) + QLatin1String("\", ");
     } 
     authHeader.chop(2);
-
     return authHeader;
 }
 
@@ -298,7 +299,7 @@ bool TwitterDataTypeSyncAdaptor::consumerKeyAndSecret(QString &consumerKey, QStr
     int csSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_secret", &cConsumerSecret);
 
     if (ckSuccess != 0 || cConsumerKey == NULL || csSuccess != 0 || cConsumerSecret == NULL) {
-        qWarning() << Q_FUNC_INFO << "No valid OAuth2 keys found";
+        TRACE(SOCIALD_INFORMATION, QLatin1String("No valid OAuth2 keys found"));
         return false;
     }
 

@@ -15,7 +15,7 @@ Image {
     source: {
         if (container.icon == "") {
             return container.icon
-        } else if (container.icon == 0) {
+        } else if (container.icon.indexOf("http") == 0) {
             return container.icon
         } else if (container.icon.indexOf("/") == 0) {
             return "image://nemoThumbnail/" + container.icon

@@ -24,7 +24,7 @@ BuildRequires:  buteo-syncfw-qt5-devel
 BuildRequires:  qt5-qttools-linguist
 Requires: sailfish-components-accounts-qt5 >= 0.0.37
 Requires: nemo-qml-plugin-notifications-qt5
-Requires: nemo-qml-plugin-social-qt5 >= 0.0.6
+Requires: nemo-qml-plugin-social-qt5 >= 0.0.7
 Requires: buteo-syncfw-qt5-msyncd
 
 %description
@@ -39,7 +39,9 @@ A daemon process which provides data synchronization with various social service
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.mention.conf
 %{_datadir}/translations/sociald_eng_en.qm
 %{_datadir}/translations/lipstick-jolla-home-facebook_eng_en.qm
+%{_datadir}/translations/lipstick-jolla-home-twitter_eng_en.qm
 %{_datadir}/lipstick/eventfeed/facebook.qml
+%{_datadir}/lipstick/eventfeed/twitter.qml
 %{_datadir}/lipstick/eventfeed/shared/*.qml
 
 %package ts-devel
@@ -54,6 +56,7 @@ Translation source for sociald
 %defattr(-,root,root,-)
 %{_datadir}/translations/source/sociald.ts
 %{_datadir}/translations/source/lipstick-jolla-home-facebook.ts
+%{_datadir}/translations/source/lipstick-jolla-home-twitter.ts
 
 %prep
 %setup -q -n %{name}-%{version}
