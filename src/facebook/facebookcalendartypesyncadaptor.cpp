@@ -22,6 +22,7 @@
 #define DB_NAME QLatin1String("facebook.db")
 
 static const char *FACEBOOK = "Facebook";
+static const char *FACEBOOK_COLOR = "#3b5998";
 
 // TODO: use a database to track the events
 // in order to perform events overriding, removal of all events on
@@ -179,6 +180,9 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
                                            query.value(1).toString());
         }
 
+        TRACE(SOCIALD_DEBUG,
+              QString(QLatin1String("%1 events in the database")).arg(facebookIdToIncidenceId.count()));
+
         // We open the calendar and storage associated to it
         mKCal::ExtendedCalendar::Ptr calendar =
                 mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(QLatin1String("UTC")));
@@ -187,27 +191,54 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
 
         // Search for the Facebook Notebook
         // Create one if not found (TODO: check if it failed)
-        storage->loadNotebooks();
+        // TODO: set a name to the notebook
         mKCal::Notebook::List facebookNotebooks;
         foreach (mKCal::Notebook::Ptr notebook, storage->notebooks()) {
-            if (notebook->pluginNam() == QLatin1String(FACEBOOK)) {
+            if (notebook->pluginName() == QLatin1String(FACEBOOK)
+                && notebook->account() == QString::number(accountId)) {
                 facebookNotebooks.append(notebook);
             }
         }
+
+        TRACE(SOCIALD_DEBUG,
+              QString(QLatin1String("Found %1 notebooks")).arg(facebookNotebooks.count()));
 
         // That should not happen, but we check it nevertheless
         // we should purge anything that is contained in these notebooks
         // and restart over
         if (facebookNotebooks.count() > 1) {
+            TRACE(SOCIALD_DEBUG,
+                  QString(QLatin1String("Resetting notebooks")));
+
             foreach (mKCal::Notebook::Ptr notebook, facebookNotebooks) {
-                storage->loadNotebookIncidences(notebook->uid());
-                notebook->
+                KCalCore::Incidence::List incidenceList;
+                storage->allIncidences(&incidenceList, notebook->uid());
+
+                foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
+                    calendar->deleteIncidence(incidence);
+                }
+
+                storage->deleteNotebook(notebook);
             }
+
+            facebookNotebooks.clear();
         }
 
-        // TODO: we use default notebook, we should use a specific notebook
-        mKCal::Notebook::Ptr defaultNotebook = storage->defaultNotebook();
+        mKCal::Notebook::Ptr notebook;
 
+        // We create the Facebook notebook
+        if (facebookNotebooks.isEmpty()) {
+            notebook = mKCal::Notebook::Ptr(new mKCal::Notebook);
+            notebook->setName(QLatin1String(FACEBOOK));
+            notebook->setPluginName(QLatin1String(FACEBOOK));
+            notebook->setAccount(QString::number(accountId));
+            notebook->setColor(QLatin1String(FACEBOOK_COLOR));
+            storage->addNotebook(notebook);
+        } else {
+            notebook = facebookNotebooks.first();
+        }
+        // TODO, we might need the following code (but it do not work)
+        // notebook->setIsReadOnly(false);
 
         // We first set all facebook ids to be deleted
         // if we find that the entry should still be displayed
@@ -265,27 +296,31 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
                 }
             }
 
-            // TODO: ugly :(
             if (!update) {
                 event = KCalCore::Event::Ptr(new KCalCore::Event);
                 facebookIdAndIncidenceToBeAdded.insert(eventId, event->uid());
-            }
-            if (update) {
+            } else {
                 event->startUpdates();
             }
+
+            // Set the property of the event
             event->setSummary(summary);
             event->setDescription(description);
             event->setDtStart(startTime);
             event->setAllDay(isDateOnly);
+            event->setReadOnly(true);
+
             if (update) {
                 event->endUpdates();
+            } else {
+                calendar->addEvent(event, notebook->uid());
             }
-            if (!update) {
-                calendar->addEvent(event, defaultNotebook->uid());
-            }
-
         }
 
+        // TODO, we might need the following code (but it do not work)
+        // notebook->setIsReadOnly(true);
+
+        // Write to calendar
         storage->save();
         storage->close();
 

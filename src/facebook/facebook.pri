@@ -1,5 +1,6 @@
 INCLUDEPATH += . ..
 INCLUDEPATH += /home/sk/Code/Qt/Jolla/Jolla/mkcal/src/ #TODO: REMOVE
+INCLUDEPATH += /home/sk/Code/Qt/Jolla/Jolla/kcalcore/kcalcore/ #TODO: remove
 
 HEADERS += \
     $$PWD/facebookdatatypesyncadaptor.h \
