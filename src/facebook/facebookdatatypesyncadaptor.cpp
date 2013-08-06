@@ -159,17 +159,15 @@ void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 }
 
-QVariantMap FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
+QJsonObject FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
 {
-    QVariant parsed;
     QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
     *ok = !jsonDocument.isEmpty();
-    parsed = jsonDocument.toVariant();
-    if (*ok && parsed.type() == QVariant::Map) {
-        return parsed.toMap();
+    if (*ok && jsonDocument.isObject()) {
+        return jsonDocument.object();
     }
     *ok = false;
-    return QVariantMap();
+    return QJsonObject();
 }
 
 bool FacebookDataTypeSyncAdaptor::initializeClientId()

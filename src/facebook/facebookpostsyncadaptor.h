@@ -42,8 +42,7 @@ protected: // implementing FacebookDataTypeSyncAdaptor interface
 
 private:
     void requestMe(int accountId, const QString &accessToken);
-    void requestPosts(int accountId, const QString &accessToken,
-                              const QString &until = QString(), const QString &pagingToken = QString());
+    void requestPosts(int accountId, const QString &accessToken);
     bool haveAlreadyPostedEvent(const QString &postId, const QString &title, const QDateTime &createdTime);
     bool fromIsSelfContact(const QString &fromName, const QString &fromFbUid) const;
 
@@ -53,12 +52,12 @@ private Q_SLOTS:
     void contactFetchStateChangedHandler(QContactAbstractRequest::State newState);
 
 private:
-    QContactManager m_contactManager;
+    QContactManager *m_contactManager;
     QList<QContact> m_contacts;
     QContact m_selfContact;
     QContactFetchRequest *m_contactFetchRequest;
     MEventFeed *m_eventFeed;
-    QStringList m_selfFbuids; // facebook user id strings of "me" objects
+    QMap<int, QString> m_selfFacebookUserIds; // facebook user id strings of "me" objects
 
     // for busy/inactive detection.
     void decrementSemaphore(int accountId);

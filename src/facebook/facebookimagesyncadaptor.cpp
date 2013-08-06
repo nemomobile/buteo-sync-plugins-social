@@ -9,6 +9,8 @@
 #include "syncservice.h"
 #include "trace.h"
 
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonValue>
 #include <QtCore/QPair>
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -192,7 +194,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (!ok || !parsed.contains(QLatin1String("data"))) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read albums response for Facebook account with id %1"))
@@ -202,7 +204,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
         return;
     }
 
-    QList<QVariant> data = parsed.value(QLatin1String("data")).toList();
+    QJsonArray data = parsed.value(QLatin1String("data")).toArray();
     if (data.size() == 0) {
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("Facebook account with id %1 has no albums"))
@@ -213,13 +215,13 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
 
     // read the albums information
     for (int i = 0; i < data.size(); ++i) {
-        QVariantMap album = data.at(i).toMap();
+        QJsonObject album = data.at(i).toObject();
         if (album.isEmpty()) {
             continue;
         }
 
         QString albumId = album.value(QLatin1String("id")).toString();
-        QString userId = album.value(QLatin1String("from")).toMap().value(QLatin1String("id")).toString();
+        QString userId = album.value(QLatin1String("from")).toObject().value(QLatin1String("id")).toString();
         if (!userId.isEmpty() && userId != fbUserId) {
             // probably because the fbUserId hasn't been filled yet.
             fbUserId = userId;
@@ -236,7 +238,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
         }
 
         QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Images), QString::number(accountId));
-        QString userName = album.value(QLatin1String("from")).toMap().value(QLatin1String("name")).toString();
+        QString userName = album.value(QLatin1String("from")).toObject().value(QLatin1String("name")).toString();
         QString albumName = album.value(QLatin1String("name")).toString();
         QString photoCountStr = album.value(QLatin1String("count")).toString();
         QString createdTimeStr = album.value(QLatin1String("created_time")).toString();
@@ -266,7 +268,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
     }
 
     // perform a continuation request if required.
-    QVariantMap paging = parsed.value(QLatin1String("paging")).toMap();
+    QJsonObject paging = parsed.value(QLatin1String("paging")).toObject();
     QString nextUrl = paging.value(QLatin1String("next")).toString();
     if (!nextUrl.isEmpty() && nextUrl != continuationUrl) {
         // note: we check equality because fb can return spurious paging data...
@@ -294,7 +296,7 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseReplyData(replyData, &ok);
     if (!ok || !parsed.contains(QLatin1String("data"))) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read photos response for Facebook account with id %1"))
@@ -304,7 +306,7 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
         return;
     }
 
-    QList<QVariant> data = parsed.value(QLatin1String("data")).toList();
+    QJsonArray data = parsed.value(QLatin1String("data")).toArray();
     if (data.size() == 0) {
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("Album with id %1 from Facebook account with id %2 has no photos"))
@@ -315,7 +317,7 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
 
     // read the photos information
     for (int i = 0; i < data.size(); ++i) {
-        QVariantMap photo = data.at(i).toMap();
+        QJsonObject photo = data.at(i).toObject();
         if (photo.isEmpty()) {
             continue;
         }
@@ -331,11 +333,11 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
         // is too small so this is sort of best guess what sizes FB might returns. We can't
         // also hardcode the exact sizes here, because we can't be sure that certains sizes
         // will stay for ever.
-        QVariantList images = photo.value(QLatin1String("images")).toList();
+        QJsonArray images = photo.value(QLatin1String("images")).toArray();
         for (int j = 0; j < images.size(); j++) {
-            QVariantMap image = images.at(j).toMap();
-            qulonglong width = image.value(QLatin1String("width")).toULongLong();
-            qulonglong height= image.value(QLatin1String("height")).toULongLong();
+            QJsonObject image = images.at(j).toObject();
+            int width = image.value(QLatin1String("width")).toString().toInt();
+            int height= image.value(QLatin1String("height")).toString().toInt();
             if (160 <= width && width <= 350 &&
                 160 <= height && height <= 350) {
                 thumbnailUrl = image.value(QLatin1String("source")).toString();
@@ -367,7 +369,7 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
     }
 
     // perform a continuation request if required.
-    QVariantMap paging = parsed.value(QLatin1String("paging")).toMap();
+    QJsonObject paging = parsed.value(QLatin1String("paging")).toObject();
     QString nextUrl = paging.value(QLatin1String("next")).toString();
     if (!nextUrl.isEmpty() && nextUrl != continuationUrl) {
         TRACE(SOCIALD_DEBUG,
@@ -555,7 +557,7 @@ void FacebookImageSyncAdaptor::userFinishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseReplyData(replyData, &ok);
     if (!ok || !parsed.contains(QLatin1String("id"))) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read user response for Facebook account with id %1"))
@@ -566,10 +568,10 @@ void FacebookImageSyncAdaptor::userFinishedHandler()
     QString fbUserId = parsed.value(QLatin1String("id")).toString();
     QString fbName = parsed.value(QLatin1String("name")).toString();
     QString updatedStr = parsed.value(QLatin1String("updated_time")).toString();
-    QString fbPictureUrl = parsed.value(QLatin1String("picture")).toMap()
-                           .value(QLatin1String("data")).toMap()
+    QString fbPictureUrl = parsed.value(QLatin1String("picture")).toObject()
+                           .value(QLatin1String("data")).toObject()
                            .value(QLatin1String("url")).toString();
-    QString fbCoverUrl = parsed.value(QLatin1String("cover")).toMap()
+    QString fbCoverUrl = parsed.value(QLatin1String("cover")).toObject()
                          .value(QLatin1String("source")).toString();
 
     QSqlQuery query(m_imgdb);

@@ -15,6 +15,7 @@
 #include <QtCore/QString>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
+#include <QtCore/QJsonObject>
 
 class Account;
 
@@ -33,7 +34,7 @@ public:
     virtual void sync(const QString &dataType);
 
 protected:
-    static QVariantMap parseReplyData(const QByteArray &replyData, bool *ok);
+    static QJsonObject parseReplyData(const QByteArray &replyData, bool *ok);
     virtual void updateDataForAccounts(const QList<int> &accountIds);
     virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0;    // must at least implement these two
     virtual void beginSync(int accountId, const QString &accessToken) = 0; // must at least implement these two

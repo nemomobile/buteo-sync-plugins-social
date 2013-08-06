@@ -10,6 +10,8 @@
 #include "trace.h"
 #include "constants_p.h"
 
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonValue>
 #include <QtCore/QPair>
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -232,11 +234,11 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (!isError && ok && parsed.contains(QLatin1String("data"))) {
         // we expect "data" and possibly "paging"
-        QVariantList data = parsed.value(QLatin1String("data")).toList();
-        QVariantMap paging = parsed.value(QLatin1String("paging")).toMap(); // may not exist, if no more results.
+        QJsonArray data = parsed.value(QLatin1String("data")).toArray();
+        QJsonObject paging = parsed.value(QLatin1String("paging")).toObject(); // may not exist, if no more results.
 
         if (!data.size()) {
             TRACE(SOCIALD_DEBUG,
@@ -250,7 +252,7 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
 
             // for each friend, retrieve the detailed information.
             for (int i = 0; i < data.size(); ++i) {
-                QVariantMap currFriend = data.at(i).toMap();
+                QJsonObject currFriend = data.at(i).toObject();
                 QString friendId = currFriend.value(QLatin1String("id")).toString();
                 QString friendName = currFriend.value(QLatin1String("name")).toString();
                 if (friendId.isEmpty()) {
@@ -307,7 +309,7 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
         newOrExisting.removeDetail(&detail);\
     } while (0)
 
-void FacebookContactSyncAdaptor::parseContactDetails(const QVariantMap &blobDetails, int accountId)
+void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDetails, int accountId)
 {
     if (blobDetails.contains(QLatin1String("id"))) {
         // we expect friend user data.
@@ -319,19 +321,19 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QVariantMap &blobDeta
         QString link = blobDetails.value(QLatin1String("link")).toString(); // link to user's profile on facebook
         QString website = blobDetails.value(QLatin1String("website")).toString(); // personal website.
         QString picture;
-        QVariantMap pictureData = blobDetails.value(QLatin1String("picture")).toMap().value(QLatin1String("data")).toMap();
+        QJsonObject pictureData = blobDetails.value(QLatin1String("picture")).toObject().value(QLatin1String("data")).toObject();
         QString isSilhouette = pictureData.value(QLatin1String("is_silhouette")).toString();
         if (!isSilhouette.isEmpty() && isSilhouette != QLatin1String("1") && isSilhouette != QLatin1String("true")) {
             picture = pictureData.value(QLatin1String("url")).toString();
         }
-        QString cover = blobDetails.value(QLatin1String("cover")).toMap().value(QLatin1String("source")).toString();
+        QString cover = blobDetails.value(QLatin1String("cover")).toObject().value(QLatin1String("source")).toString();
         // TODO: location.
         QString username = blobDetails.value(QLatin1String("username")).toString();
         QString birthdayStr = blobDetails.value(QLatin1String("birthday")).toString();
         QDateTime birthday = QDateTime::fromString(birthdayStr, Qt::ISODate);
         QString bio = blobDetails.value(QLatin1String("bio")).toString();
         QString gender = blobDetails.value(QLatin1String("gender")).toString();
-        QString significantOther = blobDetails.value(QLatin1String("significant_other")).toMap().value(QLatin1String("id")).toString();
+        QString significantOther = blobDetails.value(QLatin1String("significant_other")).toObject().value(QLatin1String("id")).toString();
         QString updatedTimeStr = blobDetails.value(QLatin1String("updated_time")).toString();
         QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
 
