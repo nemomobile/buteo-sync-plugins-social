@@ -661,7 +661,7 @@ void FacebookImageSyncAdaptor::cacheImage(const QString &fbPhotoId, const QStrin
         } else {
             TRACE(SOCIALD_DEBUG, QString(QLatin1String("successfully executed cache image update for fb photo: %1")).arg(fbPhotoId));
         }
-    } else {        
+    } else {
         // new row, insert.
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("about to insert cached photo into database:"
