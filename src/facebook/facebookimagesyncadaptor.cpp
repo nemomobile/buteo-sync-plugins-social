@@ -239,11 +239,12 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
 
         QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Images), QString::number(accountId));
         QString userName = album.value(QLatin1String("from")).toObject().value(QLatin1String("name")).toString();
-        QString albumName = album.value(QLatin1String("name")).toString();
-        QString photoCountStr = album.value(QLatin1String("count")).toString();
+        QString albumName = album.value(QLatin1String("name")).toString();        
         QString createdTimeStr = album.value(QLatin1String("created_time")).toString();
         QString updatedTimeStr = album.value(QLatin1String("updated_time")).toString();
         QString coverPhotoId = album.value(QLatin1String("cover_photo")).toString();
+        int photoCount = static_cast<int>(album.value(QLatin1String("count")).toDouble());
+
 
         // check to see whether we need to sync (any changes since last sync)
         QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
@@ -263,7 +264,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
 
         // we need to sync.  See if we need to save the album entry, and request the photos for the album.
         possiblyAddNewAlbum(albumId, userId, userName, createdTimeStr, updatedTimeStr, albumName,
-                            photoCountStr, coverPhotoId, accountId, accessToken);
+                            photoCount, coverPhotoId, accountId, accessToken);
         requestData(accountId, accessToken, QString(), fbUserId, fbAlbumId);
     }
 
@@ -438,7 +439,7 @@ bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbPhotoId, 
 void FacebookImageSyncAdaptor::possiblyAddNewAlbum(const QString &fbAlbumId, const QString &fbUserId,
                                                    const QString &fbUserName, const QString &createdTime,
                                                    const QString &updatedTime, const QString &albumName,
-                                                   const QString &photoCountStr, const QString &coverPhotoId,
+                                                   int photoCount, const QString &coverPhotoId,
                                                    int accountId, const QString &accessToken)
 {
     // first, check to see whether we need to add a new user to the users table
@@ -452,9 +453,6 @@ void FacebookImageSyncAdaptor::possiblyAddNewAlbum(const QString &fbAlbumId, con
         TRACE(SOCIALD_ERROR, QLatin1String("error reading from albums table:") << query.lastError());
         return;
     }
-
-    bool ok = false;
-    int photoCount = photoCountStr.toInt(&ok);
 
     if (query.next()) {
         // already exists.  Don't need to add it.  But, can update the updated time + album name (might have changed).
@@ -626,7 +624,6 @@ void FacebookImageSyncAdaptor::cacheImage(const QString &fbPhotoId, const QStrin
                         .arg(imageFile).arg(fbPhotoId));
             }
         }
-
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("about to update cached photo in database:"
                                       "\n   fbPhotoId: %1"
@@ -664,7 +661,7 @@ void FacebookImageSyncAdaptor::cacheImage(const QString &fbPhotoId, const QStrin
         } else {
             TRACE(SOCIALD_DEBUG, QString(QLatin1String("successfully executed cache image update for fb photo: %1")).arg(fbPhotoId));
         }
-    } else {
+    } else {        
         // new row, insert.
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("about to insert cached photo into database:"
