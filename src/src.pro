@@ -55,10 +55,13 @@ MOC_DIR = $$PWD/../.moc
 OBJECTS_DIR = $$PWD/../.obj
 
 # lipstick event feed subview shared components
-shared_eventfeed.files =    $$PWD/eventfeed/Face.qml \
-                            $$PWD/eventfeed/Body.qml \
+shared_eventfeed.files =    $$PWD/eventfeed/SocialAvatar.qml \
+                            $$PWD/eventfeed/SocialBody.qml \
                             $$PWD/eventfeed/SocialButton.qml \
-                            $$PWD/eventfeed/MediaRow.qml
+                            $$PWD/eventfeed/SocialContent.qml \
+                            $$PWD/eventfeed/SocialMediaRow.qml \
+                            $$PWD/eventfeed/SocialInfoLabel.qml \
+                            $$PWD/eventfeed/SocialReplyField.qml
 shared_eventfeed.path = /usr/share/lipstick/eventfeed/shared/
 
 

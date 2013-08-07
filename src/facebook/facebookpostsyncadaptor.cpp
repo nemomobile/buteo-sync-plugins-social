@@ -526,6 +526,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                     }
                 }
 
+
                 // Publish the post to the events feed.
                 qlonglong eventId = m_eventFeed->addItem(
                         icon,

@@ -356,7 +356,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 // publish the post to the events feed.
                 qlonglong eventId = m_eventFeed->addItem(
                         icon,
-                        //QLatin1String("icon-s-service-twitter"),
                         eventTitle,
                         eventBody,
                         eventImageList,
