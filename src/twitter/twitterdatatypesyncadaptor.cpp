@@ -329,7 +329,7 @@ void TwitterDataTypeSyncAdaptor::signIn(Account *account)
     SignInParameters *sip = account->signInParameters("twitter-sync");
     sip->setParameter(QLatin1String("ConsumerKey"), oauthConsumerKey);
     sip->setParameter(QLatin1String("ConsumerSecret"), consumerSecret);
-    sip->setParameter(QLatin1String("UiPolicy"), SignOn::NoUserInteractionPolicy);
+    sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
 
     connect(account, SIGNAL(signInError(QString)), this, SLOT(signOnError(QString)));
     connect(account, SIGNAL(signInResponse(QVariantMap)), this, SLOT(signOnResponse(QVariantMap)));

@@ -7,7 +7,6 @@ License:    TBD
 URL:        https://bitbucket.org/jolla/base-sociald
 Source0:    %{name}-%{version}.tar.bz2
 BuildRequires:  pkgconfig(Qt5Core)
-# Looks like that sailfish-components-accounts pc file is missing
 # Qt5Gui requires -> hence adding over here.
 BuildRequires:  pkgconfig(Qt5Gui)
 BuildRequires:  pkgconfig(Qt5DBus)
@@ -23,6 +22,7 @@ BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
 # for lupdate
 BuildRequires:  qt5-qttools-linguist
+Requires: sailfish-components-accounts-qt5 >= 0.0.37
 Requires: nemo-qml-plugin-notifications-qt5
 Requires: nemo-qml-plugin-social-qt5 >= 0.0.6
 Requires: buteo-syncfw-qt5-msyncd

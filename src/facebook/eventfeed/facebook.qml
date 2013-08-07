@@ -35,7 +35,7 @@ Page {
                 var params = signInParameters("facebook-sync")
                 console.debug(container.model.metaData["clientId"])
                 params.setParameter("ClientId", container.model.metaData["clientId"])
-                params.setParameter("UiPolicy", 2) // NoUserInteractionPolicy - XXX TODO: define this in SailfishAccounts
+                params.setParameter("UiPolicy", SignInParameters.NoUserInteractionPolicy)
                 signIn("Jolla", "Jolla", params)
             }
         }

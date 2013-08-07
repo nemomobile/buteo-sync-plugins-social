@@ -195,7 +195,7 @@ void FacebookDataTypeSyncAdaptor::signIn(Account *account)
 
     SignInParameters *sip = account->signInParameters("facebook-sync");
     sip->setParameter(QLatin1String("ClientId"), m_clientId);
-    sip->setParameter(QLatin1String("UiPolicy"), SignOn::NoUserInteractionPolicy);
+    sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
 
     connect(account, SIGNAL(signInError(QString)), this, SLOT(signOnError(QString)));
     connect(account, SIGNAL(signInResponse(QVariantMap)), this, SLOT(signOnResponse(QVariantMap)));
