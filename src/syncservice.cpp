@@ -26,12 +26,15 @@
 SyncServicePrivate::SyncServicePrivate(const QString &connectionName, SyncService *parent)
     : QObject(parent), q(parent)
 {
-    if (!QFile::exists(QString("%1/%2").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(QLatin1String(SOCIALD_DATABASE_NAME)))) {
-        QDir dir(SOCIALD_DATABASE_DIR);
+    QString socialdDatabaseDir = QString("%1/%2")
+            .arg(QLatin1String(PRIVILEGED_DATA_DIR))
+            .arg(QLatin1String(SYNC_DATABASE_DIR));
+    if (!QFile::exists(QString("%1/%2").arg(socialdDatabaseDir).arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)))) {
+        QDir dir(socialdDatabaseDir);
         if (!dir.exists()) {
             dir.mkpath(".");
         }
-        QString absolutePath = dir.absoluteFilePath(SOCIALD_DATABASE_NAME);
+        QString absolutePath = dir.absoluteFilePath(SOCIALD_SYNC_DATABASE_NAME);
         QFile dbfile(absolutePath);
         if (!dbfile.open(QIODevice::ReadWrite)) {
             TRACE(SOCIALD_ERROR,
@@ -44,11 +47,11 @@ SyncServicePrivate::SyncServicePrivate(const QString &connectionName, SyncServic
 
     // open the database in which we store our sync event information
     m_db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
-    m_db.setDatabaseName(QString("%1/%2").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(QLatin1String(SOCIALD_DATABASE_NAME)));
+    m_db.setDatabaseName(QString("%1/%2").arg(socialdDatabaseDir).arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)));
     if (!m_db.open()) {
         TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: unable to open sociald database %1 - sociald will be inactive"))
-            .arg(QLatin1String(SOCIALD_DATABASE_NAME)));
+            .arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)));
         return;
     }
 

@@ -39,13 +39,14 @@ FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QOb
 {
     m_enabled = false;
 
-    // we create a database at SOCIALD_DATABASE_DIR/Images/facebook.db
+    // we create a database at PRIVILEGED_DATA_DIR/Images/facebook.db
     // the Jolla Gallery application will open this database for fb album support.
-    if (!QFile::exists(QString("%1/%2/%3")
-                .arg(QLatin1String(SOCIALD_DATABASE_DIR))
+    QString imageSyncDatabaseFile = QString("%1/%2/%3")
+                .arg(QLatin1String(PRIVILEGED_DATA_DIR))
                 .arg(SyncService::dataType(m_dataType))
-                .arg(QLatin1String("facebook.db")))) {
-        QDir dir(QString("%1/%2").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(SyncService::dataType(m_dataType)));
+                .arg(QLatin1String("facebook.db"));
+    if (!QFile::exists(imageSyncDatabaseFile)) {
+        QDir dir(QString("%1/%2").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(m_dataType)));
         if (!dir.exists()) {
             dir.mkpath(".");
         }
@@ -62,11 +63,11 @@ FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QOb
 
     // open the database in which we store our synced image information
     m_imgdb = QSqlDatabase::addDatabase("QSQLITE", QString(QLatin1String("sociald/facebook/%1")).arg(SyncService::dataType(m_dataType)));
-    m_imgdb.setDatabaseName(QString("%1/%2/%3").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(SyncService::dataType(m_dataType)).arg(QLatin1String("facebook.db")));
+    m_imgdb.setDatabaseName(imageSyncDatabaseFile);
     if (!m_imgdb.open()) {
         TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: unable to open Facebook image database %1 - Facebook image sync will be inactive"))
-            .arg(QLatin1String(SOCIALD_DATABASE_NAME)));
+            .arg(imageSyncDatabaseFile));
         return;
     }
 

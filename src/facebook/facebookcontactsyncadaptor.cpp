@@ -68,12 +68,13 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
         return;
     }
 
-    // we create a database at SOCIALD_DATABASE_DIR/Contacts/facebook.db
-    if (!QFile::exists(QString("%1/%2/%3")
-                .arg(QLatin1String(SOCIALD_DATABASE_DIR))
+    // we create a database at PRIVILEGED_DATA_DIR/Contacts/facebook.db
+    QString contactSyncDb = QString("%1/%2/%3")
+                .arg(QLatin1String(PRIVILEGED_DATA_DIR))
                 .arg(SyncService::dataType(m_dataType))
-                .arg(QLatin1String("facebook.db")))) {
-        QDir dir(QString("%1/%2").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(SyncService::dataType(m_dataType)));
+                .arg(QLatin1String("facebook.db"));
+    if (!QFile::exists(contactSyncDb)) {
+        QDir dir(QString("%1/%2").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(m_dataType)));
         if (!dir.exists()) {
             dir.mkpath(".");
         }
@@ -90,7 +91,7 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
 
     // open the database in which we store our synced friend information
     QString connectionName = QString(QLatin1String("sociald/facebook/%1")).arg(SyncService::dataType(m_dataType));
-    QString databaseName = QString("%1/%2/%3").arg(QLatin1String(SOCIALD_DATABASE_DIR)).arg(SyncService::dataType(m_dataType)).arg(QLatin1String("facebook.db"));
+    QString databaseName = contactSyncDb;
     m_contactSyncDb = QSqlDatabase::addDatabase("QSQLITE", connectionName);
     m_contactSyncDb.setDatabaseName(databaseName);
     if (!m_contactSyncDb.open()) {
@@ -792,7 +793,7 @@ void FacebookContactSyncAdaptor::saveImageAndUpdateDatabase(int accountId, const
 
     // save the new image (eg fbfriendid-accid-picture.jpg or fbfriendid-accid-cover.jpg)
     QString newName = QString("%1/%2/%3-%4-%5.jpg")
-                             .arg(QLatin1String(SOCIALD_DATABASE_DIR))
+                             .arg(QLatin1String(PRIVILEGED_DATA_DIR))
                              .arg(SyncService::dataType(m_dataType))
                              .arg(fbFriendId)
                              .arg(accountId)

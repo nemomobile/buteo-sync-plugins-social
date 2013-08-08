@@ -35,9 +35,9 @@ QT += \
 include(facebook/facebook.pri)
 include(twitter/twitter.pri)
 
-# if you change this, you need to modify jolla-gallery-facebook too!
-DEFINES += 'SOCIALD_DATABASE_DIR=\'\"/home/nemo/.config/sociald\"\''
-DEFINES += 'SOCIALD_DATABASE_NAME=\'\"sociald.db\"\''
+DEFINES += 'PRIVILEGED_DATA_DIR=\'\"/home/nemo/.local/share/data/.privileged/\"\''
+DEFINES += 'SYNC_DATABASE_DIR=\'\"Sync\"\''
+DEFINES += 'SOCIALD_SYNC_DATABASE_NAME=\'\"sociald.db\"\''
 
 HEADERS += \
     $$PWD/buteosocialsync.h \
