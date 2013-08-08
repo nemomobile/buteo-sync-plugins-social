@@ -149,13 +149,14 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
         }
     }
 
+    QList<QPair<QString, QString> > queryItems;
+    QUrlQuery query(url);
     if (!url.toString().contains("access_token")) {
-        QList<QPair<QString, QString> > queryItems;
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
-        QUrlQuery query(url);
-        query.setQueryItems(queryItems);
-        url.setQuery(query);
     }
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("limit")), QString(QLatin1String("2000"))));
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
 
     QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
     if (reply) {
