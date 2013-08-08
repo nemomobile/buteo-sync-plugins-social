@@ -505,13 +505,14 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 
                 // TODO: We should update the number of likes and comments
             } else {
+                static QString clientId(storedClientId());
                 QVariantMap metaData;
                 metaData.insert("accountId", accountId);
                 metaData.insert("nodeId", postId);
                 metaData.insert("postAttachmentName", attachmentName);
                 metaData.insert("postAttachmentCaption", attachmentCaption);
                 metaData.insert("postAttachmentDescription", attachmentDescription);
-                metaData.insert("clientId", storedClientId());
+                metaData.insert("clientId", clientId);
 
                 QString icon = QLatin1String("icon-s-service-facebook");
 
