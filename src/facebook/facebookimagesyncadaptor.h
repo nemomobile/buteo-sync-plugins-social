@@ -57,7 +57,7 @@ private:
     void possiblyAddNewAlbum(const QString &fbAlbumId, const QString &fbUserId,
                              const QString &fbUserName, const QString &createdTime,
                              const QString &updatedTime, const QString &albumName,
-                             const QString &photoCountStr, const QString &coverPhotoId,
+                             int photoCount, const QString &coverPhotoId,
                              int accountId, const QString &accessToken);
 
     QStringList queryDatabaseRow(const QString &fbPhotoId);
