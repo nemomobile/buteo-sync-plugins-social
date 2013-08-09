@@ -41,6 +41,8 @@
 #define SOCIALD_FACEBOOK_CONTACTS_ID_PREFIX QLatin1String("facebook-contacts-")
 #define SOCIALD_FACEBOOK_CONTACTS_GROUPNAME QLatin1String("sociald-sync-facebook-contacts")
 #define SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET QLatin1String("facebook")
+#define SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbFriendId, avatarType) QString("%1/%2/%3-%4.jpg").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(m_dataType)).arg(fbFriendId).arg(avatarType)
+#define SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE 50
 
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
@@ -462,12 +464,11 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
                     REMOVE_DETAIL(contactAvatar);
                 } else if (avatarUrlIsDifferent(QLatin1String("cover"), fbuid, accountId, cover)) {
                     // needs to be updated.
-                    FacebookContactSyncAdaptor::AvatarRequestData ard;
-                    ard.accountId = accountId;
-                    ard.fbuid = fbuid;
-                    ard.url = cover;
-                    ard.type = QLatin1String("cover");
-                    m_avatarsToRequest.append(ard);
+                    // note: we don't download the cover image here; the contacts app should
+                    // do so only for contacts which we need the cover of.
+                    QContactAvatar contactAvatar = avatar;
+                    contactAvatar.setImageUrl(cover); // remote url.
+                    SAVE_DETAIL(contactAvatar);
                 }
             } else if (avatar.value(QContactAvatar__FieldAvatarMetadata) == QLatin1String("picture")) {
                 foundPicture = true;
@@ -476,7 +477,12 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
                     QContactAvatar contactAvatar = avatar;
                     REMOVE_DETAIL(contactAvatar);
                 } else if (avatarUrlIsDifferent(QLatin1String("picture"), fbuid, accountId, picture)) {
-                    // needs to be updated.
+                    // needs to be updated.  we set the value to be the (future) image filename.
+                    QContactAvatar contactAvatar = avatar;
+                    contactAvatar.setImageUrl(SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbuid, QLatin1String("picture")));
+                    SAVE_DETAIL(contactAvatar);
+
+                    // we also queue up a request to download the thumbnail in the background.
                     FacebookContactSyncAdaptor::AvatarRequestData ard;
                     ard.accountId = accountId;
                     ard.fbuid = fbuid;
@@ -488,15 +494,21 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
         }
         if (!foundCover && !cover.isEmpty()) {
             // needs to be updated.
-            FacebookContactSyncAdaptor::AvatarRequestData ard;
-            ard.accountId = accountId;
-            ard.fbuid = fbuid;
-            ard.url = cover;
-            ard.type = QLatin1String("cover");
-            m_avatarsToRequest.append(ard);
+            // note: we don't download the cover image here; the contacts app should
+            // do so only for contacts which we need the cover of.
+            QContactAvatar contactAvatar;
+            contactAvatar.setImageUrl(cover); // remote url.
+            contactAvatar.setValue(QContactAvatar__FieldAvatarMetadata, QLatin1String("cover"));
+            SAVE_DETAIL(contactAvatar);
         }
         if (!foundPicture && !picture.isEmpty()) {
-            // needs to be updated.
+            // needs to be updated.  we set the value to be the (future) image filename.
+            QContactAvatar contactAvatar;
+            contactAvatar.setImageUrl(SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbuid, QLatin1String("picture")));
+            contactAvatar.setValue(QContactAvatar__FieldAvatarMetadata, QLatin1String("picture"));
+            SAVE_DETAIL(contactAvatar);
+
+            // we also queue up a request to download the thumbnail in the background.
             FacebookContactSyncAdaptor::AvatarRequestData ard;
             ard.accountId = accountId;
             ard.fbuid = fbuid;
@@ -639,7 +651,7 @@ void FacebookContactSyncAdaptor::requestAvatars(const QString &accessToken)
     saveAvatars();
 
     // secondly, request the next batch.
-    int batchSize = qMin(m_avatarsToRequest.size(), 5);
+    int batchSize = qMin(m_avatarsToRequest.size(), SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE);
     while (batchSize > 0) {
         batchSize--;
         FacebookContactSyncAdaptor::AvatarRequestData ard = m_avatarsToRequest.takeFirst();
@@ -649,12 +661,28 @@ void FacebookContactSyncAdaptor::requestAvatars(const QString &accessToken)
 
 void FacebookContactSyncAdaptor::saveAvatars()
 {
+    QStringList avatarTypes;
+    QStringList fileNames;
+    QStringList avatarUrls;
+    QStringList fbFriendIds;
+    QList<int> accountIds;
+
+    // save a batch of avatars to disk
     while (m_avatarsToSave.size()) {
-        // XXX TODO: batch this up properly.  At the moment, since the SQL access
-        // and file io is interleaved, it's very, very slow / io bound.
         FacebookContactSyncAdaptor::AvatarReplyData ard = m_avatarsToSave.takeFirst();
-        saveImageAndUpdateDatabase(ard.accountId, ard.type, ard.fbuid, ard.url, ard.data);
+        QString currFileName = saveImageToDisk(ard.accountId, ard.type, ard.fbuid, ard.data);
+        if (!currFileName.isEmpty()) {
+            // successfully saved.  update the database info.
+            avatarTypes.append(ard.type);
+            fileNames.append(currFileName);
+            avatarUrls.append(ard.url);
+            fbFriendIds.append(ard.fbuid);
+            accountIds.append(ard.accountId);
+        }
     }
+
+    // update database with updated info.
+    updateDatabaseWithImageInfo(avatarTypes, fileNames, avatarUrls, fbFriendIds, accountIds);
 }
 
 void FacebookContactSyncAdaptor::avatarFinishedHandler()
@@ -685,12 +713,10 @@ void FacebookContactSyncAdaptor::avatarFinishedHandler()
     reply->deleteLater();
 
     m_avatarsSemaphore--;
-    if ((m_avatarsSemaphore % 5) == 0) {
+    if ((m_avatarsSemaphore % SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE) == 0) {
         // request more avatars if they exist
-        // Note: due to the use of the modulo, if the original count is not %5
-        // there is a chance for the first (up to) 4 to be queued "unfairly".
-        // They will still be handled, but possibly after the second batch is
-        // requested...
+        // Note: due to the use of the modulo, the first few avatar writes might
+        // be queued unfairly.
         requestAvatars(accessToken);
     }
 
@@ -739,9 +765,14 @@ bool FacebookContactSyncAdaptor::avatarUrlIsDifferent(const QString &avatarType,
 
 bool FacebookContactSyncAdaptor::removeAvatarFromDisk(const QString &fbFriendId, int accountId, const QString &avatarType)
 {
+    // only remove it if this friend isn't a friend of multiple accounts.
     QSqlQuery query(m_contactSyncDb);
     query.prepare(QString(QLatin1String(
-                 "SELECT %1File FROM friends WHERE fbFriendId = :fbfid AND accountId = :aid"))
+                  "SELECT %1File, COUNT(accountId), MAX(accountId)"
+                  " FROM friends"
+                  " GROUP BY %1File"
+                  " HAVING COUNT(accountId) = 1"
+                  " AND MAX(accountId) = :aid"))
                  .arg(avatarType));
     query.bindValue(":fbfid", fbFriendId);
     query.bindValue(":aid", accountId);
@@ -764,93 +795,110 @@ bool FacebookContactSyncAdaptor::removeAvatarFromDisk(const QString &fbFriendId,
     return true;
 }
 
-void FacebookContactSyncAdaptor::saveImageAndUpdateDatabase(int accountId, const QString &avatarType, const QString &fbFriendId, const QString &avatarUrl, const QByteArray &data)
+QString FacebookContactSyncAdaptor::saveImageToDisk(int accountId, const QString &avatarType, const QString &fbFriendId, const QByteArray &data)
 {
     if (fbFriendId.isEmpty()) {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("error: empty friend id while downloading avatar - aborting")));
-        return;
+        return QString();
     }
 
     if (avatarType.isEmpty()) {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("error: empty avatar type while downloading avatar - aborting")));
-        return;
+        return QString();
     }
 
-    bool isCover = avatarType == QLatin1String("cover");
     QImage image;
     bool loadedOk = image.loadFromData(data);
     if (!loadedOk || image.isNull()) {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("error: downloaded %1 for %2 but image data not valid"))
               .arg(avatarType).arg(fbFriendId));
-        return;
+        return QString();
     }
 
     // first, if any existing image exists, we need to remove it from disk.
-    removeAvatarFromDisk(fbFriendId, accountId, isCover ? QLatin1String("cover") : QLatin1String("picture"));
+    removeAvatarFromDisk(fbFriendId, accountId, avatarType);
 
-    // save the new image (eg fbfriendid-accid-picture.jpg or fbfriendid-accid-cover.jpg)
-    QString newName = QString("%1/%2/%3-%4-%5.jpg")
-                             .arg(QLatin1String(PRIVILEGED_DATA_DIR))
-                             .arg(SyncService::dataType(m_dataType))
-                             .arg(fbFriendId)
-                             .arg(accountId)
-                             .arg(isCover ? QLatin1String("cover") : QLatin1String("picture"));
+    // save the new image (eg fbfriendid-picture.jpg or fbfriendid-cover.jpg)
+    QString newName = SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbFriendId, avatarType);
 
     bool saveOk = image.save(newName);
     if (!saveOk) {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("error: downloaded %1 for %2 but could not save image"))
               .arg(avatarType).arg(fbFriendId));
-        return;
+        return QString();
     }
 
-    // successfully saved.  update the database.
-    QSqlQuery query(m_contactSyncDb);
-    query.prepare(QString(QLatin1String(
-                 "UPDATE friends SET %1File = :file, %1Url = :url WHERE fbFriendId = :fbfid AND accountId = :aid"))
-                 .arg(isCover ? QLatin1String("cover") : QLatin1String("picture")));
-    query.bindValue(":file", newName);
-    query.bindValue(":url", avatarUrl);
-    query.bindValue(":fbfid", fbFriendId);
-    query.bindValue(":aid", accountId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: saved %1 for %2 as %3 but could not update db: %4"))
-              .arg(avatarType).arg(fbFriendId).arg(newName).arg(query.lastError().text()));
-        QFile::remove(newName); // clean up: delete the newly saved file.
-        return;
-    }
+    return newName; // success.  Return the filename we saved the image as.
+}
 
-    // having updated the "cache db" we now need to update the QtContacts database.
-    bool isNewContact = false;
-    QContact existingContact = newOrExistingContact(fbFriendId, &isNewContact);
-    if (isNewContact) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: downloaded %1 for %2 but %2 doesn't exist"))
-              .arg(avatarType).arg(fbFriendId));
-        return;
-    }
+void FacebookContactSyncAdaptor::updateDatabaseWithImageInfo(const QStringList &avatarTypes, const QStringList &fileNames, const QStringList &avatarUrls, const QStringList &fbFriendIds, const QList<int> &accountIds)
+{
+    // firstly, group according to cover/picture.
+    QVariantList pictureFileNames;
+    QVariantList pictureAvatarUrls;
+    QVariantList pictureFbFriendIds;
+    QVariantList pictureAccountIds;
 
-    QContactAvatar saveAv;
-    QList<QContactAvatar> allAvatars = existingContact.details<QContactAvatar>();
-    for (int i = 0; i < allAvatars.size(); ++i) {
-        if (allAvatars.at(i).value(QContactAvatar__FieldAvatarMetadata) == avatarType) {
-            saveAv = allAvatars.at(i);
-            break;
+    QVariantList coverFileNames;
+    QVariantList coverAvatarUrls;
+    QVariantList coverFbFriendIds;
+    QVariantList coverAccountIds;
+
+    for (int i = 0; i < avatarTypes.size(); ++i) {
+        if (avatarTypes[i] == QLatin1String("picture")) {
+            pictureFileNames.append(fileNames[i]);
+            pictureAvatarUrls.append(avatarUrls[i]);
+            pictureFbFriendIds.append(fbFriendIds[i]);
+            pictureAccountIds.append(accountIds[i]);
+        } else {
+            coverFileNames.append(fileNames[i]);
+            coverAvatarUrls.append(avatarUrls[i]);
+            coverFbFriendIds.append(fbFriendIds[i]);
+            coverAccountIds.append(accountIds[i]);
         }
     }
 
-    saveAv.setImageUrl(newName);
-    saveAv.setValue(QContactAvatar__FieldAvatarMetadata, avatarType);
-    existingContact.saveDetail(&saveAv);
-    if (!m_contactManager->saveContact(&existingContact)) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: unable to save contact during %1 update for %2"))
-              .arg(avatarType).arg(fbFriendId));
+    // update the database.
+    QSqlQuery query(m_contactSyncDb);
+    if (pictureFileNames.size()) {
+        query.prepare(QString(QLatin1String(
+                     "UPDATE friends SET pictureFile = ?, pictureUrl = ?"
+                     " WHERE fbFriendId = ? AND accountId = ?")));
+        query.addBindValue(pictureFileNames);
+        query.addBindValue(pictureAvatarUrls);
+        query.addBindValue(pictureFbFriendIds);
+        query.addBindValue(pictureAccountIds);
+        if (!query.execBatch()) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("error: failed to update database with avatar (picture) info: %1"))
+                  .arg(query.lastError().text()));
+            // NOTE: we should clean up the files here, but since we use a standard naming pattern,
+            // the QtContact will (should) still reference it if it exists.
+        }
     }
+    if (coverFileNames.size()) {
+        query.prepare(QString(QLatin1String(
+                     "UPDATE friends SET coverFile = ?, coverUrl = ?"
+                     " WHERE fbFriendId = ? AND accountId = ?")));
+        query.addBindValue(coverFileNames);
+        query.addBindValue(coverAvatarUrls);
+        query.addBindValue(coverFbFriendIds);
+        query.addBindValue(coverAccountIds);
+        if (!query.execBatch()) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("error: failed to update database with avatar (cover) info: %1"))
+                  .arg(query.lastError().text()));
+            // NOTE: we should clean up the files here, but since we use a standard naming pattern,
+            // the QtContact will (should) still reference it if it exists.
+        }
+    }
+
+    // NOTE: no need to update the QtContacts database, as the avatar image field
+    // always points to the local file location.
 }
 
 QList<QContactId> FacebookContactSyncAdaptor::contactIdsForGuid(const QString &fbuid)

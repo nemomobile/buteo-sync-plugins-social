@@ -67,7 +67,8 @@ private:
     QContact newOrExistingContact(const QString &fbuid, bool *isNewContact);
     bool avatarUrlIsDifferent(const QString &avatarType, const QString &fbFriendId, int accountId, const QString &avatarUrl);
     bool removeAvatarFromDisk(const QString &fbFriendId, int accountId, const QString &avatarType);
-    void saveImageAndUpdateDatabase(int accountId, const QString &avatarType, const QString &fbFriendId, const QString &avatarUrl, const QByteArray &data);
+    QString saveImageToDisk(int accountId, const QString &avatarType, const QString &fbFriendId, const QByteArray &data);
+    void updateDatabaseWithImageInfo(const QStringList &avatarTypes, const QStringList &fileNames, const QStringList &avatarUrls, const QStringList &fbFriendIds, const QList<int> &accountIds);
     void parseContactDetails(const QJsonObject &blobDetails, int accountId);
     void requestAvatars(const QString &accessToken);
     void saveAvatars();
