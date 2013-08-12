@@ -25,9 +25,28 @@
 //meegotouchevents/meventfeed
 #include <meventfeed.h>
 
+// sailfish-components-accounts-qt5
+#include <sailfishkeyprovider.h>
+
 #define SOCIALD_TWITTER_POSTS_ID_PREFIX QLatin1String("twitter-posts-")
-#define SOCIALD_TWITTER_POSTS_GROUPNAME QLatin1String("sociald-sync-twitter-posts")
+#define SOCIALD_TWITTER_POSTS_GROUPNAME QLatin1String("twitter")
 #define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
+
+static QString storedSecret(const char *key)
+{
+    char *cKey = NULL;
+    int success = SailfishKeyProvider_storedKey("twitter", "twitter-sync", key, &cKey);
+    if (success != 0) {
+        TRACE(SOCIALD_INFORMATION,
+                QString(QLatin1String("Twitter sync: could not retrieve key from SailfishKeyProvider")));
+        free(cKey);
+        return QString();
+    }
+
+    QString retn = QLatin1String(cKey);
+    free(cKey);
+    return retn;
+}
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
@@ -213,9 +232,11 @@ void TwitterHomeTimelineSyncAdaptor::finishedMeHandler()
     if (ok && parsed.contains(QLatin1String("id_str"))) {
         QString selfUserId = parsed.value(QLatin1String("id_str")).toString();
         QString selfScreenName = parsed.value(QLatin1String("screen_name")).toString();
+        QString profileImage = parsed.value(QLatin1String("profile_image_url")).toString();
         if (!m_selfTuids.contains(selfUserId)) {
             m_selfTuids.append(selfUserId);
             m_selfTScreenNames.insert(selfUserId, selfScreenName);
+            m_accountProfileImage.insert(accountId, profileImage);
         }
 
         requestPosts(accountId, oauthToken, oauthTokenSecret, QString(), QString());
@@ -270,8 +291,16 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             bool eventIsVideo;
             QString eventUrl;
 
+            QString retweeter;
+
             // grab the data from the current post
             QVariantMap currData = data.at(i).toMap();
+
+            if (currData.contains(QLatin1String("retweeted_status"))) {
+                retweeter = currData.value(QLatin1String("user")).toMap().value("name").toString();
+                currData = currData.value(QLatin1String("retweeted_status")).toMap();
+            }
+
             QDateTime createdTime = parseTwitterDateTime(currData.value(QLatin1String("created_at")).toString());
             QString postId = currData.value(QLatin1String("id_str")).toString();
             QString text = currData.value(QLatin1String("text")).toString();
@@ -279,16 +308,19 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             QString userId = dataUser.value("id_str").toString();
             QString userName = dataUser.value("name").toString();
             QString screenName = dataUser.value("screen_name").toString();
+            QString icon = dataUser.value(QLatin1String("profile_image_url")).toString();
 
-            if (fromIsSelfContact(userName, userId)) {
-                //: The title of a Tweet posted by the device's user, as displayed in event feed
-                //% "You posted a Tweet!"
-                eventTitle = qtTrId("sociald_twitter_posts-you_posted_tweet");
-            } else {
-                // The title of a Tweet posted by a friend or followee, as displayed in the event feed
-                //% "%1 posted a Tweet!"
-                eventTitle = qtTrId("sociald_twitter_posts-friend_posted_tweet").arg(userName);
+            QVariantList mediaList = currData.value(QLatin1String("entities")).toMap().value(QLatin1String("media")).toList();
+            if (!mediaList.isEmpty()) {
+                foreach (QVariant mediaVariant, mediaList) {
+                    QVariantMap mediaObject = mediaVariant.toMap();
+                    if (mediaObject.contains(QLatin1String("media_url_https"))) {
+                        eventImageList.append(mediaObject.value(QLatin1String("media_url_https")).toString());
+                    }
+                }
             }
+
+            eventTitle = userName;
             eventBody = text;
             eventTimestamp = createdTime;
             eventIsVideo = false; // XXX TODO: Twitter Vine posts?
@@ -312,9 +344,18 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                         QString(QLatin1String("event for account %1 has already been posted:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << eventBody);
             } else {
+                QVariantMap metaData;
+                metaData.insert("accountId", accountId);
+                metaData.insert("consumerKey", storedSecret("consumer_key"));
+                metaData.insert("consumerSecret", storedSecret("consumer_secret"));
+                metaData.insert("nodeId", postId);
+                metaData.insert("retweeter", retweeter);
+                metaData.insert("profilePicture", m_accountProfileImage.value(accountId));
+
+
                 // publish the post to the events feed.
                 qlonglong eventId = m_eventFeed->addItem(
-                        QLatin1String("icon-s-service-twitter"),
+                        icon,
                         eventTitle,
                         eventBody,
                         eventImageList,
@@ -323,7 +364,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                         eventIsVideo,
                         eventUrl,
                         SOCIALD_TWITTER_POSTS_GROUPNAME, // sourceName
-                        QLatin1String("Twitter"));       // sourceDisplayName // XXX TODO: per-account?
+                        QLatin1String("Twitter"), // sourceDisplayName // XXX TODO: per-account?
+                        metaData);
                 if (eventId == 0) {
                     // failed.
                     TRACE(SOCIALD_ERROR,

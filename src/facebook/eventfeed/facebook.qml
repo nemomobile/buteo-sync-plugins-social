@@ -20,6 +20,9 @@ Page {
     property string mediaCaption
     property string mediaDescription
 
+    // Relay used to give the comment field active focus
+    signal forceReplyFieldActiveFocus()
+
     onModelChanged: {
         nodeIdentifier = container.model.metaData["nodeId"]
         mediaName = container.model.metaData["postAttachmentName"]
@@ -48,7 +51,7 @@ Page {
         }
     }
 
-    // Returns true|false if user has liked this image
+    // Returns true|false if user has liked this post
     function isLikedBySelf() {
         for (var i = 0; i < facebookLikes.count; i++) {
             if (facebookLikes.relatedItem(i).userName === myName) {
@@ -115,7 +118,6 @@ Page {
                 facebookMe.populate()
                 facebookLikes.populate()
                 facebookLikes.loading = true
-                facebookComments.populate()
             }
         }
     }
@@ -153,6 +155,7 @@ Page {
                 facebookLikes.loading = false
                 container.liked = container.isLikedBySelf()
                 container.likers = container.updateLikers()
+                facebookComments.populate()
             }
         }
     }
@@ -191,95 +194,52 @@ Page {
         header: Column {
             width: view.width
 
-            // Contains the header, picture, body and social button
-            // Includes a background
-            Item {
-                height: childrenRect.height
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                }
-
-                Rectangle {
-                    anchors.fill: parent
-                    color: Theme.highlightColor
-                    opacity: 0.1
-                }
-
-                PageHeader {
-                    id: header
-                    title: container.model.sourceDisplayName
-                }
-
-                // Contains the picture, body and social button
-                Item {
+            SocialContent {
+                avatar: container.model.icon
+                source: container.model.sourceDisplayName
+                timestamp: model.timestamp
+                body: model.body
+                socialButtons: Item {
                     anchors {
-                        top: header.bottom
                         left: parent.left
                         right: parent.right
-                        rightMargin: Theme.paddingLarge
                     }
                     height: childrenRect.height
 
-                    Face {
-                        id: face
-                        icon: container.model.icon
+                    SocialButton {
+                        anchors.left: parent.left
+                        enabled: !facebookLikes.loading && container.accessToken != ""
+                        onClicked: {
+                            if (!container.liked) {
+                                facebookLikes.node.like()
+                            } else {
+                                facebookLikes.node.unlike()
+                            }
+                        }
+                        icon: "image://theme/icon-m-like"
+                        //% "Unlike"
+                        text: container.liked ? qsTrId("lipstick-jolla-home-facebook-la-unlike")
+                                                //% "Like"
+                                              : qsTrId("lipstick-jolla-home-facebook-la-like")
+
                     }
 
-                    Column {
-                        anchors {
-                            left: face.right
-                            leftMargin: Theme.paddingMedium
-                            right: parent.right
-                        }
-
-                        Body {
-                            text: model.body
-                            time: formatter.formatDate(model.timestamp, Formatter.DurationElapsed)
-                        }
-
-                        Item {
-                            anchors {
-                                left: parent.left
-                                right: parent.right
-                            }
-                            height: childrenRect.height
-
-                            SocialButton {
-                                anchors.left: parent.left
-                                enabled: !facebookLikes.loading && container.accessToken != ""
-                                onClicked: {
-                                    if (!container.liked) {
-                                        facebookLikes.node.like()
-                                    } else {
-                                        facebookLikes.node.unlike()
-                                    }
-                                }
-                                icon: "image://theme/icon-m-like"
-                                //% "Unlike"
-                                text: container.liked ? qsTrId("lipstick-jolla-home-facebook-la-unlike")
-                                                        //% "Like"
-                                                      : qsTrId("lipstick-jolla-home-facebook-la-like")
-
-                            }
-
-                            SocialButton {
-                                anchors.right: parent.right
-                                enabled: !facebookLikes.loading && container.accessToken != ""
-                                icon: "image://theme/icon-m-chat"
-                                //% "Comment"
-                                text: qsTrId("lipstick-jolla-home-facebook-la-comment")
-                                onClicked: {
-                                    view.positionViewAtEnd()
-                                    // TODO: give focus to commentField
-                                }
-                            }
+                    SocialButton {
+                        id: commentButton
+                        anchors.right: parent.right
+                        enabled: facebookComments.status == Facebook.Idle
+                                 && container.accessToken != ""
+                        icon: "image://theme/icon-m-chat"
+                        //% "Comment"
+                        text: qsTrId("lipstick-jolla-home-facebook-la-comment")
+                        onClicked: {
+                            container.forceReplyFieldActiveFocus()
                         }
                     }
                 }
             }
 
-            MediaRow {
+            SocialMediaRow {
                 id: mediaRow
                 imageList: container.model.imageList
                 mediaName: container.mediaName
@@ -287,33 +247,7 @@ Page {
                 mediaDescription: container.mediaDescription
             }
 
-            Item {
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                }
-
-                height: container.likers != "" ? (likesLabel.height + 2 * Theme.paddingLarge)
-                                           : Theme.paddingLarge
-                opacity: container.likers != "" ? 1 : 0
-
-                Label {
-                    id: likesLabel
-                    anchors {
-                        left: parent.left
-                        leftMargin: Theme.paddingMedium
-                        right: parent.right
-                        rightMargin: Theme.paddingMedium
-                        verticalCenter: parent.verticalCenter
-                    }
-                    text: container.likers
-                    font.pixelSize: Theme.fontSizeSmall
-                    wrapMode: Text.WordWrap
-                }
-
-                Behavior on opacity { FadeAnimation {} }
-                Behavior on height { FadeAnimation {} }
-            }
+            SocialInfoLabel { text: container.likers }
         }
 
         delegate: Item {
@@ -382,53 +316,28 @@ Page {
             }
         }
 
-        footer: Item {
-            width: parent.width
-            height: commentContainer.height  + Theme.paddingMedium
-                    + (view.count != 0 ? Theme.paddingLarge : 0)
-            opacity: facebookComments.status == Facebook.Idle ? 1 : 0
-            Behavior on opacity { FadeAnimation {} }
+        footer: SocialReplyField {
+            id: replyField
+            displayMargins: facebookComments.count > 0
+            avatar: facebookMe.node != null && facebookMe.node.picture != null ? facebookMe.node.picture.url : ""
+            //% "Write a comment"
+            placeholderText: qsTrId("lipstick-jolla-home-facebook-ph-write-comment")
+            allowComment: facebookComments.status == Facebook.Idle
+            onEnterKeyClicked: {
+                facebookComments.node.uploadComment(comment.text)
+                facebookComments.repopulate()
+            }
 
-            Item {
-                id: commentContainer
-                height: childrenRect.height
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                    bottom: parent.bottom
-                    bottomMargin: Theme.paddingMedium
-                }
+            Connections {
+                target: container
+                onForceReplyFieldActiveFocus: replyField.forceActiveFocus()
+            }
 
-                Image {
-                    id: commentAvatar
-                    width: Theme.iconSizeMedium
-                    height: Theme.iconSizeMedium
-                    source: facebookMe.node != null && facebookMe.node.picture != null ? facebookMe.node.picture.url : ""
-                }
-
-                TextField {
-                    id: commentField
-                    anchors {
-                        left: commentAvatar.right
-                        right: parent.right
-                    }
-
-                    //% "Write a comment"
-                    placeholderText: qsTrId("lipstick-jolla-home-facebook-ph-write-comment")
-                    enabled: facebookComments.status == Facebook.Idle
-
-                    EnterKey.onClicked: {
-                        facebookComments.node.uploadComment(comment.text)
-                        facebookComments.repopulate()
-                    }
-
-                    Connections {
-                        target: facebookComments
-                        onStatusChanged: {
-                            if (facebookComments.status == Facebook.Idle) {
-                                commentField.text = ""
-                            }
-                        }
+            Connections {
+                target: facebookComments
+                onStatusChanged: {
+                    if (facebookComments.status == Facebook.Idle) {
+                        replyField.clear()
                     }
                 }
             }

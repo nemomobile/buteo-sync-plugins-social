@@ -60,6 +60,7 @@ private:
     MEventFeed *m_eventFeed;
     QStringList m_selfTuids; // twitter user id strings of "me" objects
     QMap<QString, QString> m_selfTScreenNames; // map of user id string to screen name
+    QMap<int, QString> m_accountProfileImage; // map of user profile images
 
     // for busy/inactive detection.
     void decrementSemaphore(int accountId);

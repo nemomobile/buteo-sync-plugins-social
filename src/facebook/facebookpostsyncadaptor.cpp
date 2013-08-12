@@ -60,13 +60,14 @@ static const char *FQL_QUERY = "{"\
 #define QUERY_EID_KEY QLatin1String("eid")
 static const int QUERY_SIZE = 1000;
 
+// TODO: Share this code
 static QString storedClientId()
 {
     char *cClientId = NULL;
     int success = SailfishKeyProvider_storedKey("facebook", "facebook-sync", "client_id", &cClientId);
     if (success != 0) {
         TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("FacebookCacheModel::clientId(): could not retrieve stored client id from SailfishKeyProvider")));
+                QString(QLatin1String("Facebook sync: could not retrieve stored client id from SailfishKeyProvider")));
         free(cClientId);
         return QString();
     }
@@ -524,6 +525,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                         icon = avatar.imageUrl().toString();
                     }
                 }
+
 
                 // Publish the post to the events feed.
                 qlonglong eventId = m_eventFeed->addItem(
