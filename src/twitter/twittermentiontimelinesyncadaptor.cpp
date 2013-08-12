@@ -36,10 +36,6 @@ TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService
     : TwitterDataTypeSyncAdaptor(syncService, SyncService::Notifications, parent)
     , m_contactFetchRequest(new QContactFetchRequest(this))
 {
-    //: The text displayed for Twitter notifications on the lock screen
-    //% "New Twitter notification!"
-    QString NOTIFICATION_CATEGORY_TRANSLATED_TEXT = qtTrId("qtn_social_notifications_new_twitter");
-
     // can sync, enabled
     m_enabled = true;
     m_status = SocialNetworkSyncAdaptor::Inactive;
@@ -137,6 +133,7 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
+
     QNetworkReply *reply = m_qnam->get(nreq);
     
     if (reply) {
@@ -162,7 +159,12 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
     int accountId = reply->property("accountId").toInt();
     QString oauthToken = reply->property("oauthToken").toString();
     QString oauthTokenSecret = reply->property("oauthTokenSecret").toString();
-    QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"), SyncService::dataType(SyncService::Notifications), QString::number(accountId));
+    QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"),
+                                           SyncService::dataType(SyncService::Notifications),
+                                           QString::number(accountId));
+    TRACE(SOCIALD_DEBUG,
+            QString(QLatin1String("Last sync:")) << lastSync);
+
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
@@ -181,6 +183,11 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
 
         bool needMorePages = true;
         bool postedNew = false;
+        int mentionsCount = 0;
+        QString body;
+        QString summary;
+        QDateTime timestamp;
+        QString link;
         for (int i = 0; i < data.size(); ++i) {
             QVariantMap currData = data.at(i).toMap();
             QDateTime createdTime = parseTwitterDateTime(currData.value(QLatin1String("created_at")).toString());
@@ -190,7 +197,7 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
             QString user_id = user.value(QLatin1String("id_str")).toString();
             QString user_name = user.value(QLatin1String("name")).toString();
             QString user_screen_name = user.value(QLatin1String("screen_name")).toString();
-            QString link = QLatin1String("https://twitter.com/") + user_screen_name + QLatin1String("/status/") + mention_id;
+            link = QLatin1String("https://twitter.com/") + user_screen_name + QLatin1String("/status/") + mention_id;
 
             // check to see if we need to post it to the notifications feed
             if (lastSync.isValid() && createdTime < lastSync) {
@@ -199,16 +206,12 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                         .arg(accountId) << "    " << createdTime << ":" << text);
                 needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent notifications will be even older.
-            } else if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
+            } else if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("notification for account %1 is more than a week old:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << text);
                 needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent notifications will be even older.
-            } else if (haveAlreadyPostedNotification(mention_id, text, createdTime)) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("notification for account %1 has already been posted:\n"))
-                        .arg(accountId) << "    " << createdTime << ":" << text);
             } else {
                 // XXX TODO: use twitter user id to look up the contact directly, instead of heuristic detection.
                 QString nameString = user_name;
@@ -245,39 +248,49 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                             .arg(originalNameString).arg(nameString).arg(avatar));
                 }
 
-                // post the notification to the notifications feed.
-                Notification *notif = new Notification;
-                notif->setCategory(QLatin1String("x-nemo.social.twitter.mention"));
-                notif->setSummary(text);
-                notif->setBody(text);
-                notif->setPreviewSummary(nameString);
-                notif->setPreviewBody(text);
-                notif->setItemCount(1);
-                notif->setTimestamp(createdTime);
-                notif->setRemoteDBusCallServiceName("org.sailfishos.browser");
-                notif->setRemoteDBusCallObjectPath("/");
-                notif->setRemoteDBusCallInterface("org.sailfishos.browser");
-                notif->setRemoteDBusCallMethodName("openUrl");
-                QStringList openUrlArgs; openUrlArgs << link;
-                notif->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
-                notif->publish();
-                qlonglong localId = (0 + notif->replacesId());
-                if (localId == 0) {
-                    // failed.
-                    TRACE(SOCIALD_ERROR,
-                            QString(QLatin1String("error: failed to publish notification: %1"))
-                            .arg(text));
-                } else {
-                    // and store the fact that we have synced it to the notifications feed.
-                    markSyncedDatum(QString(QLatin1String("twitter-notifications-%1")).arg(QString::number(localId)),
-                                    QLatin1String("twitter"), SyncService::dataType(SyncService::Notifications),
-                                    QString::number(accountId), createdTime, QDateTime::currentDateTime(),
-                                    mention_id);
-                }
+                body = nameString;
+                summary = text;
+                timestamp = createdTime;
+                mentionsCount ++;
+            }
+        }
 
-                // if we didn't post anything new, we don't try to fetch more.
-                postedNew = true;
-                delete notif;
+        if (mentionsCount > 0) {
+            // Search if we already have a notification
+            Notification *notification = createNotification(accountId);
+
+            // Set properties of the notification
+            notification->setItemCount(notification->itemCount() + mentionsCount);
+            notification->setRemoteDBusCallServiceName("org.sailfishos.browser");
+            notification->setRemoteDBusCallObjectPath("/");
+            notification->setRemoteDBusCallInterface("org.sailfishos.browser");
+            notification->setRemoteDBusCallMethodName("openUrl");
+            QStringList openUrlArgs;
+
+
+            if (notification->itemCount() == 1) {
+                notification->setTimestamp(timestamp);
+                notification->setSummary(summary);
+                notification->setBody(body);
+                openUrlArgs << link;
+            } else {
+                notification->setTimestamp(QDateTime::currentDateTimeUtc());
+                // TODO: maybe we should display the name of the account
+                //% "Twitter"
+                notification->setBody(qtTrId("qtn_social_notifications_twitter"));
+                //% "You received %n mentions"
+                notification->setSummary(qtTrId("qtn_social_notifications_n_mentions", notification->itemCount()));
+                openUrlArgs << QLatin1String("https://twitter.com/i/connect");
+            }
+            notification->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
+            notification->publish();
+
+            qlonglong localId = (0 + notification->replacesId());
+            if (localId == 0) {
+                // failed.
+                TRACE(SOCIALD_ERROR,
+                        QString(QLatin1String("error: failed to publish notification: %1"))
+                        .arg(body));
             }
         }
 
@@ -354,14 +367,6 @@ QContact TwitterMentionTimelineSyncAdaptor::findMatchingContact(const QString &n
     return QContact();
 }
 
-bool TwitterMentionTimelineSyncAdaptor::haveAlreadyPostedNotification(const QString &mentionId, const QString &text, const QDateTime &createdTime)
-{
-    Q_UNUSED(text);
-    Q_UNUSED(createdTime);
-
-    return (whenSyncedDatum(QLatin1String("twitter"), mentionId).isValid());
-}
-
 void TwitterMentionTimelineSyncAdaptor::incrementSemaphore(int accountId)
 {
     int semaphoreValue = m_accountSyncSemaphores.value(accountId);
@@ -415,4 +420,33 @@ void TwitterMentionTimelineSyncAdaptor::decrementSemaphore(int accountId)
             changeStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
+}
+
+Notification *TwitterMentionTimelineSyncAdaptor::createNotification(int accountId)
+{
+    Notification *notification = 0;
+    QList<QObject *> notifications = Notification::notifications();
+    foreach (QObject *object, notifications) {
+        Notification *castedNotification = static_cast<Notification *>(object);
+        if (castedNotification->category() == "x-nemo.social.twitter.mention"
+            && castedNotification->hintValue("x-nemo.sociald.account-id").toInt() == accountId) {
+            notification = castedNotification;
+            break;
+        }
+    }
+
+    if (notification) {
+        notifications.removeAll(notification);
+    }
+
+    qDeleteAll(notifications);
+
+    if (notification) {
+        return notification;
+    }
+
+    notification = new Notification(this);
+    notification->setCategory(QLatin1String("x-nemo.social.twitter.mention"));
+    notification->setHintValue("x-nemo.sociald.account-id", accountId);
+    return notification;
 }
