@@ -31,14 +31,13 @@ class FacebookDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
 public:
     FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent);
     virtual ~FacebookDataTypeSyncAdaptor();
-    virtual void sync(const QString &dataType);
+    virtual void sync(const QString &dataTypeString);
 
 protected:
     static QJsonObject parseReplyData(const QByteArray &replyData, bool *ok);
     virtual void updateDataForAccounts(const QList<int> &accountIds);
     virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0;    // must at least implement these two
     virtual void beginSync(int accountId, const QString &accessToken) = 0; // must at least implement these two
-    SyncService::DataType m_dataType;
 
 protected Q_SLOTS:
     virtual void errorHandler(QNetworkReply::NetworkError err);

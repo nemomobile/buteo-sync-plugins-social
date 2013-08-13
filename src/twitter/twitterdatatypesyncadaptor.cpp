@@ -33,8 +33,7 @@
 #include <SignOn/SessionData>
 
 TwitterDataTypeSyncAdaptor::TwitterDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
-    : SocialNetworkSyncAdaptor("twitter", syncService, parent)
-    , m_dataType(dataType)
+    : SocialNetworkSyncAdaptor("twitter", dataType, syncService, parent)
 {
 }
 
@@ -42,13 +41,13 @@ TwitterDataTypeSyncAdaptor::~TwitterDataTypeSyncAdaptor()
 {
 }
 
-void TwitterDataTypeSyncAdaptor::sync(const QString &dataType)
+void TwitterDataTypeSyncAdaptor::sync(const QString &dataTypeString)
 {
-    if (dataType != SyncService::dataType(m_dataType)) {
+    if (dataTypeString != SyncService::dataType(dataType)) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: Twitter %1 sync adaptor was asked to sync %2"))
-                .arg(SyncService::dataType(m_dataType)).arg(dataType));
-        changeStatus(SocialNetworkSyncAdaptor::Error);
+                .arg(SyncService::dataType(dataType)).arg(dataTypeString));
+        setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
 
@@ -58,20 +57,20 @@ void TwitterDataTypeSyncAdaptor::sync(const QString &dataType)
     // 3) for existing accounts, pull new data for the existing account
 
     QList<int> newIds, purgeIds, updateIds;
-    checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
+    checkAccounts(dataType, &newIds, &purgeIds, &updateIds);
     purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
     updateDataForAccounts(newIds);
     updateDataForAccounts(updateIds);
 
     TRACE(SOCIALD_DEBUG,
             QString(QLatin1String("successfully triggered sync of %1: %2 purged, %3 new, %4 updated accounts"))
-            .arg(SyncService::dataType(m_dataType)).arg(purgeIds.size()).arg(newIds.size()).arg(updateIds.size()));
+            .arg(SyncService::dataType(dataType)).arg(purgeIds.size()).arg(newIds.size()).arg(updateIds.size()));
 }
 
 void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
-        Account *account = m_accountManager->account(accountId);
+        Account *account = accountManager->account(accountId);
         if (!account) {
             TRACE(SOCIALD_ERROR,
                     QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
@@ -104,7 +103,7 @@ void TwitterDataTypeSyncAdaptor::signOnError(const QString &err)
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
           .arg(account->identifier()) << err);
     account->disconnect(this);
-    changeStatus(SocialNetworkSyncAdaptor::Error);
+    setStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void TwitterDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -140,9 +139,9 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
-            .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(err));
+            .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
     // the error is an incomprehensible enum value, but that doesn't matter to users.
-    changeStatus(SocialNetworkSyncAdaptor::Error);
+    setStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void TwitterDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
@@ -156,7 +155,7 @@ void TwitterDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     }
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
-            .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
+            .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
 }
 
 // This function taken from http://qt-project.org/wiki/HMAC-SHA1 which is in the public domain

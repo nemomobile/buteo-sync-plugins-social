@@ -35,7 +35,8 @@ public:
     };
 
 public:
-    SocialNetworkSyncAdaptor(QString serviceName, SyncService *syncService, QObject *parent);
+    SocialNetworkSyncAdaptor(QString serviceName, SyncService::DataType dataType,
+                             SyncService *syncService, QObject *parent);
     virtual ~SocialNetworkSyncAdaptor();
 
     Status status() const;
@@ -58,16 +59,24 @@ protected:
     QStringList syncedDatumLocalIdentifiers(const QString &serviceName, const QString &dataType, const QString &accountId) const;
     void beginTransaction();
     void endTransaction();
-    void changeStatus(Status status);
+    void setStatus(Status status);
+    void setInitialActive(bool enabled);
 
+    // Semaphore system
+    const SyncService::DataType dataType;
+    void decrementSemaphore(int accountId);
+    void incrementSemaphore(int accountId);
+
+    AccountManager *const accountManager;
+    QNetworkAccessManager * const networkAccessManager; // Do not allow the pointer to be changed
+
+
+private:
     Status m_status;
     bool m_enabled;
     QString m_serviceName;
-    AccountManager *m_accountManager;
-    QNetworkAccessManager *m_qnam;
-
-private:
-    SyncService *q;
+    SyncService *m_syncService;
+    QMap<int, int> m_accountSyncSemaphores;
 };
 
 #endif // SOCIALNETWORKSYNCADAPTOR_H

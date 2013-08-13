@@ -50,15 +50,10 @@ private Q_SLOTS:
     void contactFetchStateChangedHandler(QContactAbstractRequest::State newState);
 
 private:
+    Notification * createNotification(int accountId);
     QContactManager m_contactManager;
     QList<QContact> m_contacts;
     QContactFetchRequest *m_contactFetchRequest;
-
-    // for busy/inactive detection.
-    void decrementSemaphore(int accountId);
-    void incrementSemaphore(int accountId);
-    Notification * createNotification(int accountId);
-    QMap<int, int> m_accountSyncSemaphores;
 };
 
 #endif // TWITTERMENTIONTIMELINESYNCADAPTOR_H

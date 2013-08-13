@@ -37,8 +37,7 @@ TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService
     , m_contactFetchRequest(new QContactFetchRequest(this))
 {
     // can sync, enabled
-    m_enabled = true;
-    m_status = SocialNetworkSyncAdaptor::Inactive;
+    setInitialActive(true);
 
     // fetch all contacts.  We detect which contact a mention came from.
     // XXX TODO: we really shouldn't do this, we should do it on demand instead
@@ -134,7 +133,7 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
 
-    QNetworkReply *reply = m_qnam->get(nreq);
+    QNetworkReply *reply = networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -365,61 +364,6 @@ QContact TwitterMentionTimelineSyncAdaptor::findMatchingContact(const QString &n
             .arg(nameString));
 
     return QContact();
-}
-
-void TwitterMentionTimelineSyncAdaptor::incrementSemaphore(int accountId)
-{
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue += 1;
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-
-    if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        changeStatus(SocialNetworkSyncAdaptor::Busy);
-    }
-}
-
-void TwitterMentionTimelineSyncAdaptor::decrementSemaphore(int accountId)
-{
-    if (!m_accountSyncSemaphores.contains(accountId)) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
-        return;
-    }
-
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue -= 1;
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-    if (semaphoreValue < 0) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
-        return;
-    }
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-
-    if (semaphoreValue == 0) {
-        // finished all outstanding requests for Notifications sync for this account.
-        // update the sync time for this user's Notifications in the global sociald database.
-        updateLastSyncTimestamp(QLatin1String("twitter"),
-                                SyncService::dataType(SyncService::Notifications),
-                                QString::number(accountId),
-                                QDateTime::currentDateTime());
-
-        // if all outstanding requests for all accounts have finished,
-        // then update our status to Inactive / ready to handle more sync requests.
-        bool allAreZero = true;
-        QList<int> semaphores = m_accountSyncSemaphores.values();
-        foreach (int sv, semaphores) {
-            if (sv != 0) {
-                allAreZero = false;
-                break;
-            }
-        }
-
-        if (allAreZero) {
-            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Twitter Notifications sync at: %1"))
-                                       .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            changeStatus(SocialNetworkSyncAdaptor::Inactive);
-        }
-    }
 }
 
 Notification *TwitterMentionTimelineSyncAdaptor::createNotification(int accountId)

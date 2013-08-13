@@ -53,6 +53,7 @@ private Q_SLOTS:
     void contactFetchStateChangedHandler(QContactAbstractRequest::State newState);
 
 private:
+    QMap<int, QString> m_accountProfileImage;
     QContactManager m_contactManager;
     QList<QContact> m_contacts;
     QContact m_selfContact;
@@ -60,12 +61,6 @@ private:
     MEventFeed *m_eventFeed;
     QStringList m_selfTuids; // twitter user id strings of "me" objects
     QMap<QString, QString> m_selfTScreenNames; // map of user id string to screen name
-    QMap<int, QString> m_accountProfileImage; // map of user profile images
-
-    // for busy/inactive detection.
-    void decrementSemaphore(int accountId);
-    void incrementSemaphore(int accountId);
-    QMap<int, int> m_accountSyncSemaphores;
 };
 
 #endif // TWITTERHOMETIMELINESYNCADAPTOR_H

@@ -23,7 +23,7 @@ class SyncService : public QObject
 {
     Q_OBJECT
 
-public:    
+public:
     enum DataType {
         Contacts = 1,   // "Contacts"
         Calendars,      // "Calendars"

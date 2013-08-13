@@ -56,7 +56,7 @@ TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *sync
     , m_eventFeed(MEventFeed::instance())
 {
     if (!m_eventFeed) {
-        m_enabled = false;
+        setInitialActive(false);
         return; // can't sync to the local device's event feed, so not enabled.
     }
 
@@ -78,8 +78,7 @@ TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *sync
     }
 
     // can sync, enabled
-    m_enabled = true;
-    m_status = SocialNetworkSyncAdaptor::Inactive;
+    setInitialActive(true);
 }
 
 TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
@@ -152,7 +151,7 @@ void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oau
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = m_qnam->get(nreq);
+    QNetworkReply *reply = networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -191,7 +190,7 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = m_qnam->get(nreq);
+    QNetworkReply *reply = networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -455,59 +454,4 @@ bool TwitterHomeTimelineSyncAdaptor::haveAlreadyPostedEvent(const QString &postI
     Q_UNUSED(createdTime);
 
     return (whenSyncedDatum(QLatin1String("twitter"), postId).isValid());
-}
-
-void TwitterHomeTimelineSyncAdaptor::incrementSemaphore(int accountId)
-{
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue += 1;
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-
-    if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        changeStatus(SocialNetworkSyncAdaptor::Busy);
-    }
-}
-
-void TwitterHomeTimelineSyncAdaptor::decrementSemaphore(int accountId)
-{
-    if (!m_accountSyncSemaphores.contains(accountId)) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
-        return;
-    }
-
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue -= 1;
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-    if (semaphoreValue < 0) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
-        return;
-    }
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-
-    if (semaphoreValue == 0) {
-        // finished all outstanding requests for Posts sync for this account.
-        // update the sync time for this user's Posts in the global sociald database.
-        updateLastSyncTimestamp(QLatin1String("twitter"),
-                                SyncService::dataType(SyncService::Posts),
-                                QString::number(accountId),
-                                QDateTime::currentDateTime());
-
-        // if all outstanding requests for all accounts have finished,
-        // then update our status to Inactive / ready to handle more sync requests.
-        bool allAreZero = true;
-        QList<int> semaphores = m_accountSyncSemaphores.values();
-        foreach (int sv, semaphores) {
-            if (sv != 0) {
-                allAreZero = false;
-                break;
-            }
-        }
-
-        if (allAreZero) {
-            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Twitter Posts sync at: %1"))
-                                       .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            changeStatus(SocialNetworkSyncAdaptor::Inactive);
-        }
-    }
 }

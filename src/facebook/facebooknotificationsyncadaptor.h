@@ -40,11 +40,6 @@ private Q_SLOTS:
     void finishedHandler();
 
 private:
-    // for busy/inactive detection.
-    void decrementSemaphore(int accountId);
-    void incrementSemaphore(int accountId);
-    QMap<int, int> m_accountSyncSemaphores;
-
     Notification *existingNemoNotification(int accountId);
 };
 

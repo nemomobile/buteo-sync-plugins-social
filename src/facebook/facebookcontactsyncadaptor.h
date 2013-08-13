@@ -91,11 +91,6 @@ private:
     QList<AvatarRequestData> m_avatarsToRequest;
     QList<AvatarReplyData> m_avatarsToSave;
     int m_avatarsSemaphore;
-
-    // for busy/inactive detection.
-    void decrementSemaphore(int accountId);
-    void incrementSemaphore(int accountId);
-    QMap<int, int> m_accountSyncSemaphores;
 };
 
 #endif // FACEBOOKCONTACTSYNCADAPTOR_H
