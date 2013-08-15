@@ -32,6 +32,10 @@ public:
     QMap<QString, QStringList> m_supportedDataTypes;
 
     QSqlDatabase m_db;
+private:
+    bool openDb(const QString &connectionName);
+    int checkDbVersion();
+    bool createTables();
 };
 
 #endif // SYNCSERVICE_P_H

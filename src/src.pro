@@ -41,6 +41,7 @@ DEFINES += 'SOCIALD_SYNC_DATABASE_NAME=\'\"sociald.db\"\''
 
 HEADERS += \
     $$PWD/buteosocialsync.h \
+    $$PWD/eventfeedhelper_p.h \
     $$PWD/socialnetworksyncadaptor.h \
     $$PWD/syncservice.h \
     $$PWD/syncservice_p.h \
@@ -61,14 +62,16 @@ shared_eventfeed.files =    $$PWD/eventfeed/SocialAvatar.qml \
                             $$PWD/eventfeed/SocialContent.qml \
                             $$PWD/eventfeed/SocialMediaRow.qml \
                             $$PWD/eventfeed/SocialInfoLabel.qml \
-                            $$PWD/eventfeed/SocialReplyField.qml
+                            $$PWD/eventfeed/SocialReplyField.qml \
+                            $$PWD/eventfeed/SocialAccountPullDownMenu.qml \
+                            $$PWD/eventfeed/SocialAccountPage.qml
 shared_eventfeed.path = /usr/share/lipstick/eventfeed/shared/
 
 
 # translations
 TS_FILE = $$OUT_PWD/sociald.ts
 EE_QM = $$OUT_PWD/sociald_eng_en.qm
-ts.commands += lupdate -no-recursive $$PWD/facebook $$PWD/twitter -ts $$TS_FILE
+ts.commands += lupdate -no-recursive $$PWD/eventfeed $$PWD/facebook $$PWD/twitter -ts $$TS_FILE
 ts.CONFIG += no_check_exist
 ts.output = $$TS_FILE
 ts.input = .

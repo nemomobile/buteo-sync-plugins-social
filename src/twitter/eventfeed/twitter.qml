@@ -11,19 +11,28 @@ Page {
     property variant model
     property string nodeIdentifier
     property string retweeter
+    property int accountCount
+    property int accountIndex
 
     onModelChanged: {
         nodeIdentifier = container.model.metaData["nodeId"]
         twitter.consumerKey = container.model.metaData["consumerKey"]
         twitter.consumerSecret = container.model.metaData["consumerSecret"]
         retweeter = container.model.metaData["retweeter"]
-        replyField.avatar = container.model.metaData["profilePicture"]
+
+        accountCount = container.model.metaData["accountIdCount"]
+        account.identifier = container.model.metaData["accountId0"]
+        replyField.avatar = container.model.metaData["profilePicture0"]
     }
 
     Account {
-        identifier: container.model != null ? container.model.metaData["accountId"] : -1
-        onStatusChanged: {
-            if (status == Account.Initialized) {
+        id: account
+        function performSignIn() {
+            if (status == Account.Initialized && identifier != -1) {
+                // Reset token
+                twitter.oauthToken = ""
+                twitter.oauthTokenSecret = ""
+
                 // Sign in, and get credentials.
                 var params = signInParameters("twitter-sync")
                 params.setParameter("ConsumerKey", twitter.consumerKey)
@@ -32,6 +41,10 @@ Page {
                 signIn("Jolla", "Jolla", params)
             }
         }
+        identifier: -1
+
+        onStatusChanged: performSignIn()
+        onIdentifierChanged: performSignIn()
 
         onSignInResponse: {
             var accessTok = data["AccessToken"]
@@ -131,141 +144,162 @@ Page {
         }
     }
 
-    Column {
-        width: container.width
+    SilicaFlickable {
+        id: flickable
+        anchors.fill: parent
+        contentHeight: column.height
 
-        SocialContent {
-            avatar: container.model.icon
-            source: container.model.sourceDisplayName
-            timestamp: model.timestamp
-            body: model.body
-            // The commented code below might still be useful, to display the
-            // "follow" button if we finally decide to keep it.
-            /*
-            belowAvatar: MouseArea {
-                id: followButton
-                anchors.fill: parent
+        SocialAccountPullDownMenu {
+            pageContainer: container.pageContainer
+            metaData: container.model.metaData
+            onCurrentAccountChanged: account.identifier = currentAccount
+            onCurrentAccountIndexChanged: replyField.avatar = model.metaData["profilePicture" + currentAccountIndex]
+            //% "Select account"
+            selectAccountString: qsTrId("lipstick-jolla-home-la-select-account")
+            //% "Change to %1"
+            changeToAccountString: qsTrId("lipstick-jolla-home-la-change-to-account")
+            //% "Account: %1"
+            accountString: qsTrId("lipstick-jolla-home-la-account-name")
+        }
 
-                Rectangle {
-                    id: followButtonBackground
-                    anchors {
-                        fill: followButtonLabel
-                        margins: -Theme.paddingSmall
+        Column {
+            id: column
+            width: flickable.width
+
+            SocialContent {
+                avatar: container.model.icon
+                source: container.model.title
+                timestamp: model.timestamp
+                body: model.body
+                // The commented code below might still be useful, to display the
+                // "follow" button if we finally decide to keep it.
+                /*
+                belowAvatar: MouseArea {
+                    id: followButton
+                    anchors.fill: parent
+
+                    Rectangle {
+                        id: followButtonBackground
+                        anchors {
+                            fill: followButtonLabel
+                            margins: -Theme.paddingSmall
+                        }
+                        color: !followButton.pressed ? Theme.rgba(Theme.primaryColor, 0.2)
+                                                     : Theme.rgba(Theme.highlightColor, 0.3)
                     }
-                    color: !followButton.pressed ? Theme.rgba(Theme.primaryColor, 0.2)
-                                                 : Theme.rgba(Theme.highlightColor, 0.3)
-                }
 
-                Label {
-                    id: followButtonLabel
-                    anchors.centerIn: parent
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    //% "Follow"
-                    text: qsTrId("lipstick-jolla-home-twitter-la-follow")
-                    color: !followButton.pressed ? Theme.primaryColor : Theme.highlightColor
-                }
-            }
-            */
-            belowAvatar: MouseArea {
-                id: favoriteButton
-                property bool favorited: tweet.favorited
-                enabled: tweet.status == Twitter.Idle && twitter.credentialsReady
-                anchors.centerIn: parent
-                width: icon.width + 2 * Theme.paddingLarge
-                height: icon.width + 2 * Theme.paddingLarge
-                onClicked: {
-                    tweet.favoriting = true
-                    if (favorited) {
-                        tweet.unfavorite()
-                    } else {
-                        tweet.favorite()
+                    Label {
+                        id: followButtonLabel
+                        anchors.centerIn: parent
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        //% "Follow"
+                        text: qsTrId("lipstick-jolla-home-twitter-la-follow")
+                        color: !followButton.pressed ? Theme.primaryColor : Theme.highlightColor
                     }
                 }
-                Image {
-                    id: icon
-                    anchors.centerIn: parent
-                    opacity: favoriteButton.enabled ? 1 : 0.5
-                    source: !favoriteButton.favorited ? "image://theme/icon-m-favorite"
-                                                      : "image://theme/icon-m-favorite-selected"
-                }
-            }
-            socialButtons: Item {
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                }
-                height: childrenRect.height
-
-                SocialButton {
-                    property bool retweeted: tweet.retweeted
-                    anchors.left: parent.left
+                */
+                belowAvatar: MouseArea {
+                    id: favoriteButton
+                    property bool favorited: tweet.favorited
                     enabled: tweet.status == Twitter.Idle && twitter.credentialsReady
-                             && !retweeted
+                    anchors.centerIn: parent
+                    width: icon.width + 2 * Theme.paddingLarge
+                    height: icon.width + 2 * Theme.paddingLarge
                     onClicked: {
-                        tweet.retweeting = true
-                        tweet.uploadRetweet()
+                        tweet.favoriting = true
+                        if (favorited) {
+                            tweet.unfavorite()
+                        } else {
+                            tweet.favorite()
+                        }
                     }
-                    icon: "image://theme/icon-m-sync"
-                    //% "Retweet"
-                    text: !retweeted ? qsTrId("lipstick-jolla-home-twitter-la-retweet")
-                                      //% "Retweeted"
-                                      : qsTrId("lipstick-jolla-home-twitter-la-retweeted")
+                    Image {
+                        id: icon
+                        anchors.centerIn: parent
+                        opacity: favoriteButton.enabled ? 1 : 0.5
+                        source: !favoriteButton.favorited ? "image://theme/icon-m-favorite"
+                                                          : "image://theme/icon-m-favorite-selected"
+                    }
                 }
+                socialButtons: Item {
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                    }
+                    height: childrenRect.height
 
-                SocialButton {
-                    anchors.right: parent.right
-                    enabled: tweet.status == Twitter.Idle && twitter.credentialsReady
-                    icon: "image://theme/icon-m-chat"
-                    //% "Reply"
-                    text: qsTrId("lipstick-jolla-home-twitter-la-reply")
-                    onClicked: replyField.forceActiveFocus()
+                    SocialButton {
+                        property bool retweeted: tweet.retweeted
+                        anchors.left: parent.left
+                        enabled: tweet.status == Twitter.Idle && twitter.credentialsReady
+                                 && !retweeted
+                        onClicked: {
+                            tweet.retweeting = true
+                            tweet.uploadRetweet()
+                        }
+                        icon: "image://theme/icon-m-sync"
+                        //% "Retweet"
+                        text: !retweeted ? qsTrId("lipstick-jolla-home-twitter-la-retweet")
+                                          //% "Retweeted"
+                                          : qsTrId("lipstick-jolla-home-twitter-la-retweeted")
+                    }
+
+                    SocialButton {
+                        anchors.right: parent.right
+                        enabled: tweet.status == Twitter.Idle && twitter.credentialsReady
+                        icon: "image://theme/icon-m-chat"
+                        //% "Reply"
+                        text: qsTrId("lipstick-jolla-home-twitter-la-reply")
+                        onClicked: replyField.forceActiveFocus()
+                    }
                 }
             }
-        }
 
-        SocialMediaRow {
-            id: mediaRow
-            imageList: container.model.imageList
-        }
+            SocialMediaRow {
+                id: mediaRow
+                imageList: container.model.imageList
+            }
 
-        SocialInfoLabel {
-            id: infoLabel
-            function updateInfoLabel() {
-                //% "%n retweets"
-                var retweet = qsTrId("lipstick-jolla-home-twitter-retweets", tweet.retweetCount)
-                //% "%n favourited"
-                var favourited = qsTrId("lipstick-jolla-home-twitter-favourited", tweet.favoriteCount)
-                if (tweet.retweetCount > 0 && tweet.favoriteCount > 0) {
-                    //% "%1 and %2"
-                    text = qsTrId("lipstick-jolla-home-twitter-retweets-favourited-link").arg(retweet).arg(favourited)
-                } else if (tweet.retweetCount > 0 && tweet.favoriteCount == 0) {
-                    text = retweet
-                } else if (tweet.retweetCount == 0 && tweet.favoriteCount > 0) {
-                    text = favourited
-                } else {
-                    text = ""
-                }
-
-                if (tweet.replied) {
-                    if (text.length > 0) {
-                        text += "\n"
+            SocialInfoLabel {
+                id: infoLabel
+                function updateInfoLabel() {
+                    //% "%n retweets"
+                    var retweet = qsTrId("lipstick-jolla-home-twitter-retweets", tweet.retweetCount)
+                    //% "%n favourited"
+                    var favourited = qsTrId("lipstick-jolla-home-twitter-favourited", tweet.favoriteCount)
+                    if (tweet.retweetCount > 0 && tweet.favoriteCount > 0) {
+                        //% "%1 and %2"
+                        text = qsTrId("lipstick-jolla-home-twitter-retweets-favourited-link").arg(retweet).arg(favourited)
+                    } else if (tweet.retweetCount > 0 && tweet.favoriteCount == 0) {
+                        text = retweet
+                    } else if (tweet.retweetCount == 0 && tweet.favoriteCount > 0) {
+                        text = favourited
+                    } else {
+                        text = ""
                     }
-                    //% "You replied to this Tweet"
-                    text += qsTrId("lipstick-jolla-home-twitter-replied-uploaded")
+
+                    if (tweet.replied) {
+                        if (text.length > 0) {
+                            text += "\n"
+                        }
+                        //% "You replied to this Tweet"
+                        text += qsTrId("lipstick-jolla-home-twitter-replied-uploaded")
+                    }
                 }
             }
-        }
 
-        SocialReplyField {
-            id: replyField
-            enabled: !tweet.replying && twitter.credentialsReady
-            //% "Write a reply"
-            placeholderText: qsTrId("lipstick-jolla-home-twitter-ph-write-reply")
-            allowComment: tweet.status == Facebook.Idle
-            onEnterKeyClicked: {
-                tweet.uploadReply("@" + tweet.user.screenName + " " + text)
-                tweet.replying = true
+            SocialReplyField {
+                id: replyField
+                enabled: !tweet.replying && twitter.credentialsReady
+                //% "Write a reply"
+                placeholderText: qsTrId("lipstick-jolla-home-twitter-ph-write-reply")
+                allowComment: tweet.status == Facebook.Idle
+                onEnterKeyClicked: {
+                    tweet.uploadReply("@" + tweet.user.screenName + " " + text)
+                    tweet.replying = true
+                }
             }
         }
     }
+
 }

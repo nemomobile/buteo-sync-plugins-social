@@ -22,7 +22,9 @@
 #include <QtContacts/QContactPresence>
 #include <QtContacts/QContactAvatar>
 
-//meegotouchevents/meventfeed
+#include "eventfeedhelper_p.h"
+
+// meegotouchevents/meventfeed
 #include <meventfeed.h>
 
 // sailfish-components-accounts-qt5
@@ -52,29 +54,10 @@ static QString storedSecret(const char *key)
 
 TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *syncService, QObject *parent)
     : TwitterDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
-    , m_contactFetchRequest(new QContactFetchRequest(this))
-    , m_eventFeed(MEventFeed::instance())
 {
-    if (!m_eventFeed) {
+    if (!MEventFeed::instance()) {
         setInitialActive(false);
         return; // can't sync to the local device's event feed, so not enabled.
-    }
-
-    // fetch all contacts.  We detect which contact a event came from.
-    // XXX TODO: we really shouldn't do this, we should do it on demand instead
-    // of holding the contacts in memory.
-    if (m_contactFetchRequest) {
-        QContactFetchHint cfh;
-        cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-        cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
-                               << QContactDetail::TypeAvatar
-                               << QContactDetail::TypeName
-                               << QContactDetail::TypeNickname
-                               << QContactDetail::TypePresence);
-        m_contactFetchRequest->setFetchHint(cfh);
-        m_contactFetchRequest->setManager(&m_contactManager);
-        connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
-        m_contactFetchRequest->start();
     }
 
     // can sync, enabled
@@ -83,24 +66,6 @@ TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *sync
 
 TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
 {
-}
-
-void TwitterHomeTimelineSyncAdaptor::sync(const QString &dataType)
-{
-    // refresh local cache of contacts.
-    // we do this asynchronous request in parallel to the sync code below
-    // since the network request round-trip times should far exceed the
-    // local database fetch.  If not, then the current sync run will
-    // still work, but the "post is from which contact" detection
-    // will be using slightly stale data.
-    if (m_contactFetchRequest &&
-            (m_contactFetchRequest->state() == QContactAbstractRequest::InactiveState ||
-             m_contactFetchRequest->state() == QContactAbstractRequest::FinishedState)) {
-        m_contactFetchRequest->start();
-    }
-
-    // call superclass impl.
-    TwitterDataTypeSyncAdaptor::sync(dataType);
 }
 
 void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
@@ -117,7 +82,7 @@ void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &p
             QString eventIdStr = pdi.mid(prefixLen); // pdi is of form: "twitter-posts-EVENTID"
             qlonglong eventId = eventIdStr.toLongLong(&ok);
             if (ok) {
-                m_eventFeed->removeItem(eventId);
+                MEventFeed::instance()->removeItem(eventId);
             } else {
                 TRACE(SOCIALD_ERROR,
                         QString(QLatin1String("error: unable to convert event id string to int: %1"))
@@ -170,7 +135,9 @@ void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oau
     }
 }
 
-void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &sinceTweetId, const QString &fromUserId)
+void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &oauthToken,
+                                                  const QString &oauthTokenSecret,
+                                                  const QString &sinceTweetId, const QString &fromUserId)
 {
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("count")), QString(QLatin1String("50"))));
@@ -280,15 +247,18 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
 
         bool needMorePages = true;
         bool postedNew = false;
+        QList<SyncedDatum> syncedData;
+        int prefixLen = QString(SOCIALD_TWITTER_POSTS_ID_PREFIX).size();
+
         for (int i = 0; i < data.size(); ++i) {
             // these are the fields we eventually need to fill out:
-            QString eventTitle;
-            QString eventBody;
-            QStringList eventImageList;
+            QString title;
+            QString body;
+            QStringList imageList;
             QDateTime eventTimestamp;
-            QString eventFooter;
-            bool eventIsVideo;
-            QString eventUrl;
+            QString footer;
+            bool isVideo;
+            QString url;
 
             QString retweeter;
 
@@ -318,78 +288,65 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 foreach (QVariant mediaVariant, mediaList) {
                     QVariantMap mediaObject = mediaVariant.toMap();
                     if (mediaObject.contains(QLatin1String("media_url_https"))) {
-                        eventImageList.append(mediaObject.value(QLatin1String("media_url_https")).toString());
+                        imageList.append(mediaObject.value(QLatin1String("media_url_https")).toString());
                     }
                 }
             }
 
-            eventTitle = userName;
-            eventBody = text;
+            title = userName;
+            body = text;
             eventTimestamp = createdTime;
-            eventIsVideo = false; // XXX TODO: Twitter Vine posts?
-            eventUrl = QLatin1String("https://twitter.com/") + screenName + QLatin1String("/status/") + postId;
+            isVideo = false; // XXX TODO: Twitter Vine posts?
+            url = QLatin1String("https://twitter.com/") + screenName + QLatin1String("/status/") + postId;
 
             // check to see if we need to post it to the events feed
             if (lastSync.isValid() && createdTime < lastSync) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 came after last sync:"))
-                        .arg(accountId) << "    " << createdTime << ":" << eventBody);
+                        .arg(accountId) << "    " << createdTime << ":" << body);
                 needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
             } else if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 is more than a week old:\n"))
-                        .arg(accountId) << "    " << createdTime << ":" << eventBody);
+                        .arg(accountId) << "    " << createdTime << ":" << body);
                 needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
-            } else if (haveAlreadyPostedEvent(postId, eventBody, createdTime)) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("event for account %1 has already been posted:\n"))
-                        .arg(accountId) << "    " << createdTime << ":" << eventBody);
             } else {
+
+
+
+
                 QVariantMap metaData;
-                metaData.insert("accountId", accountId);
                 metaData.insert("consumerKey", storedSecret("consumer_key"));
                 metaData.insert("consumerSecret", storedSecret("consumer_secret"));
                 metaData.insert("nodeId", postId);
                 metaData.insert("retweeter", retweeter);
-                metaData.insert("profilePicture", m_accountProfileImage.value(accountId));
+                QString localIdentifier = syncedDatumLocalIdentifier(serviceName(), SyncService::dataType(dataType), postId).mid(prefixLen);
 
-
-                // publish the post to the events feed.
-                qlonglong eventId = m_eventFeed->addItem(
-                        icon,
-                        eventTitle,
-                        eventBody,
-                        eventImageList,
-                        createdTime,
-                        eventFooter,
-                        eventIsVideo,
-                        eventUrl,
-                        SOCIALD_TWITTER_POSTS_GROUPNAME, // sourceName
-                        QLatin1String("Twitter"), // sourceDisplayName // XXX TODO: per-account?
-                        metaData);
-                if (eventId == 0) {
-                    // failed.
-                    TRACE(SOCIALD_ERROR,
-                            QString(QLatin1String("error: failed to publish post/feed event: %1"))
-                            .arg(eventBody));
-                } else {
-                    // and store the fact that we have synced it to the events feed.
-                    markSyncedDatum(QString(QLatin1String("twitter-posts-%1")).arg(QString::number(eventId)),
-                                    QLatin1String("twitter"), SyncService::dataType(SyncService::Posts),
-                                    QString::number(accountId), createdTime, QDateTime::currentDateTime(),
-                                    postId);
+                QList<int> accountIds;
+                if (!localIdentifier.isEmpty()) {
+                    accountIds.append(syncedDatumAccountIds(QString(SOCIALD_TWITTER_POSTS_ID_PREFIX + localIdentifier)));
+                }
+                if (!accountIds.contains(accountId)) {
+                    accountIds.append(accountId);
                 }
 
-                // if we didn't post anything new, we don't try to fetch more.
-                postedNew = true;
+                EventFeedHelper::manageEvent(icon, title, body, imageList, createdTime,
+                                             footer, isVideo, url, serviceName(),
+                                             // TODO: translate the string below
+                                             QLatin1String("Twitter"), metaData, accountId,
+                                             accountIds, m_accountProfileImage, localIdentifier,
+                                             SOCIALD_TWITTER_POSTS_ID_PREFIX, dataType, postId,
+                                             syncedData);
             }
         }
 
         if (needMorePages && postedNew) {
             // XXX TODO: paging?
         }
+
+        markSyncedData(syncedData);
     } else {
         // error occurred during request.
         TRACE(SOCIALD_ERROR,
@@ -399,59 +356,4 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
-}
-
-void TwitterHomeTimelineSyncAdaptor::contactFetchStateChangedHandler(QContactAbstractRequest::State newState)
-{
-    // update our local cache of contacts.
-    if (m_contactFetchRequest && newState == QContactAbstractRequest::FinishedState) {
-        m_contacts = m_contactFetchRequest->contacts();
-        m_selfContact = m_contactManager.contact(m_contactManager.selfContactId());
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("finished refreshing local cache of contacts, have %1"))
-                .arg(m_contacts.size()));
-    }
-}
-
-bool TwitterHomeTimelineSyncAdaptor::fromIsSelfContact(const QString &fromName, const QString &fromTwUid) const
-{
-    // XXX TODO: look this up from QtContacts database instead (saves one request round trip time)
-    if (m_selfTuids.contains(fromTwUid)) {
-        return true;
-    }
-
-    // fall back to heuristic matching.
-    QStringList firstAndLast = fromName.split(' '); // TODO: better detection of FN/LN
-    QContactName scn = m_selfContact.detail<QContactName>();
-    if ((!fromName.isEmpty() && scn.value<QString>(QContactName__FieldCustomLabel) == fromName) ||
-            (firstAndLast.size() >= 2 &&
-             scn.firstName() == firstAndLast.at(0) &&
-             scn.lastName() == firstAndLast.at(firstAndLast.size()-1))) {
-        return true;
-    }
-
-    QList<QContactNickname> nicknames = m_selfContact.details<QContactNickname>();
-    foreach (const QContactNickname &n, nicknames) {
-        if (!fromName.isEmpty() && n.nickname() == fromName) {
-            return true;
-        }
-    }
-
-    QList<QContactPresence> presences = m_selfContact.details<QContactPresence>();
-    foreach (const QContactPresence &p, presences) {
-        if (!fromName.isEmpty() && p.nickname() == fromName) {
-            return true;
-        }
-    }
-
-    // not the self contact.
-    return false;
-}
-
-bool TwitterHomeTimelineSyncAdaptor::haveAlreadyPostedEvent(const QString &postId, const QString &eventBody, const QDateTime &createdTime)
-{
-    Q_UNUSED(eventBody);
-    Q_UNUSED(createdTime);
-
-    return (whenSyncedDatum(QLatin1String("twitter"), postId).isValid());
 }

@@ -19,6 +19,17 @@ class SyncService;
 class QNetworkAccessManager;
 class AccountManager;
 
+struct SyncedDatum
+{
+    QString accountIdentifier;
+    QString localIdentifier;
+    QString serviceName;
+    QString dataType;
+    QDateTime createdTimestamp;
+    QDateTime syncedTimestamp;
+    QString datumIdentifier;
+};
+
 class SocialNetworkSyncAdaptor : public QObject
 {
     Q_OBJECT
@@ -53,12 +64,14 @@ protected:
     QDateTime lastSyncTimestamp(const QString &serviceName, const QString &dataType, const QString &accountId) const;
     bool updateLastSyncTimestamp(const QString &serviceName, const QString &dataType, const QString &accountId, const QDateTime &timestamp);
     QDateTime whenSyncedDatum(const QString &serviceName, const QString &datumIdentifier) const;
-    bool markSyncedDatum(const QString &localIdentifier, const QString &serviceName, const QString &dataType, const QString &accountId, const QDateTime &createdTimestamp, const QDateTime &syncedTimestamp, const QString &datumIdentifier);
+    bool markSyncedData(const QList<SyncedDatum> &data);
+    QString syncedDatumLocalIdentifier(const QString &serviceName, const QString &dataType, const QString &datumIdentifier);
     bool removeAllData(const QString &serviceName, const QString &dataType, const QString &accountId);
     QStringList accountIdsWithSyncTimestamp(const QString &serviceName, const QString &dataType);
     QStringList syncedDatumLocalIdentifiers(const QString &serviceName, const QString &dataType, const QString &accountId) const;
-    void beginTransaction();
-    void endTransaction();
+    QList<int> syncedDatumAccountIds(const QString &localIdentifier);
+    bool beginTransaction();
+    bool endTransaction();
     void setStatus(Status status);
     void setInitialActive(bool enabled);
 
