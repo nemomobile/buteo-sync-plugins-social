@@ -35,7 +35,7 @@ QT += \
 include(facebook/facebook.pri)
 include(twitter/twitter.pri)
 
-DEFINES += 'PRIVILEGED_DATA_DIR=\'\"/home/nemo/.local/share/data/.privileged/\"\''
+DEFINES += 'PRIVILEGED_DATA_DIR=\'\"/home/nemo/.local/share/system/privileged/\"\''
 DEFINES += 'SYNC_DATABASE_DIR=\'\"Sync\"\''
 DEFINES += 'SOCIALD_SYNC_DATABASE_NAME=\'\"sociald.db\"\''
 
