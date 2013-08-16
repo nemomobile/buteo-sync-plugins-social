@@ -20,19 +20,6 @@
 #include <accountmanager.h>
 #include <account.h>
 
-//QString EventFeedHelper::manageEvent(const QString &icon, const QString title, const QString &body,
-//                                     const QStringList &imageList, const QDateTime &createdTime,
-//                                     const QString &footer, bool isVideo, const QString &url,
-//                                     const QString &serviceName, const QString &sourceDisplayName,
-//                                     const QVariantMap &metadata, const QList<int> &accountIds,
-//                                     const QMap<int, QString> &profileImages,
-//                                     const QString &localIdentifier, const QString &group
-//                                     , SyncService::DataType dataType,
-//                                     const QString &postId)
-//{
-
-//}
-
 /*
     Remarks on timestamps
 
@@ -343,37 +330,95 @@ QString SocialNetworkSyncAdaptor::syncedDatumLocalIdentifier(const QString &serv
     Removes all rows from all sociald database tables which have the specified
     \a serviceName, \a dataType and \a accountId column values.
 */
-bool SocialNetworkSyncAdaptor::removeAllData(const QString &serviceName, const QString &dataType, const QString &accountId)
+QStringList SocialNetworkSyncAdaptor::removeAllData(const QString &serviceName,
+                                                    const QString &dataType,
+                                                    const QString &accountId, bool *ok)
 {
     if (!m_syncService->database()) {
+        if (ok) {
+            *ok = false;
+        }
+
         TRACE(SOCIALD_ERROR, QString(QLatin1String("error: database not available")));
-        return false;
+        return QStringList();
     }
 
+    QSqlQuery query(*m_syncService->database());
 
+    // Create a transaction
+    if (!query.exec("BEGIN EXCLUSIVE TRANSACTION")) {
+        if (ok) {
+            *ok = false;
+        }
 
-//    DELETE FROM synceddata WHERE localIdentifier IN (SELECT localIdentifier FROM synceddata LEFT JOIN  link_synceddata_account  ON synceddata.localIdentifier = link_synceddata_account.syncedDataId WHERE accountIdentifier IS NULL GROUP BY localIdentifier)
-//    QSqlQuery query(*m_syncService->database());
-//    query.prepare("DELETE FROM syncedData WHERE serviceName = :sn AND dataType = :dt AND accountIdentifier = :aid");
-//    query.bindValue(":sn", serviceName);
-//    query.bindValue(":dt", dataType);
-//    query.bindValue(":aid", accountId);
-//    bool success = query.exec();
-//    if (!success) {
-//        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
-//    }
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
+        return QStringList();
+    }
 
-//    query.prepare("DELETE FROM syncTimestamps WHERE serviceName = :sn AND dataType = :dt AND accountIdentifier = :aid");
-//    query.bindValue(":sn", serviceName);
-//    query.bindValue(":dt", dataType);
-//    query.bindValue(":aid", accountId);
-//    success = query.exec();
-//    if (!success) {
-//        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
-//    }
+    // First, we delete the links between the account to delete
+    query.prepare("DELETE FROM link_syncedData_account WHERE syncedDataId "\
+                  "IN (SELECT localIdentifier FROM syncedData "\
+                  "WHERE serviceName=:serviceName AND dataType=:dataType) "\
+                  "AND accountIdentifier=:accountId");
+    query.bindValue(":serviceName", serviceName);
+    query.bindValue(":dataType", dataType);
+    query.bindValue(":accountId", accountId);
+    if (!query.exec()) {
+        if (ok) {
+            *ok = false;
+        }
 
-//    return success;
-    return false;
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
+        return QStringList();
+    }
+
+    // We then select the localIdentifier that are not valid anymore
+    // Basically, we select localIdentifier entries which do
+    query.prepare("SELECT localIdentifier FROM synceddata "\
+                  "LEFT JOIN  link_synceddata_account "\
+                  "ON synceddata.localIdentifier = link_synceddata_account.syncedDataId "\
+                  "WHERE accountIdentifier IS NULL GROUP BY localIdentifier");
+    if (!query.exec()) {
+        if (ok) {
+            *ok = false;
+        }
+
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
+        return QStringList();
+    }
+
+    QStringList localIdentifiers;
+    QVariantList localIdentifiersVariant;
+    while (query.next()) {
+        localIdentifiers.append(query.value(0).toString());
+        localIdentifiersVariant.append(query.value(0));
+    }
+
+    // Delete the old entries
+    query.prepare("DELETE FROM syncedData WHERE localIdentifier=:localIdentifier");
+    query.addBindValue(localIdentifiersVariant);
+    if (!query.execBatch()) {
+        if (ok) {
+            *ok = false;
+        }
+
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
+        return QStringList();
+    }
+
+    // Execute transaction
+    if (!query.exec("END TRANSACTION")) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
+        if (ok) {
+            *ok = false;
+        }
+        return QStringList();
+    }
+
+    if (ok) {
+        *ok = true;
+    }
+    return localIdentifiers;
 }
 
 /*!
@@ -391,9 +436,10 @@ QStringList SocialNetworkSyncAdaptor::accountIdsWithSyncTimestamp(const QString 
     QStringList retn;
 
     QSqlQuery query(*m_syncService->database());
-    query.prepare("SELECT DISTINCT accountIdentifier FROM syncTimestamps WHERE serviceName = :sn AND dataType = :dt");
-    query.bindValue(":sn", serviceName);
-    query.bindValue(":dt", dataType);
+    query.prepare("SELECT DISTINCT accountIdentifier FROM syncTimestamps "\
+                  "WHERE serviceName=:serviceName AND dataType=:dataType");
+    query.bindValue(":serviceName", serviceName);
+    query.bindValue(":dataType", dataType);
     bool success = query.exec();
     if (!success) {
         TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
@@ -409,38 +455,6 @@ QStringList SocialNetworkSyncAdaptor::accountIdsWithSyncTimestamp(const QString 
     return retn;
 }
 
-/*!
-    Returns the list of "local" identifiers of all synced data associated
-    with the given \a serviceName with the specified \a dataType synced
-    from the account identified by the given \a accountId.
-*/
-QStringList SocialNetworkSyncAdaptor::syncedDatumLocalIdentifiers(const QString &serviceName, const QString &dataType, const QString &accountId) const
-{
-    if (!m_syncService->database()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: database not available")));
-        return QStringList();
-    }
-
-    QStringList retn;
-
-    QSqlQuery query(*m_syncService->database());
-    query.prepare("SELECT DISTINCT id FROM syncedData WHERE serviceName = :sn AND dataType = :dt");// AND accountIdentifier = :aid");
-    query.bindValue(":sn", serviceName);
-    query.bindValue(":dt", dataType);
-//    query.bindValue(":aid", accountId);
-    bool success = query.exec();
-    if (!success) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
-    }
-
-    while (query.next()) {
-        QString accountIdent = query.value(0).toString();
-        retn.append(accountIdent);
-    }
-
-    return retn;
-}
-
 QList<int> SocialNetworkSyncAdaptor::syncedDatumAccountIds(const QString &localIdentifier)
 {
     if (!m_syncService->database()) {
@@ -451,7 +465,7 @@ QList<int> SocialNetworkSyncAdaptor::syncedDatumAccountIds(const QString &localI
     QList<int> returnedData;
 
     QSqlQuery query(*m_syncService->database());
-    query.prepare("SELECT accountIdentifier FROM link_syncedData_account WHERE syncedDataId = :localIdentifier");
+    query.prepare("SELECT accountIdentifier FROM link_syncedData_account WHERE syncedDataId=:localIdentifier");
     query.bindValue(":localIdentifier", localIdentifier);
     if (!query.exec()) {
         TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
@@ -494,9 +508,8 @@ bool SocialNetworkSyncAdaptor::endTransaction()
         return false;
     }
 
-    return true;
-
     m_syncService->database()->commit();
+    return true;
 }
 
 /*!

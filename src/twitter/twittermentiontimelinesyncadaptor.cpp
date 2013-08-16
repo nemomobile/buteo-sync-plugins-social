@@ -81,32 +81,12 @@ void TwitterMentionTimelineSyncAdaptor::sync(const QString &dataType)
 
 void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int pid, purgeIds) {
-        // first, purge all data from nemo notifications
-        QStringList purgeDataIds = syncedDatumLocalIdentifiers(QLatin1String("twitter"),
-                SyncService::dataType(SyncService::Notifications),
-                QString::number(pid));
-
-        bool ok = true;
-        int prefixSize = QString(SOCIALD_TWITTER_MENTIONS_ID_PREFIX).size();
-        foreach (const QString &pdi, purgeDataIds) {
-            QString notifIdStr = pdi.mid(prefixSize); // pdi is of form: "twitter-mentions-NOTIFICATIONID"
-            qlonglong notificationId = notifIdStr.toLongLong(&ok);
-            if (ok) {
-                TRACE(SOCIALD_INFORMATION,
-                        QString(QLatin1String("TODO: purge notifications for deleted account %1: %2 = %3"))
-                        .arg(pid).arg(pdi).arg(notificationId));
-            } else {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to convert notification id string to int: %1"))
-                        .arg(pdi));
-            }
+    foreach (int accountIdentifier, purgeIds) {
+        Notification *notification = findNotification(accountIdentifier);
+        if (notification) {
+            notification->close();
+            notification->deleteLater();
         }
-
-        // second, purge all data from our database
-        removeAllData(QLatin1String("twitter"),
-                SyncService::dataType(SyncService::Notifications),
-                QString::number(pid));
     }
 }
 
@@ -368,6 +348,19 @@ QContact TwitterMentionTimelineSyncAdaptor::findMatchingContact(const QString &n
 
 Notification *TwitterMentionTimelineSyncAdaptor::createNotification(int accountId)
 {
+    Notification *notification = findNotification(accountId);
+    if (notification) {
+        return notification;
+    }
+
+    notification = new Notification(this);
+    notification->setCategory(QLatin1String("x-nemo.social.twitter.mention"));
+    notification->setHintValue("x-nemo.sociald.account-id", accountId);
+    return notification;
+}
+
+Notification * TwitterMentionTimelineSyncAdaptor::findNotification(int accountId)
+{
     Notification *notification = 0;
     QList<QObject *> notifications = Notification::notifications();
     foreach (QObject *object, notifications) {
@@ -385,12 +378,5 @@ Notification *TwitterMentionTimelineSyncAdaptor::createNotification(int accountI
 
     qDeleteAll(notifications);
 
-    if (notification) {
-        return notification;
-    }
-
-    notification = new Notification(this);
-    notification->setCategory(QLatin1String("x-nemo.social.twitter.mention"));
-    notification->setHintValue("x-nemo.sociald.account-id", accountId);
     return notification;
 }

@@ -51,6 +51,7 @@ private Q_SLOTS:
 
 private:
     Notification * createNotification(int accountId);
+    Notification * findNotification(int accountId);
     QContactManager m_contactManager;
     QList<QContact> m_contacts;
     QContactFetchRequest *m_contactFetchRequest;

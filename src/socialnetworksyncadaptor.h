@@ -66,9 +66,8 @@ protected:
     QDateTime whenSyncedDatum(const QString &serviceName, const QString &datumIdentifier) const;
     bool markSyncedData(const QList<SyncedDatum> &data);
     QString syncedDatumLocalIdentifier(const QString &serviceName, const QString &dataType, const QString &datumIdentifier);
-    bool removeAllData(const QString &serviceName, const QString &dataType, const QString &accountId);
+    QStringList removeAllData(const QString &serviceName, const QString &dataType, const QString &accountId, bool *ok = 0);
     QStringList accountIdsWithSyncTimestamp(const QString &serviceName, const QString &dataType);
-    QStringList syncedDatumLocalIdentifiers(const QString &serviceName, const QString &dataType, const QString &accountId) const;
     QList<int> syncedDatumAccountIds(const QString &localIdentifier);
     bool beginTransaction();
     bool endTransaction();

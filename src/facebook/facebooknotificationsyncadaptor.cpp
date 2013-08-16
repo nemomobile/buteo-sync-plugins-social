@@ -27,11 +27,30 @@ FacebookNotificationSyncAdaptor::~FacebookNotificationSyncAdaptor()
 
 void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int pid, purgeIds) {
+    foreach (int accountId, purgeIds) {
         // purge all data from our database
         removeAllData(QLatin1String("facebook"),
                 SyncService::dataType(SyncService::Notifications),
-                QString::number(pid));
+                QString::number(accountId));
+
+
+        // Search for the notification and close it
+        Notification *notification = 0;
+        QList<QObject *> notifications = Notification::notifications();
+        foreach (QObject *object, notifications) {
+            Notification *castedNotification = static_cast<Notification *>(object);
+            if (castedNotification->category() == "x-nemo.social.facebook.notification"
+                && castedNotification->hintValue("x-nemo.sociald.account-id").toInt() == accountId) {
+                notification = castedNotification;
+                break;
+            }
+        }
+
+        if (notification) {
+            notification->close();
+        }
+
+        qDeleteAll(notifications);
     }
 }
 

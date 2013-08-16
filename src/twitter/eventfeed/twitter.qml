@@ -11,7 +11,6 @@ Page {
     property variant model
     property string nodeIdentifier
     property string retweeter
-    property int accountCount
     property int accountIndex
 
     onModelChanged: {
@@ -19,10 +18,6 @@ Page {
         twitter.consumerKey = container.model.metaData["consumerKey"]
         twitter.consumerSecret = container.model.metaData["consumerSecret"]
         retweeter = container.model.metaData["retweeter"]
-
-        accountCount = container.model.metaData["accountIdCount"]
-        account.identifier = container.model.metaData["accountId0"]
-        replyField.avatar = container.model.metaData["profilePicture0"]
     }
 
     Account {

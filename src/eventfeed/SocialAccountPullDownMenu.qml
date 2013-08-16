@@ -13,18 +13,33 @@ PullDownMenu {
     property var pageContainer
     onMetaDataChanged: refreshAccountList()
 
+    // We distinguish internal.index and container.currentAccountIndex
+    // It is because internal.accounts is not matching the accounts
+    // data carried by the metadata. This is because accounts might
+    // got deleted between two sync, and that metadata contains
+    // data that should not exist.
+    //
+    // internal.index stores the index of the current account in
+    // internal.account, while container.currentAccountIndex
+    // is used to store the index for the metadata. If metadata
+    // carries also information for (for example) avatar, that
+    // are indexed, then container.currentAccountIndex contains
+    // the good index, even if accounts got removed
     function refreshAccountList() {
         internal.accounts = []
-        internal.accountCount = container.metaData["accountIdCount"]
-        for (var i = 0; i < internal.accountCount; i++) {
+        for (var i = 0; i < container.metaData["accountIdCount"]; i++) {
             var accountData = new Object
             accountData["id"] = container.metaData["accountId" + i]
             var account = accountManager.account(accountData["id"])
-            accountData["name"] = account.displayName
-            internal.accounts.push(accountData)
+            if (account != null) {
+                accountData["name"] = account.displayName
+                accountData["index"] = i
+                internal.accounts.push(accountData)
+            }
         }
+        internal.accountCount = internal.accounts.length
         container.currentAccount = internal.accounts[0]["id"]
-        container.currentAccountIndex = 0
+        container.currentAccountIndex = internal.accounts[0]["index"]
 
         if (internal.accountCount == 2) {
             internal.otherIndex = 1
@@ -34,11 +49,13 @@ PullDownMenu {
         QtObject {
             id: internal
             function setIndex(index) {
-                container.currentAccountIndex = index
+                internal.index = index
+                container.currentAccountIndex = internal.accounts[index]["index"]
                 pageContainer.pop()
             }
             property int accountCount
             property var accounts
+            property int index
             property int otherIndex
         },
         AccountManager {
@@ -62,19 +79,19 @@ PullDownMenu {
             if (internal.accountCount > 2) {
                 var page = container.pageContainer.push(Qt.resolvedUrl("SocialAccountPage.qml"),
                                                         {"accounts": internal.accounts,
-                                                         "currentIndex": container.currentAccountIndex,
+                                                         "currentIndex": internal.index,
                                                          "headerText": container.selectAccountString})
                 page.indexSelected.connect(internal.setIndex)
-                // TODO
             } else {
-                container.currentAccountIndex = internal.otherIndex
-                container.currentAccount = internal.accounts[container.currentAccountIndex]["id"]
+                internal.index = internal.otherIndex
+                container.currentAccount = internal.accounts[internal.index]["id"]
+                container.currentAccountIndex = internal.accounts[internal.index]["index"]
                 internal.otherIndex = (internal.otherIndex == 0 ? 1 : 0)
             }
         }
     }
 
     MenuLabel {
-        text: container.accountString.arg(internal.accounts[container.currentAccountIndex]["name"])
+        text: container.accountString.arg(internal.accounts[internal.index]["name"])
     }
 }

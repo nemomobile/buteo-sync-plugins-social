@@ -70,30 +70,28 @@ TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
 
 void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int pid, purgeIds) {
-        // first, purge all data from nemo events
-        QStringList purgeDataIds = syncedDatumLocalIdentifiers(QLatin1String("twitter"),
-                SyncService::dataType(SyncService::Posts),
-                QString::number(pid));
+    foreach (int accountIdentifier, purgeIds) {
+        bool ok;
+        QStringList localIdentifiers = removeAllData(serviceName(), SyncService::dataType(dataType),
+                                                     QString::number(accountIdentifier), &ok);
+        if (!ok) {
+            continue;
+        }
 
-        bool ok = true;
-        int prefixLen = QString(SOCIALD_TWITTER_POSTS_ID_PREFIX).size();
-        foreach (const QString &pdi, purgeDataIds) {
-            QString eventIdStr = pdi.mid(prefixLen); // pdi is of form: "twitter-posts-EVENTID"
-            qlonglong eventId = eventIdStr.toLongLong(&ok);
+
+        int prefixLength = QString(SOCIALD_TWITTER_POSTS_ID_PREFIX).size();
+        // Remove entries in the event feed
+        foreach (const QString &localIdentifier, localIdentifiers) {
+            QString eventIdString = localIdentifier.mid(prefixLength);
+            qlonglong eventId = eventIdString.toLongLong(&ok);
             if (ok) {
                 MEventFeed::instance()->removeItem(eventId);
             } else {
                 TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to convert event id string to int: %1"))
-                        .arg(pdi));
+                        QString(QLatin1String("error: unable to remove event %1"))
+                        .arg(eventIdString));
             }
         }
-
-        // second, purge all data from our database
-        removeAllData(QLatin1String("twitter"),
-                SyncService::dataType(SyncService::Posts),
-                QString::number(pid)); // XXX TODO: use fb id instead of QString::number(accountId)
     }
 }
 
@@ -313,10 +311,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
             } else {
-
-
-
-
                 QVariantMap metaData;
                 metaData.insert("consumerKey", storedSecret("consumer_key"));
                 metaData.insert("consumerSecret", storedSecret("consumer_secret"));
@@ -341,11 +335,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                                              syncedData);
             }
         }
-
-        if (needMorePages && postedNew) {
-            // XXX TODO: paging?
-        }
-
         markSyncedData(syncedData);
     } else {
         // error occurred during request.

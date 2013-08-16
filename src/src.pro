@@ -71,7 +71,7 @@ shared_eventfeed.path = /usr/share/lipstick/eventfeed/shared/
 # translations
 TS_FILE = $$OUT_PWD/sociald.ts
 EE_QM = $$OUT_PWD/sociald_eng_en.qm
-ts.commands += lupdate -no-recursive $$PWD/eventfeed $$PWD/facebook $$PWD/twitter -ts $$TS_FILE
+ts.commands += lupdate -no-recursive $$PWD/facebook $$PWD/twitter -ts $$TS_FILE
 ts.CONFIG += no_check_exist
 ts.output = $$TS_FILE
 ts.input = .

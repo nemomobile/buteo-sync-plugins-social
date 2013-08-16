@@ -150,30 +150,28 @@ void FacebookPostSyncAdaptor::sync(const QString &dataType)
 
 void FacebookPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int pid, purgeIds) {
-        // first, purge all data from nemo events
-        QStringList purgeDataIds = syncedDatumLocalIdentifiers(QLatin1String("facebook"),
-                SyncService::dataType(SyncService::Posts),
-                QString::number(pid));
+    foreach (int accountIdentifier, purgeIds) {
+        bool ok;
+        QStringList localIdentifiers = removeAllData(serviceName(), SyncService::dataType(dataType),
+                                                     QString::number(accountIdentifier), &ok);
+        if (!ok) {
+            continue;
+        }
 
-        bool ok = true;
-        int prefixLen = QString(SOCIALD_FACEBOOK_POSTS_ID_PREFIX).size();
-        foreach (const QString &pdi, purgeDataIds) {
-            QString eventIdStr = pdi.mid(prefixLen); // pdi is of form: "facebook-posts-EVENTID"
-            qlonglong eventId = eventIdStr.toLongLong(&ok);
+
+        int prefixLength = QString(SOCIALD_FACEBOOK_POSTS_ID_PREFIX).size();
+        // Remove entries in the event feed
+        foreach (const QString &localIdentifier, localIdentifiers) {
+            QString eventIdString = localIdentifier.mid(prefixLength);
+            qlonglong eventId = eventIdString.toLongLong(&ok);
             if (ok) {
                 MEventFeed::instance()->removeItem(eventId);
             } else {
                 TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to convert event id string to int: %1"))
-                        .arg(pdi));
+                        QString(QLatin1String("error: unable to remove event %1"))
+                        .arg(eventIdString));
             }
         }
-
-        // second, purge all data from our database
-        removeAllData(QLatin1String("facebook"),
-                SyncService::dataType(SyncService::Posts),
-                QString::number(pid)); // XXX TODO: use fb id instead of QString::number(accountId)
     }
 }
 
@@ -283,7 +281,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
     bool ok = false;
     QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("data"))) {
-        // we expect "data" and possible "paging"
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         if (!data.size()) {

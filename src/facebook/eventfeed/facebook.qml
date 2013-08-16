@@ -28,13 +28,6 @@ Page {
         mediaName = container.model.metaData["postAttachmentName"]
         mediaCaption = container.model.metaData["postAttachmentCaption"]
         mediaDescription = container.model.metaData["postAttachmentDescription"]
-        account.identifier = container.model.metaData["accountId0"]
-        console.debug("\n")
-        for(var k in container.model.metaData) {
-            console.debug(k + ": " + container.model.metaData[k] + "\n")
-        }
-        console.debug("\n")
-
     }
 
     Account {
