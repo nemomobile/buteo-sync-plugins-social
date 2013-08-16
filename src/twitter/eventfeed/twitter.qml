@@ -103,6 +103,7 @@ Page {
                     replying = false
                     replied = true
                     reload()
+                    replyField.clear()
                     return
                 }
 
@@ -257,6 +258,7 @@ Page {
 
         SocialReplyField {
             id: replyField
+            enabled: !tweet.replying && twitter.credentialsReady
             //% "Write a reply"
             placeholderText: qsTrId("lipstick-jolla-home-twitter-ph-write-reply")
             allowComment: tweet.status == Facebook.Idle

@@ -176,6 +176,7 @@ Page {
 
     SocialNetworkModel {
         id: facebookComments
+        property bool replying
         filters: [ ContentItemTypeFilter { type: Facebook.Comment } ]
         socialNetwork: facebook
         nodeIdentifier: container.nodeIdentifier
@@ -318,14 +319,15 @@ Page {
 
         footer: SocialReplyField {
             id: replyField
+            enabled: !facebookComments.replying && container.accessToken != ""
             displayMargins: facebookComments.count > 0
             avatar: facebookMe.node != null && facebookMe.node.picture != null ? facebookMe.node.picture.url : ""
             //% "Write a comment"
             placeholderText: qsTrId("lipstick-jolla-home-facebook-ph-write-comment")
             allowComment: facebookComments.status == Facebook.Idle
             onEnterKeyClicked: {
-                facebookComments.node.uploadComment(comment.text)
-                facebookComments.repopulate()
+                facebookComments.node.uploadComment(replyField.text)
+                facebookComments.replying = true
             }
 
             Connections {
@@ -337,6 +339,16 @@ Page {
                 target: facebookComments
                 onStatusChanged: {
                     if (facebookComments.status == Facebook.Idle) {
+                        facebookComments.replying = false
+                    }
+                }
+            }
+
+            Connections {
+                target: facebookComments.node
+                onStatusChanged: {
+                    if (facebookComments.node.status == Facebook.Idle) {
+                        facebookComments.repopulate()
                         replyField.clear()
                     }
                 }
