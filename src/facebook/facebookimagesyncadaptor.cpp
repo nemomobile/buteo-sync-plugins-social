@@ -339,8 +339,8 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
         QJsonArray images = photo.value(QLatin1String("images")).toArray();
         for (int j = 0; j < images.size(); j++) {
             QJsonObject image = images.at(j).toObject();
-            int width = image.value(QLatin1String("width")).toString().toInt();
-            int height= image.value(QLatin1String("height")).toString().toInt();
+            int width = static_cast<int>(image.value(QLatin1String("width")).toDouble());
+            int height= static_cast<int>(image.value(QLatin1String("height")).toDouble());
             if (160 <= width && width <= 350 &&
                 160 <= height && height <= 350) {
                 thumbnailUrl = image.value(QLatin1String("source")).toString();
@@ -350,8 +350,8 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
 
 
         bool ok = false;
-        int width = photo.value(QLatin1String("width")).toString().toInt(&ok);
-        int height = photo.value(QLatin1String("height")).toString().toInt(&ok);
+        int width = static_cast<int>(photo.value(QLatin1String("width")).toDouble());
+        int height = static_cast<int>(photo.value(QLatin1String("height")).toDouble());
 
         if (!m_serverPhotoIds.contains(photoId)) {
             // for removal detection.  Don't remove this one from cache, it still exists on the server.
