@@ -296,12 +296,16 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             // grab the data from the current post
             QVariantMap currData = data.at(i).toMap();
 
+            // Just to be sure to get the time of the current (re)tweet
+            QDateTime createdTime = parseTwitterDateTime(currData.value(QLatin1String("created_at")).toString());
+
+            // We should get data for the retweeted tweet instead of
+            // getting the (often partial) retweeted tweet.
             if (currData.contains(QLatin1String("retweeted_status"))) {
                 retweeter = currData.value(QLatin1String("user")).toMap().value("name").toString();
                 currData = currData.value(QLatin1String("retweeted_status")).toMap();
             }
 
-            QDateTime createdTime = parseTwitterDateTime(currData.value(QLatin1String("created_at")).toString());
             QString postId = currData.value(QLatin1String("id_str")).toString();
             QString text = currData.value(QLatin1String("text")).toString();
             QVariantMap dataUser = currData.value(QLatin1String("user")).toMap();
