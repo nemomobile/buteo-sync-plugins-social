@@ -29,9 +29,6 @@
 //meegotouchevents/meventfeed
 #include <meventfeed.h>
 
-// sailfish-components-accounts-qt5
-#include <sailfishkeyprovider.h>
-
 #define SOCIALD_FACEBOOK_POSTS_ID_PREFIX QLatin1String("facebook-posts-")
 #define SOCIALD_FACEBOOK_POSTS_GROUPNAME QLatin1String("facebook")
 #define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
@@ -61,23 +58,6 @@ static const char *FQL_QUERY = "{"\
 #define QUERY_GID_KEY QLatin1String("gid")
 #define QUERY_EID_KEY QLatin1String("eid")
 static const int QUERY_SIZE = 1000;
-
-// TODO: Share this code
-static QString storedClientId()
-{
-    char *cClientId = NULL;
-    int success = SailfishKeyProvider_storedKey("facebook", "facebook-sync", "client_id", &cClientId);
-    if (success != 0) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("Facebook sync: could not retrieve stored client id from SailfishKeyProvider")));
-        free(cClientId);
-        return QString();
-    }
-
-    QString retn = QLatin1String(cClientId);
-    free(cClientId);
-    return retn;
-}
 
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
@@ -505,13 +485,12 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                         .arg(accountId) << "    " << createdTime << ":" << body);
                 break;                 // all subsequent events will be even older.
             } else {
-                static QString clientId(storedClientId());
                 QVariantMap metaData;
                 metaData.insert("nodeId", postId);
                 metaData.insert("postAttachmentName", attachmentName);
                 metaData.insert("postAttachmentCaption", attachmentCaption);
                 metaData.insert("postAttachmentDescription", attachmentDescription);
-                metaData.insert("clientId", clientId);
+                metaData.insert("clientId", clientId());
 
                 QString icon = QLatin1String("icon-s-service-facebook");
 

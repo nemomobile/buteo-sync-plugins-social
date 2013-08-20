@@ -40,10 +40,6 @@ PullDownMenu {
         internal.accountCount = internal.accounts.length
         container.currentAccount = internal.accounts[0]["id"]
         container.currentAccountIndex = internal.accounts[0]["index"]
-
-        if (internal.accountCount == 2) {
-            internal.otherIndex = 1
-        }
     }
     resources: [
         QtObject {
@@ -68,7 +64,7 @@ PullDownMenu {
             if (internal.accountCount > 2) {
                 container.selectAccountString
             } else if (internal.accountCount == 2) {
-                container.changeToAccountString.arg(internal.accounts[internal.otherIndex]["name"])
+                container.changeToAccountString.arg(internal.accounts[internal.index == 0 ? 1 : 0]["name"])
             } else {
                 ""
             }
@@ -83,10 +79,9 @@ PullDownMenu {
                                                          "headerText": container.selectAccountString})
                 page.indexSelected.connect(internal.setIndex)
             } else {
-                internal.index = internal.otherIndex
+                internal.index = (internal.index == 0 ? 1 : 0)
                 container.currentAccount = internal.accounts[internal.index]["id"]
                 container.currentAccountIndex = internal.accounts[internal.index]["index"]
-                internal.otherIndex = (internal.otherIndex == 0 ? 1 : 0)
             }
         }
     }

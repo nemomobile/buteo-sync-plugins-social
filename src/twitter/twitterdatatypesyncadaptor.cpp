@@ -33,7 +33,7 @@
 #include <SignOn/SessionData>
 
 TwitterDataTypeSyncAdaptor::TwitterDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
-    : SocialNetworkSyncAdaptor("twitter", dataType, syncService, parent)
+    : SocialNetworkSyncAdaptor("twitter", dataType, syncService, parent), m_triedLoading(false)
 {
 }
 
@@ -47,6 +47,12 @@ void TwitterDataTypeSyncAdaptor::sync(const QString &dataTypeString)
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: Twitter %1 sync adaptor was asked to sync %2"))
                 .arg(SyncService::dataType(dataType)).arg(dataTypeString));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        return;
+    }
+
+    if (consumerKey().isEmpty() || consumerSecret().isEmpty()) {
+        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: secrets could not be retrieved for twitter")));
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
@@ -135,6 +141,22 @@ void TwitterDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
     }
 }
 
+QString TwitterDataTypeSyncAdaptor::consumerKey()
+{
+    if (!m_triedLoading) {
+        loadConsumerKeyAndSecret();
+    }
+    return m_consumerKey;
+}
+
+QString TwitterDataTypeSyncAdaptor::consumerSecret()
+{
+    if (!m_triedLoading) {
+        loadConsumerKeyAndSecret();
+    }
+    return m_consumerSecret;
+}
+
 void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
     TRACE(SOCIALD_ERROR,
@@ -192,9 +214,10 @@ static QString hmacSha1(const QString &signingKey, const QString &baseString)
 QString TwitterDataTypeSyncAdaptor::authorizationHeader(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &requestMethod, const QString &requestUrl, const QList<QPair<QString, QString> > &parameters)
 {
     // Twitter requires all requests to be signed with an authorization header.
-    QString consumerSecret;
-    QString oauthConsumerKey;
-    if (!consumerKeyAndSecret(oauthConsumerKey, consumerSecret)) {
+    QString key = consumerKey();
+    QString secret = consumerSecret();
+
+    if (key.isEmpty() || secret.isEmpty()) {
         return QString();
     }
 
@@ -208,7 +231,7 @@ QString TwitterDataTypeSyncAdaptor::authorizationHeader(int accountId, const QSt
     // now build up the encoded parameters map.  We use a map to perform alphabetical sorting.
     QMap<QString, QString> encodedParams;
     encodedParams.insert(QUrl::toPercentEncoding(QLatin1String("oauth_consumer_key")),
-                         QUrl::toPercentEncoding(oauthConsumerKey));
+                         QUrl::toPercentEncoding(key));
     encodedParams.insert(QUrl::toPercentEncoding(QLatin1String("oauth_nonce")),
                          QUrl::toPercentEncoding(oauthNonce));
     encodedParams.insert(QUrl::toPercentEncoding(QLatin1String("oauth_signature_method")),
@@ -236,7 +259,7 @@ QString TwitterDataTypeSyncAdaptor::authorizationHeader(int accountId, const QSt
                                 + QUrl::toPercentEncoding(requestUrl) + QLatin1String("&")
                                 + QUrl::toPercentEncoding(parametersString);
 
-    QString signingKey = QUrl::toPercentEncoding(consumerSecret) + QLatin1String("&")
+    QString signingKey = QUrl::toPercentEncoding(secret) + QLatin1String("&")
                        + QUrl::toPercentEncoding(oauthTokenSecret);
 
     oauthSignature = hmacSha1(signingKey, signatureBaseString);
@@ -290,8 +313,9 @@ QVariant TwitterDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData,
     return QVariantMap();
 }
 
-bool TwitterDataTypeSyncAdaptor::consumerKeyAndSecret(QString &consumerKey, QString &consumerSecret)
+void TwitterDataTypeSyncAdaptor::loadConsumerKeyAndSecret()
 {
+    m_triedLoading = true;
     char *cConsumerKey = NULL;
     char *cConsumerSecret = NULL;
     int ckSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_key", &cConsumerKey);
@@ -299,14 +323,13 @@ bool TwitterDataTypeSyncAdaptor::consumerKeyAndSecret(QString &consumerKey, QStr
 
     if (ckSuccess != 0 || cConsumerKey == NULL || csSuccess != 0 || cConsumerSecret == NULL) {
         TRACE(SOCIALD_INFORMATION, QLatin1String("No valid OAuth2 keys found"));
-        return false;
+        return;
     }
 
-    consumerKey = QLatin1String(cConsumerKey);
-    consumerSecret = QLatin1String(cConsumerSecret);
+    m_consumerKey = QLatin1String(cConsumerKey);
+    m_consumerSecret = QLatin1String(cConsumerSecret);
     free(cConsumerKey);
     free(cConsumerSecret);
-    return true;
 }
 
 void TwitterDataTypeSyncAdaptor::signIn(Account *account)
@@ -320,15 +343,15 @@ void TwitterDataTypeSyncAdaptor::signIn(Account *account)
     }
 
     // Fetch consumer key and secret from keyprovider
-    QString oauthConsumerKey;
-    QString consumerSecret;
-    if (!consumerKeyAndSecret(oauthConsumerKey, consumerSecret)) {
+    QString key = consumerKey();
+    QString secret = consumerSecret();
+    if (key.isEmpty() || secret.isEmpty()) {
         return;
     }
 
     SignInParameters *sip = account->signInParameters("twitter-sync");
-    sip->setParameter(QLatin1String("ConsumerKey"), oauthConsumerKey);
-    sip->setParameter(QLatin1String("ConsumerSecret"), consumerSecret);
+    sip->setParameter(QLatin1String("ConsumerKey"), key);
+    sip->setParameter(QLatin1String("ConsumerSecret"), secret);
     sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
 
     connect(account, SIGNAL(signInError(QString)), this, SLOT(signOnError(QString)));

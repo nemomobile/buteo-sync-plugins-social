@@ -34,6 +34,7 @@ public:
     virtual void sync(const QString &dataTypeString);
 
 protected:
+    QString clientId();
     static QJsonObject parseReplyData(const QByteArray &replyData, bool *ok);
     virtual void updateDataForAccounts(const QList<int> &accountIds);
     virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0;    // must at least implement these two
@@ -49,12 +50,10 @@ private Q_SLOTS:
     void signOnResponse(const QVariantMap &data);
 
 private:
-    bool initializeClientId();
+    void loadClientId();
     void signIn(Account *account);
-
-private:
+    bool m_triedLoading; // Is true if we tried to load (even if we failed)
     QString m_clientId;
-    bool m_validClientId;
 };
 
 #endif // FACEBOOKDATATYPESYNCADAPTOR_H

@@ -33,7 +33,6 @@ void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
                 SyncService::dataType(SyncService::Notifications),
                 QString::number(accountId));
 
-
         // Search for the notification and close it
         Notification *notification = 0;
         QList<QObject *> notifications = Notification::notifications();

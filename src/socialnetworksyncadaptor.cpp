@@ -569,12 +569,12 @@ void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
     m_accountSyncSemaphores.insert(accountId, semaphoreValue);
 
     if (semaphoreValue == 0) {
-        // finished all outstanding requests for Posts sync for this account.
-        // update the sync time for this user's Posts in the global sociald database.
+        // finished all outstanding sync requests for this account.
+        // update the sync time in the global sociald database.
         updateLastSyncTimestamp(m_serviceName,
                                 SyncService::dataType(dataType),
                                 QString::number(accountId),
-                                QDateTime::currentDateTime());
+                                QDateTime::currentDateTime().toTimeSpec(Qt::UTC));
 
         // if all outstanding requests for all accounts have finished,
         // then update our status to Inactive / ready to handle more sync requests.

@@ -27,28 +27,9 @@
 // meegotouchevents/meventfeed
 #include <meventfeed.h>
 
-// sailfish-components-accounts-qt5
-#include <sailfishkeyprovider.h>
-
 #define SOCIALD_TWITTER_POSTS_ID_PREFIX QLatin1String("twitter-posts-")
 #define SOCIALD_TWITTER_POSTS_GROUPNAME QLatin1String("twitter")
 #define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
-
-static QString storedSecret(const char *key)
-{
-    char *cKey = NULL;
-    int success = SailfishKeyProvider_storedKey("twitter", "twitter-sync", key, &cKey);
-    if (success != 0) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("Twitter sync: could not retrieve key from SailfishKeyProvider")));
-        free(cKey);
-        return QString();
-    }
-
-    QString retn = QLatin1String(cKey);
-    free(cKey);
-    return retn;
-}
 
 // currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
@@ -312,8 +293,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 break;                 // all subsequent events will be even older.
             } else {
                 QVariantMap metaData;
-                metaData.insert("consumerKey", storedSecret("consumer_key"));
-                metaData.insert("consumerSecret", storedSecret("consumer_secret"));
+                metaData.insert("consumerKey", consumerKey());
+                metaData.insert("consumerSecret", consumerSecret());
                 metaData.insert("nodeId", postId);
                 metaData.insert("retweeter", retweeter);
                 QString localIdentifier = syncedDatumLocalIdentifier(serviceName(), SyncService::dataType(dataType), postId).mid(prefixLen);

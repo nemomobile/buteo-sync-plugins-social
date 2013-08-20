@@ -28,9 +28,8 @@
 #include <SignOn/SessionData>
 
 FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
-    : SocialNetworkSyncAdaptor("facebook", dataType, syncService, parent)
+    : SocialNetworkSyncAdaptor("facebook", dataType, syncService, parent), m_triedLoading(false)
 {
-    m_validClientId = initializeClientId();
 }
 
 FacebookDataTypeSyncAdaptor::~FacebookDataTypeSyncAdaptor()
@@ -47,7 +46,7 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataTypeString)
         return;
     }
 
-    if (!m_validClientId) {
+    if (clientId().isEmpty()) {
         TRACE(SOCIALD_ERROR, QString(QLatin1String("error: client id couldn't be retrieved for facebook")));
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
@@ -158,6 +157,14 @@ void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 }
 
+QString FacebookDataTypeSyncAdaptor::clientId()
+{
+    if (!m_triedLoading) {
+        loadClientId();
+    }
+    return m_clientId;
+}
+
 QJsonObject FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
 {
     QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
@@ -169,17 +176,18 @@ QJsonObject FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyD
     return QJsonObject();
 }
 
-bool FacebookDataTypeSyncAdaptor::initializeClientId()
+void FacebookDataTypeSyncAdaptor::loadClientId()
 {
+    m_triedLoading = true;
     char *cClientId = NULL;
     int cSuccess = SailfishKeyProvider_storedKey("facebook", "facebook-sync", "client_id", &cClientId);
     if (cSuccess != 0 || cClientId == NULL) {
-        return false;
+        return;
     }
 
     m_clientId = QLatin1String(cClientId);
     free(cClientId);
-    return true;
+    return;
 }
 
 void FacebookDataTypeSyncAdaptor::signIn(Account *account)
@@ -193,7 +201,7 @@ void FacebookDataTypeSyncAdaptor::signIn(Account *account)
     }
 
     SignInParameters *sip = account->signInParameters("facebook-sync");
-    sip->setParameter(QLatin1String("ClientId"), m_clientId);
+    sip->setParameter(QLatin1String("ClientId"), clientId());
     sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
 
     connect(account, SIGNAL(signInError(QString)), this, SLOT(signOnError(QString)));
