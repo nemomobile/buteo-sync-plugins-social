@@ -62,6 +62,7 @@ shared_eventfeed.files =    $$PWD/eventfeed/SocialAvatar.qml \
                             $$PWD/eventfeed/SocialContent.qml \
                             $$PWD/eventfeed/SocialMediaRow.qml \
                             $$PWD/eventfeed/SocialInfoLabel.qml \
+                            $$PWD/eventfeed/SocialComment.qml \
                             $$PWD/eventfeed/SocialReplyField.qml \
                             $$PWD/eventfeed/SocialAccountPullDownMenu.qml \
                             $$PWD/eventfeed/SocialAccountPage.qml
@@ -97,3 +98,4 @@ notification_categories.files = facebook/x-nemo.social.facebook.notification.con
 notification_categories.path = /usr/share/lipstick/notificationcategories/
 
 INSTALLS += target client sync shared_eventfeed notification_categories ts_install engineering_english_install
+

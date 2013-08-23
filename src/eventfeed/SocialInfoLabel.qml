@@ -15,13 +15,14 @@ Item {
         id: label
         anchors {
             left: parent.left
-            leftMargin: Theme.paddingMedium
+            leftMargin: Theme.paddingLarge
             right: parent.right
-            rightMargin: Theme.paddingMedium
+            rightMargin: Theme.paddingLarge
             verticalCenter: parent.verticalCenter
         }
-        font.pixelSize: Theme.fontSizeSmall
+        font.pixelSize: Theme.fontSizeExtraSmall
         wrapMode: Text.WordWrap
+        color: Theme.highlightColor
     }
 
     Behavior on opacity { FadeAnimation {} }
