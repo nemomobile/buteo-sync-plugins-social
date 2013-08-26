@@ -37,8 +37,7 @@ TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService
     , m_contactFetchRequest(new QContactFetchRequest(this))
 {
     // can sync, enabled
-    m_enabled = true;
-    m_status = SocialNetworkSyncAdaptor::Inactive;
+    setInitialActive(true);
 
     // fetch all contacts.  We detect which contact a mention came from.
     // XXX TODO: we really shouldn't do this, we should do it on demand instead
@@ -82,32 +81,12 @@ void TwitterMentionTimelineSyncAdaptor::sync(const QString &dataType)
 
 void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int pid, purgeIds) {
-        // first, purge all data from nemo notifications
-        QStringList purgeDataIds = syncedDatumLocalIdentifiers(QLatin1String("twitter"),
-                SyncService::dataType(SyncService::Notifications),
-                QString::number(pid));
-
-        bool ok = true;
-        int prefixSize = QString(SOCIALD_TWITTER_MENTIONS_ID_PREFIX).size();
-        foreach (const QString &pdi, purgeDataIds) {
-            QString notifIdStr = pdi.mid(prefixSize); // pdi is of form: "twitter-mentions-NOTIFICATIONID"
-            qlonglong notificationId = notifIdStr.toLongLong(&ok);
-            if (ok) {
-                TRACE(SOCIALD_INFORMATION,
-                        QString(QLatin1String("TODO: purge notifications for deleted account %1: %2 = %3"))
-                        .arg(pid).arg(pdi).arg(notificationId));
-            } else {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to convert notification id string to int: %1"))
-                        .arg(pdi));
-            }
+    foreach (int accountIdentifier, purgeIds) {
+        Notification *notification = findNotification(accountIdentifier);
+        if (notification) {
+            notification->close();
+            notification->deleteLater();
         }
-
-        // second, purge all data from our database
-        removeAllData(QLatin1String("twitter"),
-                SyncService::dataType(SyncService::Notifications),
-                QString::number(pid));
     }
 }
 
@@ -134,7 +113,7 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
 
-    QNetworkReply *reply = m_qnam->get(nreq);
+    QNetworkReply *reply = networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -367,62 +346,20 @@ QContact TwitterMentionTimelineSyncAdaptor::findMatchingContact(const QString &n
     return QContact();
 }
 
-void TwitterMentionTimelineSyncAdaptor::incrementSemaphore(int accountId)
-{
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue += 1;
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-
-    if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        changeStatus(SocialNetworkSyncAdaptor::Busy);
-    }
-}
-
-void TwitterMentionTimelineSyncAdaptor::decrementSemaphore(int accountId)
-{
-    if (!m_accountSyncSemaphores.contains(accountId)) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
-        return;
-    }
-
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue -= 1;
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-    if (semaphoreValue < 0) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
-        return;
-    }
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-
-    if (semaphoreValue == 0) {
-        // finished all outstanding requests for Notifications sync for this account.
-        // update the sync time for this user's Notifications in the global sociald database.
-        updateLastSyncTimestamp(QLatin1String("twitter"),
-                                SyncService::dataType(SyncService::Notifications),
-                                QString::number(accountId),
-                                QDateTime::currentDateTime());
-
-        // if all outstanding requests for all accounts have finished,
-        // then update our status to Inactive / ready to handle more sync requests.
-        bool allAreZero = true;
-        QList<int> semaphores = m_accountSyncSemaphores.values();
-        foreach (int sv, semaphores) {
-            if (sv != 0) {
-                allAreZero = false;
-                break;
-            }
-        }
-
-        if (allAreZero) {
-            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Twitter Notifications sync at: %1"))
-                                       .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            changeStatus(SocialNetworkSyncAdaptor::Inactive);
-        }
-    }
-}
-
 Notification *TwitterMentionTimelineSyncAdaptor::createNotification(int accountId)
+{
+    Notification *notification = findNotification(accountId);
+    if (notification) {
+        return notification;
+    }
+
+    notification = new Notification(this);
+    notification->setCategory(QLatin1String("x-nemo.social.twitter.mention"));
+    notification->setHintValue("x-nemo.sociald.account-id", accountId);
+    return notification;
+}
+
+Notification * TwitterMentionTimelineSyncAdaptor::findNotification(int accountId)
 {
     Notification *notification = 0;
     QList<QObject *> notifications = Notification::notifications();
@@ -441,12 +378,5 @@ Notification *TwitterMentionTimelineSyncAdaptor::createNotification(int accountI
 
     qDeleteAll(notifications);
 
-    if (notification) {
-        return notification;
-    }
-
-    notification = new Notification(this);
-    notification->setCategory(QLatin1String("x-nemo.social.twitter.mention"));
-    notification->setHintValue("x-nemo.sociald.account-id", accountId);
     return notification;
 }

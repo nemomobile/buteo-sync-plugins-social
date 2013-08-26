@@ -18,8 +18,7 @@
 FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Notifications, parent)
 {
-    m_enabled = true;
-    m_status = SocialNetworkSyncAdaptor::Inactive;
+    setInitialActive(true);
 }
 
 FacebookNotificationSyncAdaptor::~FacebookNotificationSyncAdaptor()
@@ -28,11 +27,29 @@ FacebookNotificationSyncAdaptor::~FacebookNotificationSyncAdaptor()
 
 void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int pid, purgeIds) {
+    foreach (int accountId, purgeIds) {
         // purge all data from our database
         removeAllData(QLatin1String("facebook"),
                 SyncService::dataType(SyncService::Notifications),
-                QString::number(pid));
+                QString::number(accountId));
+
+        // Search for the notification and close it
+        Notification *notification = 0;
+        QList<QObject *> notifications = Notification::notifications();
+        foreach (QObject *object, notifications) {
+            Notification *castedNotification = static_cast<Notification *>(object);
+            if (castedNotification->category() == "x-nemo.social.facebook.notification"
+                && castedNotification->hintValue("x-nemo.sociald.account-id").toInt() == accountId) {
+                notification = castedNotification;
+                break;
+            }
+        }
+
+        if (notification) {
+            notification->close();
+        }
+
+        qDeleteAll(notifications);
     }
 }
 
@@ -55,7 +72,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -124,61 +141,6 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
-}
-
-void FacebookNotificationSyncAdaptor::incrementSemaphore(int accountId)
-{
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue += 1;
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-
-    if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        changeStatus(SocialNetworkSyncAdaptor::Busy);
-    }
-}
-
-void FacebookNotificationSyncAdaptor::decrementSemaphore(int accountId)
-{
-    if (!m_accountSyncSemaphores.contains(accountId)) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
-        return;
-    }
-
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue -= 1;
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-    if (semaphoreValue < 0) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
-        return;
-    }
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-
-    if (semaphoreValue == 0) {
-        // finished all outstanding requests for Notifications sync for this account.
-        // update the sync time for this user's Notifications in the global sociald database.
-        updateLastSyncTimestamp(QLatin1String("facebook"),
-                                SyncService::dataType(SyncService::Notifications),
-                                QString::number(accountId),
-                                QDateTime::currentDateTime());
-
-        // if all outstanding requests for all accounts have finished,
-        // then update our status to Inactive / ready to handle more sync requests.
-        bool allAreZero = true;
-        QList<int> semaphores = m_accountSyncSemaphores.values();
-        foreach (int sv, semaphores) {
-            if (sv != 0) {
-                allAreZero = false;
-                break;
-            }
-        }
-
-        if (allAreZero) {
-            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Notifications sync at: %1"))
-                                       .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            changeStatus(SocialNetworkSyncAdaptor::Inactive);
-        }
-    }
 }
 
 Notification *FacebookNotificationSyncAdaptor::existingNemoNotification(int accountId)

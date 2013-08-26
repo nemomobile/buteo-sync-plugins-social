@@ -22,8 +22,6 @@
 #include <QtContacts/QContact>
 #include <QtContacts/QContactFetchRequest>
 
-class MEventFeed;
-
 USE_CONTACTS_NAMESPACE
 
 class FacebookPostSyncAdaptor : public FacebookDataTypeSyncAdaptor
@@ -56,13 +54,8 @@ private:
     QList<QContact> m_contacts;
     QContact m_selfContact;
     QContactFetchRequest *m_contactFetchRequest;
-    MEventFeed *m_eventFeed;
-    QMap<int, QString> m_selfFacebookUserIds; // facebook user id strings of "me" objects
 
-    // for busy/inactive detection.
-    void decrementSemaphore(int accountId);
-    void incrementSemaphore(int accountId);
-    QMap<int, int> m_accountSyncSemaphores;
+    QMap<int, QString> m_selfFacebookUserIds;
 };
 
 #endif // FACEBOOKPOSTSYNCADAPTOR_H

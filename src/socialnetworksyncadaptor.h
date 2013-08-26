@@ -19,6 +19,17 @@ class SyncService;
 class QNetworkAccessManager;
 class AccountManager;
 
+struct SyncedDatum
+{
+    QString accountIdentifier;
+    QString localIdentifier;
+    QString serviceName;
+    QString dataType;
+    QDateTime createdTimestamp;
+    QDateTime syncedTimestamp;
+    QString datumIdentifier;
+};
+
 class SocialNetworkSyncAdaptor : public QObject
 {
     Q_OBJECT
@@ -35,7 +46,8 @@ public:
     };
 
 public:
-    SocialNetworkSyncAdaptor(QString serviceName, SyncService *syncService, QObject *parent);
+    SocialNetworkSyncAdaptor(QString serviceName, SyncService::DataType dataType,
+                             SyncService *syncService, QObject *parent);
     virtual ~SocialNetworkSyncAdaptor();
 
     Status status() const;
@@ -52,22 +64,31 @@ protected:
     QDateTime lastSyncTimestamp(const QString &serviceName, const QString &dataType, const QString &accountId) const;
     bool updateLastSyncTimestamp(const QString &serviceName, const QString &dataType, const QString &accountId, const QDateTime &timestamp);
     QDateTime whenSyncedDatum(const QString &serviceName, const QString &datumIdentifier) const;
-    bool markSyncedDatum(const QString &localIdentifier, const QString &serviceName, const QString &dataType, const QString &accountId, const QDateTime &createdTimestamp, const QDateTime &syncedTimestamp, const QString &datumIdentifier);
-    bool removeAllData(const QString &serviceName, const QString &dataType, const QString &accountId);
+    bool markSyncedData(const QList<SyncedDatum> &data);
+    QString syncedDatumLocalIdentifier(const QString &serviceName, const QString &dataType, const QString &datumIdentifier);
+    QStringList removeAllData(const QString &serviceName, const QString &dataType, const QString &accountId, bool *ok = 0);
     QStringList accountIdsWithSyncTimestamp(const QString &serviceName, const QString &dataType);
-    QStringList syncedDatumLocalIdentifiers(const QString &serviceName, const QString &dataType, const QString &accountId) const;
-    void beginTransaction();
-    void endTransaction();
-    void changeStatus(Status status);
+    QList<int> syncedDatumAccountIds(const QString &localIdentifier);
+    bool beginTransaction();
+    bool endTransaction();
+    void setStatus(Status status);
+    void setInitialActive(bool enabled);
 
+    // Semaphore system
+    const SyncService::DataType dataType;
+    void decrementSemaphore(int accountId);
+    void incrementSemaphore(int accountId);
+
+    AccountManager *const accountManager;
+    QNetworkAccessManager * const networkAccessManager; // Do not allow the pointer to be changed
+
+
+private:
     Status m_status;
     bool m_enabled;
     QString m_serviceName;
-    AccountManager *m_accountManager;
-    QNetworkAccessManager *m_qnam;
-
-private:
-    SyncService *q;
+    SyncService *m_syncService;
+    QMap<int, int> m_accountSyncSemaphores;
 };
 
 #endif // SOCIALNETWORKSYNCADAPTOR_H

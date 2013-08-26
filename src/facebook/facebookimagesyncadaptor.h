@@ -88,11 +88,6 @@ private:
     QStringList m_cachedPhotoIds;
     QStringList m_serverAlbumIds;
     QStringList m_serverPhotoIds;
-
-    // for busy/inactive detection.
-    void decrementSemaphore(int accountId);
-    void incrementSemaphore(int accountId);
-    QMap<int, int> m_accountSyncSemaphores;
 };
 
 #endif // FACEBOOKIMAGESYNCADAPTOR_H

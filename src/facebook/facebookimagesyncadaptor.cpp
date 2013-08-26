@@ -37,16 +37,16 @@
 FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Images, parent)
 {
-    m_enabled = false;
+    setInitialActive(false);
 
     // we create a database at PRIVILEGED_DATA_DIR/Images/facebook.db
     // the Jolla Gallery application will open this database for fb album support.
     QString imageSyncDatabaseFile = QString("%1/%2/%3")
                 .arg(QLatin1String(PRIVILEGED_DATA_DIR))
-                .arg(SyncService::dataType(m_dataType))
+                .arg(SyncService::dataType(dataType))
                 .arg(QLatin1String("facebook.db"));
     if (!QFile::exists(imageSyncDatabaseFile)) {
-        QDir dir(QString("%1/%2").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(m_dataType)));
+        QDir dir(QString("%1/%2").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(dataType)));
         if (!dir.exists()) {
             dir.mkpath(".");
         }
@@ -62,7 +62,7 @@ FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QOb
     }
 
     // open the database in which we store our synced image information
-    m_imgdb = QSqlDatabase::addDatabase("QSQLITE", QString(QLatin1String("sociald/facebook/%1")).arg(SyncService::dataType(m_dataType)));
+    m_imgdb = QSqlDatabase::addDatabase("QSQLITE", QString(QLatin1String("sociald/facebook/%1")).arg(SyncService::dataType(dataType)));
     m_imgdb.setDatabaseName(imageSyncDatabaseFile);
     if (!m_imgdb.open()) {
         TRACE(SOCIALD_ERROR,
@@ -87,8 +87,7 @@ FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QOb
     }
 
     // we we were able to open the database, we can sync
-    m_enabled = true;
-    m_status = SocialNetworkSyncAdaptor::Inactive;
+    setInitialActive(true);
 }
 
 
@@ -158,7 +157,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
     query.setQueryItems(queryItems);
     url.setQuery(query);
 
-    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -536,7 +535,7 @@ void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, const
         QUrlQuery query(url);
         query.setQueryItems(queryItems);
         url.setQuery(query);
-        QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
+        QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
         if (reply) {
             reply->setProperty("accountId", accountId);
             reply->setProperty("accessToken", accessToken);
@@ -1071,62 +1070,6 @@ void FacebookImageSyncAdaptor::purgeDetectedRemovals()
                                    .arg(expectedPurgeAlbumCount).arg(expectedPurgePhotoCount).arg(actualPurgeAlbumCount).arg(actualPurgePhotoCount));
     } else if (actualPurgeAlbumCount != 0 || actualPurgePhotoCount != 0) {
         TRACE(SOCIALD_DEBUG, QString(QLatin1String("successfully purged %1 albums and %2 photos")).arg(actualPurgeAlbumCount).arg(actualPurgePhotoCount));
-    }
-}
-
-void FacebookImageSyncAdaptor::incrementSemaphore(int accountId)
-{
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue += 1;
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-
-    if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        changeStatus(SocialNetworkSyncAdaptor::Busy);
-    }
-}
-
-void FacebookImageSyncAdaptor::decrementSemaphore(int accountId)
-{
-    if (!m_accountSyncSemaphores.contains(accountId)) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
-        return;
-    }
-
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue -= 1;
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-    if (semaphoreValue < 0) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
-        return;
-    }
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-
-    if (semaphoreValue == 0) {
-        // finished all outstanding requests for Image sync for this account.
-        // update the sync time for this user's Images in the global sociald database.
-        updateLastSyncTimestamp(QLatin1String("facebook"),
-                                SyncService::dataType(SyncService::Images),
-                                QString::number(accountId),
-                                QDateTime::currentDateTime());
-
-        // if all outstanding requests for all accounts have finished,
-        // then update our status to Inactive / ready to handle more sync requests.
-        bool allAreZero = true;
-        QList<int> semaphores = m_accountSyncSemaphores.values();
-        foreach (int sv, semaphores) {
-            if (sv != 0) {
-                allAreZero = false;
-                break;
-            }
-        }
-
-        if (allAreZero) {
-            purgeDetectedRemovals(); // purge anything which has been deleted server-side.
-            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Images sync at: %1"))
-                                       .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            changeStatus(SocialNetworkSyncAdaptor::Inactive);
-        }
     }
 }
 

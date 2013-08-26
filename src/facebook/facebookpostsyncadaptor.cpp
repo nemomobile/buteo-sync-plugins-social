@@ -24,11 +24,10 @@
 #include <QtContacts/QContactPresence>
 #include <QtContacts/QContactAvatar>
 
+#include "eventfeedhelper_p.h"
+
 //meegotouchevents/meventfeed
 #include <meventfeed.h>
-
-// sailfish-components-accounts-qt5
-#include <sailfishkeyprovider.h>
 
 #define SOCIALD_FACEBOOK_POSTS_ID_PREFIX QLatin1String("facebook-posts-")
 #define SOCIALD_FACEBOOK_POSTS_GROUPNAME QLatin1String("facebook")
@@ -60,23 +59,6 @@ static const char *FQL_QUERY = "{"\
 #define QUERY_EID_KEY QLatin1String("eid")
 static const int QUERY_SIZE = 1000;
 
-// TODO: Share this code
-static QString storedClientId()
-{
-    char *cClientId = NULL;
-    int success = SailfishKeyProvider_storedKey("facebook", "facebook-sync", "client_id", &cClientId);
-    if (success != 0) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("Facebook sync: could not retrieve stored client id from SailfishKeyProvider")));
-        free(cClientId);
-        return QString();
-    }
-
-    QString retn = QLatin1String(cClientId);
-    free(cClientId);
-    return retn;
-}
-
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
     QContactManager *retn = new QContactManager(
@@ -98,10 +80,9 @@ FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObje
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
     , m_contactManager(aggregatingContactManager(this))
     , m_contactFetchRequest(new QContactFetchRequest(this))
-    , m_eventFeed(MEventFeed::instance())
 {
-    if (!m_eventFeed) {
-        m_enabled = false;
+    if (!MEventFeed::instance()) {
+        setInitialActive(false);
         return; // can't sync to the local device's event feed, so not enabled.
     }
 
@@ -122,8 +103,7 @@ FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObje
     }
 
     // can sync, enabled
-    m_enabled = true;
-    m_status = SocialNetworkSyncAdaptor::Inactive;
+    setInitialActive(true);
 }
 
 FacebookPostSyncAdaptor::~FacebookPostSyncAdaptor()
@@ -150,30 +130,28 @@ void FacebookPostSyncAdaptor::sync(const QString &dataType)
 
 void FacebookPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int pid, purgeIds) {
-        // first, purge all data from nemo events
-        QStringList purgeDataIds = syncedDatumLocalIdentifiers(QLatin1String("facebook"),
-                SyncService::dataType(SyncService::Posts),
-                QString::number(pid));
-
-        bool ok = true;
-        int prefixLen = QString(SOCIALD_FACEBOOK_POSTS_ID_PREFIX).size();
-        foreach (const QString &pdi, purgeDataIds) {
-            QString eventIdStr = pdi.mid(prefixLen); // pdi is of form: "facebook-posts-EVENTID"
-            qlonglong eventId = eventIdStr.toLongLong(&ok);
-            if (ok) {
-                m_eventFeed->removeItem(eventId);
-            } else {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to convert event id string to int: %1"))
-                        .arg(pdi));
-            }
+    foreach (int accountIdentifier, purgeIds) {
+        bool ok;
+        QStringList localIdentifiers = removeAllData(serviceName(), SyncService::dataType(dataType),
+                                                     QString::number(accountIdentifier), &ok);
+        if (!ok) {
+            continue;
         }
 
-        // second, purge all data from our database
-        removeAllData(QLatin1String("facebook"),
-                SyncService::dataType(SyncService::Posts),
-                QString::number(pid)); // XXX TODO: use fb id instead of QString::number(accountId)
+
+        int prefixLength = QString(SOCIALD_FACEBOOK_POSTS_ID_PREFIX).size();
+        // Remove entries in the event feed
+        foreach (const QString &localIdentifier, localIdentifiers) {
+            QString eventIdString = localIdentifier.mid(prefixLength);
+            qlonglong eventId = eventIdString.toLongLong(&ok);
+            if (ok) {
+                MEventFeed::instance()->removeItem(eventId);
+            } else {
+                TRACE(SOCIALD_ERROR,
+                        QString(QLatin1String("error: unable to remove event %1"))
+                        .arg(eventIdString));
+            }
+        }
     }
 }
 
@@ -191,7 +169,7 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -226,7 +204,7 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -283,7 +261,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
     bool ok = false;
     QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("data"))) {
-        // we expect "data" and possible "paging"
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         if (!data.size()) {
@@ -303,6 +280,9 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
         // name easier.
         QMap<QString, QString> actorNames;
         QJsonArray mainData;
+        QList<SyncedDatum> syncedData;
+        int prefixLen = QString(SOCIALD_FACEBOOK_POSTS_ID_PREFIX).size();
+
         foreach (QJsonValue entry, data) {
             QJsonObject entryObject = entry.toObject();
             QString name = entryObject.value(QUERY_NAME_KEY).toString();
@@ -386,12 +366,12 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             QJsonObject post = entry.toObject();
             // These are the fields we eventually need to fill out
             QString actorId = post.value(QLatin1String("actor_id")).toVariant().toString();
-            QString eventTitle = actorNames.value(actorId);
-            QString eventBody;
-            QStringList eventImageList;
-            QString eventFooter;
-            bool eventIsVideo = false;
-            QString eventUrl; // What should we put here ? TODO
+            QString title = actorNames.value(actorId);
+            QString body;
+            QStringList imageList;
+            QString footer;
+            bool isVideo = false;
+            QString url; // What should we put here ? TODO
 
 
             // Grab the data from the current post
@@ -431,9 +411,9 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             }
             // Create the event body
             // We use the name of the attachment if the event body is empty
-            eventBody = isMessagePost ? message : story;
-            if (eventBody.isEmpty()) {
-                eventBody = attachment.value(QLatin1String("name")).toString();
+            body = isMessagePost ? message : story;
+            if (body.isEmpty()) {
+                body = attachment.value(QLatin1String("name")).toString();
             }
 
             // Create the event footer
@@ -445,7 +425,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             //% "%n comments"
             QString commentsString = qtTrId("sociald_facebook_posts-n_comments", comments);
 
-            eventFooter = QString ("%1 \u2022 %2").arg(likesString, commentsString);
+            footer = QString ("%1 \u2022 %2").arg(likesString, commentsString);
 
             // Pass the description of the media to the subview via metadata
             // (TODO: libeventfeed is lacking support of this, or maybe lipstick ?)
@@ -465,7 +445,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 foreach (QJsonValue medium, media) {
                     QJsonObject mediumObject = medium.toObject();
                     if (mediumObject.contains(QLatin1String("video"))) {
-                        eventIsVideo = true;
+                        isVideo = true;
                     }
                     QString mediaUrlString = mediumObject.value(QLatin1String("src")).toString();
 
@@ -490,7 +470,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                         mediaUrlString.prepend("https://facebook.com/");
                     }
 
-                    eventImageList.append(QUrl::fromEncoded(mediaUrlString.toLocal8Bit()).toString());
+                    imageList.append(QUrl::fromEncoded(mediaUrlString.toLocal8Bit()).toString());
                 }
 
                 if (wrongMediaFound) {
@@ -502,64 +482,51 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 is more than a week old:\n"))
-                        .arg(accountId) << "    " << createdTime << ":" << eventBody);
+                        .arg(accountId) << "    " << createdTime << ":" << body);
                 break;                 // all subsequent events will be even older.
-            } else if (haveAlreadyPostedEvent(postId, eventBody, createdTime)) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("event for account %1 has already been posted:\n"))
-                        .arg(accountId) << "    " << createdTime << ":" << eventBody);
-
-                // TODO: We should update the number of likes and comments
             } else {
-                static QString clientId(storedClientId());
                 QVariantMap metaData;
-                metaData.insert("accountId", accountId);
                 metaData.insert("nodeId", postId);
                 metaData.insert("postAttachmentName", attachmentName);
                 metaData.insert("postAttachmentCaption", attachmentCaption);
                 metaData.insert("postAttachmentDescription", attachmentDescription);
-                metaData.insert("clientId", clientId);
+                metaData.insert("clientId", clientId());
 
                 QString icon = QLatin1String("icon-s-service-facebook");
 
                 // Search the portrait in the contacts
-                if (contactHash.contains(eventTitle)) {
-                    QContact contact = contactHash.value(eventTitle);
+                if (contactHash.contains(title)) {
+                    QContact contact = contactHash.value(title);
                     QContactAvatar avatar = contact.detail<QContactAvatar>();
                     if (!avatar.imageUrl().isEmpty()) {
                         icon = avatar.imageUrl().toString();
                     }
                 }
 
+                QString localIdentifier = syncedDatumLocalIdentifier(serviceName(), SyncService::dataType(dataType), postId).mid(prefixLen);
 
-                // Publish the post to the events feed.
-                qlonglong eventId = m_eventFeed->addItem(
-                        icon,
-                        eventTitle,
-                        eventBody,
-                        eventImageList,
-                        createdTime.toLocalTime(), // We are using UTC time, we need to convert it
-                        eventFooter,
-                        eventIsVideo,
-                        eventUrl,
-                        SOCIALD_FACEBOOK_POSTS_GROUPNAME, // sourceName
-                        QLatin1String("Facebook"),        // sourceDisplayName // XXX TODO: per-account?
-                        metaData);
-
-                if (eventId == 0) {
-                    // failed.
-                    TRACE(SOCIALD_ERROR,
-                            QString(QLatin1String("error: failed to publish post/feed event: %1"))
-                            .arg(eventBody));
-                } else {
-                    // and store the fact that we have synced it to the events feed.
-                    markSyncedDatum(QString(QLatin1String("facebook-posts-%1")).arg(QString::number(eventId)),
-                                    QLatin1String("facebook"), SyncService::dataType(SyncService::Posts),
-                                    QString::number(accountId), createdTime, QDateTime::currentDateTime(),
-                                    postId); // XXX TODO: instead of QString::number(accountId) use fb user id.
+                QList<int> accountIds;
+                if (!localIdentifier.isEmpty()) {
+                    accountIds.append(syncedDatumAccountIds(QString(SOCIALD_FACEBOOK_POSTS_ID_PREFIX + localIdentifier)));
                 }
+                if (!accountIds.contains(accountId)) {
+                    accountIds.append(accountId);
+                }
+
+                EventFeedHelper::manageEvent(icon, title, body, imageList, createdTime,
+                                             footer, isVideo, url, serviceName(),
+                                             // TODO: translate the string below
+                                             QLatin1String("Facebook"), metaData, accountId,
+                                             accountIds,
+                                             // For Facebook, we do not need the map
+                                             // of profile picture.
+                                             QMap<int, QString>(), localIdentifier,
+                                             SOCIALD_FACEBOOK_POSTS_ID_PREFIX,
+                                             dataType, postId, syncedData);
             }
         }
+
+        markSyncedData(syncedData);
     } else {
         // error occurred during request.
         TRACE(SOCIALD_ERROR,
@@ -628,59 +595,4 @@ bool FacebookPostSyncAdaptor::haveAlreadyPostedEvent(const QString &postId, cons
 
 
     return (syncedDatum.isValid());
-}
-
-void FacebookPostSyncAdaptor::incrementSemaphore(int accountId)
-{
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue += 1;
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-
-    if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        changeStatus(SocialNetworkSyncAdaptor::Busy);
-    }
-}
-
-void FacebookPostSyncAdaptor::decrementSemaphore(int accountId)
-{
-    if (!m_accountSyncSemaphores.contains(accountId)) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
-        return;
-    }
-
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue -= 1;
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-    if (semaphoreValue < 0) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
-        return;
-    }
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-
-    if (semaphoreValue == 0) {
-        // finished all outstanding requests for Posts sync for this account.
-        // update the sync time for this user's Posts in the global sociald database.
-        updateLastSyncTimestamp(QLatin1String("facebook"),
-                                SyncService::dataType(SyncService::Posts),
-                                QString::number(accountId),
-                                QDateTime::currentDateTime());
-
-        // if all outstanding requests for all accounts have finished,
-        // then update our status to Inactive / ready to handle more sync requests.
-        bool allAreZero = true;
-        QList<int> semaphores = m_accountSyncSemaphores.values();
-        foreach (int sv, semaphores) {
-            if (sv != 0) {
-                allAreZero = false;
-                break;
-            }
-        }
-
-        if (allAreZero) {
-            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Posts sync at: %1"))
-                                       .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            changeStatus(SocialNetworkSyncAdaptor::Inactive);
-        }
-    }
 }

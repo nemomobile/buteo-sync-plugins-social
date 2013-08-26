@@ -30,7 +30,7 @@ class TwitterDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
 public:
     TwitterDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent);
     virtual ~TwitterDataTypeSyncAdaptor();
-    virtual void sync(const QString &dataType);
+    virtual void sync(const QString &dataTypeString);
 
 protected:
     static QVariant parseReplyData(const QByteArray &replyData, bool *ok);
@@ -39,8 +39,8 @@ protected:
     virtual void updateDataForAccounts(const QList<int> &accountIds);
     virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0; // must at least implement these two
     virtual void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret) = 0; // must at least implement these two
-    SyncService::DataType m_dataType;
-
+    QString consumerKey();
+    QString consumerSecret();
 protected Q_SLOTS:
     virtual void errorHandler(QNetworkReply::NetworkError err);
     virtual void sslErrorsHandler(const QList<QSslError> &errs);
@@ -51,8 +51,11 @@ private Q_SLOTS:
     void signOnResponse(const QVariantMap &data);
 
 private:
-    bool consumerKeyAndSecret(QString &consumerKey, QString &consumerSecret);
+    void loadConsumerKeyAndSecret();
     void signIn(Account *account);
+    bool m_triedLoading; // Is true if we tried to load (even if we failed)
+    QString m_consumerKey;
+    QString m_consumerSecret;
 };
 
 #endif // TWITTERDATATYPESYNCADAPTOR_H

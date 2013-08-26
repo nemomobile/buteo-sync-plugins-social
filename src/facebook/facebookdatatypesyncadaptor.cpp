@@ -28,29 +28,27 @@
 #include <SignOn/SessionData>
 
 FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
-    : SocialNetworkSyncAdaptor("facebook", syncService, parent)
-    , m_dataType(dataType)
+    : SocialNetworkSyncAdaptor("facebook", dataType, syncService, parent), m_triedLoading(false)
 {
-    m_validClientId = initializeClientId();
 }
 
 FacebookDataTypeSyncAdaptor::~FacebookDataTypeSyncAdaptor()
 {
 }
 
-void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
+void FacebookDataTypeSyncAdaptor::sync(const QString &dataTypeString)
 {
-    if (dataType != SyncService::dataType(m_dataType)) {
+    if (dataTypeString != SyncService::dataType(dataType)) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: facebook %1 sync adaptor was asked to sync %2"))
-                .arg(SyncService::dataType(m_dataType)).arg(dataType));
-        changeStatus(SocialNetworkSyncAdaptor::Error);
+                .arg(SyncService::dataType(dataType)).arg(dataTypeString));
+        setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
 
-    if (!m_validClientId) {
+    if (clientId().isEmpty()) {
         TRACE(SOCIALD_ERROR, QString(QLatin1String("error: client id couldn't be retrieved for facebook")));
-        changeStatus(SocialNetworkSyncAdaptor::Error);
+        setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
 
@@ -61,20 +59,20 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataType)
 
     QList<int> newIds, purgeIds, updateIds;
     // Implemented in socialsyncadaptor
-    checkAccounts(m_dataType, &newIds, &purgeIds, &updateIds);
+    checkAccounts(dataType, &newIds, &purgeIds, &updateIds);
     purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
     updateDataForAccounts(newIds);
     updateDataForAccounts(updateIds);
 
     TRACE(SOCIALD_DEBUG,
             QString(QLatin1String("successfully triggered sync of %1: %2 purged, %3 new, %4 updated accounts"))
-            .arg(SyncService::dataType(m_dataType)).arg(purgeIds.size()).arg(newIds.size()).arg(updateIds.size()));
+            .arg(SyncService::dataType(dataType)).arg(purgeIds.size()).arg(newIds.size()).arg(updateIds.size()));
 }
 
 void FacebookDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
-        Account *account = m_accountManager->account(accountId);
+        Account *account = accountManager->account(accountId);
         if (!account) {
             TRACE(SOCIALD_ERROR,
                   QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
@@ -107,7 +105,7 @@ void FacebookDataTypeSyncAdaptor::signOnError(const QString &err)
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
             .arg(account->identifier()) << err);
     account->disconnect(this);
-    changeStatus(SocialNetworkSyncAdaptor::Error);
+    setStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void FacebookDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -136,7 +134,7 @@ void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
-            .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(err));
+            .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     sender()->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
@@ -153,10 +151,18 @@ void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     }
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
-            .arg(SyncService::dataType(m_dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
+            .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     sender()->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
+}
+
+QString FacebookDataTypeSyncAdaptor::clientId()
+{
+    if (!m_triedLoading) {
+        loadClientId();
+    }
+    return m_clientId;
 }
 
 QJsonObject FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
@@ -170,17 +176,18 @@ QJsonObject FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyD
     return QJsonObject();
 }
 
-bool FacebookDataTypeSyncAdaptor::initializeClientId()
+void FacebookDataTypeSyncAdaptor::loadClientId()
 {
+    m_triedLoading = true;
     char *cClientId = NULL;
     int cSuccess = SailfishKeyProvider_storedKey("facebook", "facebook-sync", "client_id", &cClientId);
     if (cSuccess != 0 || cClientId == NULL) {
-        return false;
+        return;
     }
 
     m_clientId = QLatin1String(cClientId);
     free(cClientId);
-    return true;
+    return;
 }
 
 void FacebookDataTypeSyncAdaptor::signIn(Account *account)
@@ -194,7 +201,7 @@ void FacebookDataTypeSyncAdaptor::signIn(Account *account)
     }
 
     SignInParameters *sip = account->signInParameters("facebook-sync");
-    sip->setParameter(QLatin1String("ClientId"), m_clientId);
+    sip->setParameter(QLatin1String("ClientId"), clientId());
     sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
 
     connect(account, SIGNAL(signInError(QString)), this, SLOT(signOnError(QString)));

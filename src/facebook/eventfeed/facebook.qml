@@ -31,9 +31,9 @@ Page {
     }
 
     Account {
-        identifier: container.model != null ? container.model.metaData["accountId"] : -1
-        onStatusChanged: {
-            if (status == Account.Initialized) {
+        id: account
+        function performSign() {
+            if (status == Account.Initialized && identifier != -1) {
                 // Sign in, and get access token.
                 var params = signInParameters("facebook-sync")
                 console.debug(container.model.metaData["clientId"])
@@ -42,6 +42,10 @@ Page {
                 signIn("Jolla", "Jolla", params)
             }
         }
+
+        identifier: 0
+        onStatusChanged: performSign()
+        onIdentifierChanged: performSign()
 
         onSignInResponse: {
             var accessTok = data["AccessToken"]
@@ -353,6 +357,20 @@ Page {
                     }
                 }
             }
+        }
+
+        VerticalScrollDecorator {}
+
+        SocialAccountPullDownMenu {
+            pageContainer: container.pageContainer
+            metaData: container.model.metaData
+            onCurrentAccountChanged: account.identifier = currentAccount
+            //% "Select account"
+            selectAccountString: qsTrId("lipstick-jolla-home-la-select-account")
+            //% "Change to %1"
+            changeToAccountString: qsTrId("lipstick-jolla-home-la-change-to-account")
+            //% "Account: %1"
+            accountString: qsTrId("lipstick-jolla-home-la-account-name")
         }
     }
 }

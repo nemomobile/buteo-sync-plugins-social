@@ -22,60 +22,30 @@
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
+#include <QtSql/QSqlRecord>
+
+
+static const int USER_VERSION = 1;
+static inline QString pragmaUserVersionQuery() {
+    return QString("PRAGMA user_version=%1").arg(USER_VERSION);
+}
 
 SyncServicePrivate::SyncServicePrivate(const QString &connectionName, SyncService *parent)
     : QObject(parent), q(parent)
 {
-    QString socialdDatabaseDir = QString("%1/%2")
-            .arg(QLatin1String(PRIVILEGED_DATA_DIR))
-            .arg(QLatin1String(SYNC_DATABASE_DIR));
-    if (!QFile::exists(QString("%1/%2").arg(socialdDatabaseDir).arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)))) {
-        QDir dir(socialdDatabaseDir);
-        if (!dir.exists()) {
-            dir.mkpath(".");
-        }
-        QString absolutePath = dir.absoluteFilePath(SOCIALD_SYNC_DATABASE_NAME);
-        QFile dbfile(absolutePath);
-        if (!dbfile.open(QIODevice::ReadWrite)) {
-            TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to create sociald database %1 - sociald will be inactive"))
-                .arg(absolutePath));
-            return;
-        }
-        dbfile.close();
-    }
-
-    // open the database in which we store our sync event information
-    m_db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
-    m_db.setDatabaseName(QString("%1/%2").arg(socialdDatabaseDir).arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)));
-    if (!m_db.open()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to open sociald database %1 - sociald will be inactive"))
-            .arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)));
+    if (!openDb(connectionName)) {
         return;
     }
 
-    // create the sociald db tables
-    // syncedData = service, accountIdentifier, dataType, createdTimestamp, syncTimestamp, datumIdentifier
-    // syncTimestamps = service, accountIdentifier, dataType, syncTimestamp
-    QSqlQuery query(m_db);
-    query.prepare( "CREATE TABLE IF NOT EXISTS syncedData (id VARCHAR(50) PRIMARY KEY, serviceName VARCHAR(20), accountIdentifier VARCHAR(50), dataType VARCHAR(16), createdTimestamp VARCHAR(30), syncTimestamp VARCHAR(30), datumIdentifier VARCHAR(50))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create syncedData table: %1 - sociald will be inactive"))
-            .arg(query.lastError().text()));
+    // TODO: do better cleanup when version changed
+    int version = checkDbVersion();
+    if (version == -1) {
         return;
     }
 
-    query.prepare( "CREATE TABLE IF NOT EXISTS syncTimestamps (id INTEGER PRIMARY KEY, serviceName VARCHAR(20), accountIdentifier VARCHAR(50), dataType VARCHAR(16), syncTimestamp VARCHAR(30))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create syncTimestamps table: %1 - sociald will be inactive"))
-            .arg(query.lastError().text()));
-        return;
+    if (version != USER_VERSION) {
+        createTables();
     }
-
-    
 
     // TODO: use a plugin system or something?  For now, this is fine.
 
@@ -138,6 +108,141 @@ SocialNetworkSyncAdaptor *SyncServicePrivate::createAdaptor(const QString &socia
     } else {
         return 0;
     }
+}
+
+// Try to open the database. Returns false if fails
+bool SyncServicePrivate::openDb(const QString &connectionName)
+{
+    // Search and create the database
+    QString socialdDatabaseDir = QString("%1/%2")
+            .arg(QLatin1String(PRIVILEGED_DATA_DIR))
+            .arg(QLatin1String(SYNC_DATABASE_DIR));
+    if (!QFile::exists(QString("%1/%2").arg(socialdDatabaseDir).arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)))) {
+        QDir dir(socialdDatabaseDir);
+        if (!dir.exists()) {
+            dir.mkpath(".");
+        }
+        QString absolutePath = dir.absoluteFilePath(SOCIALD_SYNC_DATABASE_NAME);
+        QFile dbfile(absolutePath);
+        if (!dbfile.open(QIODevice::ReadWrite)) {
+            TRACE(SOCIALD_ERROR,
+                QString(QLatin1String("error: unable to create sociald database %1 - sociald will be inactive"))
+                .arg(absolutePath));
+            return false;
+        }
+        dbfile.close();
+    }
+
+    // open the database in which we store our sync event information
+    m_db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+    m_db.setDatabaseName(QString("%1/%2").arg(socialdDatabaseDir).arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)));
+    if (!m_db.open()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to open sociald database %1 - sociald will be inactive"))
+            .arg(QLatin1String(SOCIALD_SYNC_DATABASE_NAME)));
+        return false;
+    }
+    return true;
+}
+
+// Check database version. Returns the current version if it is up-to-date,
+// the new old version if version changed (in order to perform cleanups)
+// and -1 if something wrong happened.
+int SyncServicePrivate::checkDbVersion()
+{
+    const QString queryString = QString("PRAGMA user_version");
+
+    int currentVersion = -1;
+    QSqlQuery query(m_db);
+    if (!query.exec(queryString)) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: unable to query db version: %1"))
+              .arg(query.lastError().text()));
+        return -1;
+    }
+    QSqlRecord record = query.record();
+
+    if (!query.first()) {
+        return -1;
+    }
+
+    QString value = query.value(record.indexOf("user_version")).toString();
+    if (value.isEmpty()) {
+        return -1;
+    }
+
+    currentVersion = value.toInt();
+    if (currentVersion != USER_VERSION) {
+        // We update the version
+        query.prepare(pragmaUserVersionQuery());
+        if (!query.exec()) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("error: unable to update db version: %1"))
+                  .arg(query.lastError().text()));
+            return -1;
+        }
+    }
+
+    return currentVersion;
+}
+
+bool SyncServicePrivate::createTables()
+{
+    // Drop old tables
+    QSqlQuery query(m_db);
+    query.prepare("DROP TABLE IF EXISTS syncedData");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create drop table: %1 - sociald will be inactive"))
+            .arg(query.lastError().text()));
+        return false;
+    }
+
+    query.prepare("DROP TABLE IF EXISTS syncTimestamps");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create drop table: %1 - sociald will be inactive"))
+            .arg(query.lastError().text()));
+        return false;
+    }
+
+    query.prepare("DROP TABLE IF EXISTS link_syncedData_account");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create drop table: %1 - sociald will be inactive"))
+            .arg(query.lastError().text()));
+        return false;
+    }
+
+    // Create the sociald db tables
+    // syncedData = localIdentifier, service, dataType, createdTimestamp, syncTimestamp, datumIdentifier
+    // syncTimestamps = id, accountIdentifier, service, dataType, syncTimestamp
+    // link_syncedData_account = syncedDataId, accountIdentifier
+    query.prepare("CREATE TABLE IF NOT EXISTS syncedData (localIdentifier VARCHAR(50) PRIMARY KEY, serviceName VARCHAR(20), dataType VARCHAR(16), createdTimestamp VARCHAR(30), syncTimestamp VARCHAR(30), datumIdentifier VARCHAR(50))");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create syncedData table: %1 - sociald will be inactive"))
+            .arg(query.lastError().text()));
+        return false;
+    }
+
+    query.prepare("CREATE TABLE IF NOT EXISTS syncTimestamps (id INTEGER PRIMARY KEY, accountIdentifier VARCHAR(50), serviceName VARCHAR(20), dataType VARCHAR(16), syncTimestamp VARCHAR(30))");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create syncTimestamps table: %1 - sociald will be inactive"))
+            .arg(query.lastError().text()));
+        return false;
+    }
+
+    query.prepare("CREATE TABLE IF NOT EXISTS link_syncedData_account (syncedDataId VARCHAR(50), accountIdentifier VARCHAR(50), CONSTRAINT id PRIMARY KEY (syncedDataId, accountIdentifier))");
+    if (!query.exec()) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: unable to create syncTimestamps table: %1 - sociald will be inactive"))
+            .arg(query.lastError().text()));
+        return false;
+    }
+
+    return true;
 }
 
 // --------------------------------------------------

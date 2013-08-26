@@ -41,7 +41,7 @@
 #define SOCIALD_FACEBOOK_CONTACTS_ID_PREFIX QLatin1String("facebook-contacts-")
 #define SOCIALD_FACEBOOK_CONTACTS_GROUPNAME QLatin1String("sociald-sync-facebook-contacts")
 #define SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET QLatin1String("facebook")
-#define SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbFriendId, avatarType) QString("%1/%2/%3-%4.jpg").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(m_dataType)).arg(fbFriendId).arg(avatarType)
+#define SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbFriendId, avatarType) QString("%1/%2/%3-%4.jpg").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(dataType)).arg(fbFriendId).arg(avatarType)
 #define SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE 50
 
 static QContactManager *aggregatingContactManager(QObject *parent)
@@ -63,7 +63,7 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Contacts, parent)
     , m_contactManager(aggregatingContactManager(this))
 {
-    m_enabled = false;
+    setInitialActive(false);
     if (!m_contactManager) {
         TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: no aggregating contact manager exists - Facebook contacts sync will be inactive")));
@@ -73,10 +73,10 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
     // we create a database at PRIVILEGED_DATA_DIR/Contacts/facebook.db
     QString contactSyncDb = QString("%1/%2/%3")
                 .arg(QLatin1String(PRIVILEGED_DATA_DIR))
-                .arg(SyncService::dataType(m_dataType))
+                .arg(SyncService::dataType(dataType))
                 .arg(QLatin1String("facebook.db"));
     if (!QFile::exists(contactSyncDb)) {
-        QDir dir(QString("%1/%2").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(m_dataType)));
+        QDir dir(QString("%1/%2").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(dataType)));
         if (!dir.exists()) {
             dir.mkpath(".");
         }
@@ -92,7 +92,7 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
     }
 
     // open the database in which we store our synced friend information
-    QString connectionName = QString(QLatin1String("sociald/facebook/%1")).arg(SyncService::dataType(m_dataType));
+    QString connectionName = QString(QLatin1String("sociald/facebook/%1")).arg(SyncService::dataType(dataType));
     QString databaseName = contactSyncDb;
     m_contactSyncDb = QSqlDatabase::addDatabase("QSQLITE", connectionName);
     m_contactSyncDb.setDatabaseName(databaseName);
@@ -122,8 +122,8 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
     }
 
     // can sync, enabled
-    m_enabled = true;
-    m_status = SocialNetworkSyncAdaptor::Inactive;
+    setInitialActive(true);
+    setStatus(SocialNetworkSyncAdaptor::Inactive);
 }
 
 FacebookContactSyncAdaptor::~FacebookContactSyncAdaptor()
@@ -195,7 +195,7 @@ void FacebookContactSyncAdaptor::requestData(int accountId, const QString &acces
         url = QUrl(avatarUrl);
     }
 
-    QNetworkReply *reply = m_qnam->get(QNetworkRequest(url));
+    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -1123,60 +1123,4 @@ void FacebookContactSyncAdaptor::clearRemovalDetectionLists()
     // This function should be called if a request errors out.
     // If the lists are empty, we won't purge anything.
     m_cachedFriendIds.clear();
-}
-
-void FacebookContactSyncAdaptor::incrementSemaphore(int accountId)
-{
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue += 1;
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-
-    if (m_status == SocialNetworkSyncAdaptor::Inactive) {
-        changeStatus(SocialNetworkSyncAdaptor::Busy);
-    }
-}
-
-void FacebookContactSyncAdaptor::decrementSemaphore(int accountId)
-{
-    if (!m_accountSyncSemaphores.contains(accountId)) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
-        return;
-    }
-
-    int semaphoreValue = m_accountSyncSemaphores.value(accountId);
-    semaphoreValue -= 1;
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-    if (semaphoreValue < 0) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
-        return;
-    }
-    m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-
-    if (semaphoreValue == 0) {
-        // finished all outstanding requests for Contacts sync for this account.
-        // update the sync time for this user's Contacts in the global sociald database.
-        updateLastSyncTimestamp(QLatin1String("facebook"),
-                                SyncService::dataType(SyncService::Contacts),
-                                QString::number(accountId),
-                                QDateTime::currentDateTime());
-
-        // if all outstanding requests for all accounts have finished,
-        // then update our status to Inactive / ready to handle more sync requests.
-        bool allAreZero = true;
-        QList<int> semaphores = m_accountSyncSemaphores.values();
-        foreach (int sv, semaphores) {
-            if (sv != 0) {
-                allAreZero = false;
-                break;
-            }
-        }
-
-        if (allAreZero) {
-            purgeDetectedRemovals(); // purge anything which has been deleted server-side.
-            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished Facebook Contacts sync at: %1"))
-                                       .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
-            changeStatus(SocialNetworkSyncAdaptor::Inactive);
-        }
-    }
 }

@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.23
+Version:    0.0.24
 Release:    1
 Group:      System/Applications
 License:    TBD
@@ -22,7 +22,7 @@ BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
 # for lupdate
 BuildRequires:  qt5-qttools-linguist
-Requires: sailfish-components-accounts-qt5 >= 0.0.37
+Requires: sailfish-components-accounts-qt5 >= 0.0.43
 Requires: nemo-qml-plugin-notifications-qt5
 Requires: nemo-qml-plugin-social-qt5 >= 0.0.7
 Requires: buteo-syncfw-qt5-msyncd
