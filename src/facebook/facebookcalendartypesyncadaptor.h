@@ -1,7 +1,7 @@
 /****************************************************************************
  **
  ** Copyright (C) 2013 Jolla Ltd.
- ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ ** Contact: Lucien Xu <lucien.xu@jollamobile.com>
  **
  ****************************************************************************/
 
@@ -35,9 +35,6 @@ private Q_SLOTS:
 private:
     bool dbCreateTables();
     bool dbDropTables();
-
-//private:
-//    Notification *existingNemoNotification(int accountId);
 };
 
 #endif // FACEBOOKCALENDARTYPESYNCADAPTOR_H

@@ -1,7 +1,7 @@
 /****************************************************************************
  **
  ** Copyright (C) 2013 Jolla Ltd.
- ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ ** Contact: Lucien Xu <lucien.xu@jollamobile.com>
  **
  ****************************************************************************/
 
@@ -9,6 +9,7 @@
 #include <QtCore/QUrlQuery>
 #include <QtCore/QFile>
 #include <QtCore/QDir>
+#include <QtCore/QJsonArray>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 #include "trace.h"
@@ -22,17 +23,14 @@
 #define DB_NAME QLatin1String("facebook.db")
 
 static const char *FACEBOOK = "Facebook";
-static const char *FACEBOOK_COLOR = "#3b5998";
+static const char *FACEBOOK_COLOR = "#3B5998";
 
-// TODO: use a database to track the events
-// in order to perform events overriding, removal of all events on
-// purging, and removal of old events
 FacebookCalendarTypeSyncAdaptor::FacebookCalendarTypeSyncAdaptor(SyncService *syncService,
                                                                  QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Calendars, parent)
 {
     setInitialActive(initDatabase(serviceName(), SyncService::dataType(dataType),
-                                  QLatin1String(SOCIALD_DATABASE_DIR), DB_NAME ,USER_VERSION));
+                                  QLatin1String(PRIVILEGED_DATA_DIR), DB_NAME ,USER_VERSION));
 }
 
 FacebookCalendarTypeSyncAdaptor::~FacebookCalendarTypeSyncAdaptor()
@@ -63,6 +61,7 @@ void FacebookCalendarTypeSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
                                            query.value(1).toString());
         }
 
+        // Delete events from the calendar
         foreach (QString facebookId, facebookIdToIncidenceId.keys()) {
             QString incidenceId = facebookIdToIncidenceId.value(facebookId);
             storage->load(incidenceId);
@@ -72,11 +71,21 @@ void FacebookCalendarTypeSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
             }
         }
 
+        // Delete the notebook from the storage
+        // (we even check if there are several of them, in case of an error)
+        foreach (mKCal::Notebook::Ptr notebook, storage->notebooks()) {
+            if (notebook->pluginName() == QLatin1String(FACEBOOK)
+                && notebook->account() == QString::number(accountId)) {
+                storage->deleteNotebook(notebook);
+            }
+        }
+
+        // Clean the database
         query.prepare("DELETE FROM events WHERE accountId=:accountId");
         query.bindValue(":accountId", accountId);
         if (!query.exec()) {
             TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("error: unable to execute events deletin for account %1. "\
+                  QString(QLatin1String("error: unable to execute events deletion for account %1. "\
                                         "Error %2")).arg(accountId).arg(query.lastError().text()));
             return;
         }
@@ -153,15 +162,13 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
-    QString accessToken = reply->property("accessToken").toString();
-    QDateTime lastSync = lastSyncTimestamp(serviceName(), SyncService::dataType(dataType),
-                                           QString::number(accountId));
     QByteArray replyData = reply->readAll();
+
     disconnect(reply);
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (ok) {
         // We get the existing incidences
         QSqlQuery query(db);
@@ -237,8 +244,6 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
         } else {
             notebook = facebookNotebooks.first();
         }
-        // TODO, we might need the following code (but it do not work)
-        // notebook->setIsReadOnly(false);
 
         // We first set all facebook ids to be deleted
         // if we find that the entry should still be displayed
@@ -260,10 +265,10 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
         }
 
         // Parse the event list
-        QVariantList dataList = parsed.value(QLatin1String("data")).toList();
-        foreach (QVariant data, dataList) {
-            QVariantMap dataMap = data.toMap();
-            QString eventId = dataMap.value(QLatin1String("eid")).toString();
+        QJsonArray dataList = parsed.value(QLatin1String("data")).toArray();
+        foreach (QJsonValue data, dataList) {
+            QJsonObject dataMap = data.toObject();
+            QString eventId = dataMap.value(QLatin1String("eid")).toVariant().toString();
             QString startTimeString = dataMap.value(QLatin1String("start_time")).toString();
             bool isDateOnly = dataMap.value(QLatin1String("is_date_only")).toBool();
             KDateTime startTime;
@@ -317,9 +322,6 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
             }
         }
 
-        // TODO, we might need the following code (but it do not work)
-        // notebook->setIsReadOnly(true);
-
         // Write to calendar
         storage->save();
         storage->close();
@@ -347,8 +349,8 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
         QVariantList args3;
         foreach (QString facebookId, facebookIdAndIncidenceToBeAdded.keys()) {
             args1.append(facebookId);
-            args2.append(facebookIdAndIncidenceToBeAdded.value(facebookId));
-            args3.append(accountId);
+            args2.append(accountId);
+            args3.append(facebookIdAndIncidenceToBeAdded.value(facebookId));
         }
         query.addBindValue(args1);
         query.addBindValue(args2);
@@ -377,9 +379,10 @@ bool FacebookCalendarTypeSyncAdaptor::dbCreateTables()
     // events = fbEventId, fbUserId, incidenceId
     QSqlQuery query(db);
     query.prepare( "CREATE TABLE IF NOT EXISTS events ("
-                   "fbEventId VARCHAR(50) UNIQUE PRIMARY KEY,"
+                   "fbEventId VARCHAR(50),"
+                   "accountId VARCHAR(50),"
                    "incidenceId VARCHAR(50),"
-                   "accountId VARCHAR(50))");
+                   "CONSTRAINT id PRIMARY KEY (fbEventId, accountId))");
     if (!query.exec()) {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("error: unable to create events table - "\

@@ -48,13 +48,14 @@ HEADERS += \
     $$PWD/socialnetworksyncadaptor.h \
     $$PWD/syncservice.h \
     $$PWD/syncservice_p.h \
-    $$PWD/trace.h
+    $$PWD/trace.h \
+    $$PWD/databasemanipulationinterface.h
 
 SOURCES += \
     $$PWD/buteosocialsync.cpp \
     $$PWD/socialnetworksyncadaptor.cpp \
     $$PWD/syncservice.cpp \
-    databasemanipulationinterface.cpp
+    $$PWD/databasemanipulationinterface.cpp
 
 MOC_DIR = $$PWD/../.moc
 OBJECTS_DIR = $$PWD/../.obj
