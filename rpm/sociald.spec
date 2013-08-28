@@ -23,6 +23,7 @@ BuildRequires:  buteo-syncfw-qt5-devel
 # for lupdate
 BuildRequires:  qt5-qttools-linguist
 Requires: sailfish-components-accounts-qt5 >= 0.0.43
+Requires: sailfish-components-textlinking
 Requires: nemo-qml-plugin-notifications-qt5
 Requires: nemo-qml-plugin-social-qt5 >= 0.0.7
 Requires: buteo-syncfw-qt5-msyncd
