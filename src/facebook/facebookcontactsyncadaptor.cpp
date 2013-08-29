@@ -10,8 +10,6 @@
 #include "trace.h"
 #include "constants_p.h"
 
-#include <QtCore/QJsonArray>
-#include <QtCore/QJsonValue>
 #include <QtCore/QPair>
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -237,7 +235,7 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!isError && ok && parsed.contains(QLatin1String("data"))) {
         // we expect "data" and possibly "paging"
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();

@@ -232,7 +232,7 @@ void FacebookPostSyncAdaptor::finishedMeHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("id"))) {
         QString selfUserId = parsed.value(QLatin1String("id")).toString();
         if (!m_selfFacebookUserIds.contains(accountId)) {
@@ -258,7 +258,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("data"))) {
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 

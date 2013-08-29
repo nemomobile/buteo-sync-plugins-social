@@ -32,7 +32,9 @@ protected: // implementing TwitterDataTypeSyncAdaptor interface
     void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret);
 
 private:
-    void requestNotifications(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &sinceTweetId = QString());
+    void requestNotifications(int accountId, const QString &oauthToken,
+                              const QString &oauthTokenSecret,
+                              const QString &sinceTweetId = QString());
 
 private Q_SLOTS:
     void finishedHandler();

@@ -12,6 +12,7 @@
 
 #include <QtCore/QPair>
 #include <QtCore/QUrlQuery>
+#include <QtCore/QJsonValue>
 
 //nemo-qml-plugins/notifications
 #include <notification.h>
@@ -100,10 +101,9 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariant parsed = TwitterDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
-    if (ok && parsed.type() == QVariant::List) {
-        QVariantList data = parsed.toList();
-        if (!data.size()) {
+    QJsonArray tweets = parseJsonArrayReplyData(replyData, &ok);
+    if (ok) {
+        if (!tweets.size()) {
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("no notifications received for account %1"))
                     .arg(accountId));
@@ -116,15 +116,15 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
         QString summary;
         QDateTime timestamp;
         QString link;
-        for (int i = 0; i < data.size(); ++i) {
-            QVariantMap currData = data.at(i).toMap();
-            QDateTime createdTime = parseTwitterDateTime(currData.value(QLatin1String("created_at")).toString());
-            QString mention_id = currData.value(QLatin1String("id_str")).toString();
-            QString text = currData.value(QLatin1String("text")).toString();
-            QVariantMap user = currData.value(QLatin1String("user")).toMap();
+        foreach (const QJsonValue &tweetValue, tweets) {
+            QJsonObject tweet = tweetValue.toObject();
+            QDateTime createdTime = parseTwitterDateTime(tweet.value(QLatin1String("created_at")).toString());
+            QString mentionId = tweet.value(QLatin1String("id_str")).toString();
+            QString text = tweet.value(QLatin1String("text")).toString();
+            QJsonObject user = tweet.value(QLatin1String("user")).toObject();
             QString userName = user.value(QLatin1String("name")).toString();
             QString userScreenName = user.value(QLatin1String("screen_name")).toString();
-            link = QLatin1String("https://twitter.com/") + userScreenName + QLatin1String("/status/") + mention_id;
+            link = QLatin1String("https://twitter.com/") + userScreenName + QLatin1String("/status/") + mentionId;
 
             // check to see if we need to post it to the notifications feed
             if (lastSync.isValid() && createdTime < lastSync) {

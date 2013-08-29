@@ -33,7 +33,6 @@ public:
     virtual void sync(const QString &dataTypeString);
 
 protected:
-    static QVariant parseReplyData(const QByteArray &replyData, bool *ok);
     static QDateTime parseTwitterDateTime(const QString &tdt);
     virtual QString authorizationHeader(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &requestMethod, const QString &requestUrl, const QList<QPair<QString, QString> > &parameters);
     virtual void updateDataForAccounts(const QList<int> &accountIds);

@@ -14,8 +14,6 @@
 #include <QtCore/QString>
 #include <QtCore/QByteArray>
 
-#include <QJsonDocument>
-
 // sailfish-components-accounts-qt5
 #include <accountmanager.h>
 #include <account.h>
@@ -163,17 +161,6 @@ QString FacebookDataTypeSyncAdaptor::clientId()
         loadClientId();
     }
     return m_clientId;
-}
-
-QJsonObject FacebookDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
-{
-    QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
-    *ok = !jsonDocument.isEmpty();
-    if (*ok && jsonDocument.isObject()) {
-        return jsonDocument.object();
-    }
-    *ok = false;
-    return QJsonObject();
 }
 
 void FacebookDataTypeSyncAdaptor::loadClientId()

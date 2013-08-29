@@ -9,6 +9,7 @@
 #include "syncservice.h"
 #include "trace.h"
 
+#include <QtCore/QJsonDocument>
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
@@ -594,4 +595,26 @@ void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
             setStatus(SocialNetworkSyncAdaptor::Inactive);
         }
     }
+}
+
+QJsonObject SocialNetworkSyncAdaptor::parseJsonObjectReplyData(const QByteArray &replyData, bool *ok)
+{
+    QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
+    *ok = !jsonDocument.isEmpty();
+    if (*ok && jsonDocument.isObject()) {
+        return jsonDocument.object();
+    }
+    *ok = false;
+    return QJsonObject();
+}
+
+QJsonArray SocialNetworkSyncAdaptor::parseJsonArrayReplyData(const QByteArray &replyData, bool *ok)
+{
+    QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
+    *ok = !jsonDocument.isEmpty();
+    if (*ok && jsonDocument.isArray()) {
+        return jsonDocument.array();
+    }
+    *ok = false;
+    return QJsonArray();
 }
