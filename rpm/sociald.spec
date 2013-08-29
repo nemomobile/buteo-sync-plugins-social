@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.25
+Version:    0.0.26
 Release:    1
 Group:      System/Applications
 License:    TBD

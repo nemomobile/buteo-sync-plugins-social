@@ -1,7 +1,7 @@
 TEMPLATE = lib
 
 TARGET = sociald-client
-VERSION = 0.0.25
+VERSION = 0.0.26
 CONFIG += link_pkgconfig plugin
 
 CONFIG += meegotouchevents-qt5
