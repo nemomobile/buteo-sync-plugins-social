@@ -32,6 +32,7 @@
 #define SOCIALD_FACEBOOK_POSTS_ID_PREFIX QLatin1String("facebook-posts-")
 #define SOCIALD_FACEBOOK_POSTS_GROUPNAME QLatin1String("facebook")
 #define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
+#define FACEBOOK_AVATAR QLatin1String("https://graph.facebook.com/%1/picture?width=200&height=200")
 
 
 static const char *FQL_QUERY = "{"\
@@ -492,7 +493,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 metaData.insert("postAttachmentDescription", attachmentDescription);
                 metaData.insert("clientId", clientId());
 
-                QString icon = QLatin1String("icon-s-service-facebook");
+                QString icon;
 
                 // Search the portrait in the contacts
                 if (contactHash.contains(title)) {
@@ -501,6 +502,12 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                     if (!avatar.imageUrl().isEmpty()) {
                         icon = avatar.imageUrl().toString();
                     }
+                }
+
+                // If we don't find the portrait in contacts, we download
+                // the avatar from Facebook
+                if (icon.isEmpty()) {
+                    icon = QString(FACEBOOK_AVATAR).arg(actorId);
                 }
 
                 QString localIdentifier = syncedDatumLocalIdentifier(serviceName(), SyncService::dataType(dataType), postId).mid(prefixLen);
