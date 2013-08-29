@@ -19,6 +19,7 @@ Column {
         color: Theme.highlightColor
         wrapMode: Text.WordWrap
         font.pixelSize: Theme.fontSizeSmall
+        shortenUrl: true
     }
     Label {
         id: time
