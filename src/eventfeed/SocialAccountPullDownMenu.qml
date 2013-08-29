@@ -11,6 +11,7 @@ PullDownMenu {
     property string changeToAccountString
     property string accountString
     property var pageContainer
+    property bool switchEnabled
     onMetaDataChanged: refreshAccountList()
 
     // We distinguish internal.index and container.currentAccountIndex
@@ -70,6 +71,7 @@ PullDownMenu {
             }
         }
         visible: internal.accountCount > 1
+        enabled: container.switchEnabled
 
         onClicked: {
             if (internal.accountCount > 2) {

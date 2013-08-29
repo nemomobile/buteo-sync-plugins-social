@@ -7,8 +7,8 @@ Item {
     property alias source: header.title
     property date timestamp
     property alias body: body.text
-    property alias belowAvatar: belowAvatarContainer.children
     property alias socialButtons: socialButtonsContainer.children
+    property alias fullRowSocialButtons: fullRowSocialButtonsContainer.children
 
     height: childrenRect.height
     anchors {
@@ -48,31 +48,33 @@ Item {
         time: formatter.formatDate(container.timestamp, Formatter.DurationElapsed)
     }
 
-    // This item is used to anchors social buttons and below avatar content
+    // This item is used to anchors social buttons and full-row social buttons content
     Item {
         id: mainContentMask
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        height: belowAvatarContainer.childrenRect.height > 0 ? Math.max(body.height, socialAvatar.height)
-                                                             : body.height
+        height: fullRowSocialButtonsContainer.childrenRect.height > 0 ? Math.max(body.height, socialAvatar.height)
+                                                                      : body.height
     }
 
     Item {
-        id: belowAvatarContainer
+        id: fullRowSocialButtonsContainer
         anchors {
-            left: socialAvatar.left
-            right: socialAvatar.right
             top: mainContentMask.bottom
+            left: socialAvatar.left
+            leftMargin: Theme.paddingLarge
+            right: parent.right
+            rightMargin: Theme.paddingLarge
         }
-        height: socialButtonsContainer.height
+        height: childrenRect.height
     }
 
     Item {
         id: socialButtonsContainer
         anchors {
             top: mainContentMask.bottom
-            left: belowAvatarContainer.right
+            left: socialAvatar.right
             leftMargin: Theme.paddingMedium
             right: parent.right
             rightMargin: Theme.paddingLarge

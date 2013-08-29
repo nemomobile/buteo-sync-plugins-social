@@ -27,6 +27,12 @@ Item {
 
     Behavior on opacity { FadeAnimation {} }
 
+    Rectangle {
+        anchors.fill: avatar
+        color: Theme.highlightColor
+        opacity: 0.5
+    }
+
     Image {
         id: avatar
         anchors {
