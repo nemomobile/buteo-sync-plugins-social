@@ -12,16 +12,6 @@
 
 #include <QtCore/QPair>
 
-//QtMobility
-#include <QtContacts/QContactManager>
-#include <QtContacts/QContactFetchHint>
-#include <QtContacts/QContactFetchRequest>
-#include <QtContacts/QContact>
-#include <QtContacts/QContactName>
-#include <QtContacts/QContactNickname>
-#include <QtContacts/QContactPresence>
-#include <QtContacts/QContactAvatar>
-
 #include "eventfeedhelper_p.h"
 
 // meegotouchevents/meventfeed
@@ -205,8 +195,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
     }
 
     int accountId = reply->property("accountId").toInt();
-    QString accessToken = reply->property("accessToken").toString();
-    QString selfUserId = reply->property("selfUserId").toString();
     QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"), SyncService::dataType(SyncService::Posts), QString::number(accountId));
     QByteArray replyData = reply->readAll();
     disconnect(reply);
@@ -224,8 +212,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             return;
         }
 
-        bool needMorePages = true;
-        bool postedNew = false;
         QList<SyncedDatum> syncedData;
         int prefixLen = QString(SOCIALD_TWITTER_POSTS_ID_PREFIX).size();
 
@@ -257,7 +243,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             QString postId = currData.value(QLatin1String("id_str")).toString();
             QString text = currData.value(QLatin1String("text")).toString();
             QVariantMap dataUser = currData.value(QLatin1String("user")).toMap();
-            QString userId = dataUser.value("id_str").toString();
             QString userName = dataUser.value("name").toString();
             QString screenName = dataUser.value("screen_name").toString();
             QString icon = dataUser.value(QLatin1String("profile_image_url")).toString();
@@ -283,13 +268,11 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 came after last sync:"))
                         .arg(accountId) << "    " << createdTime << ":" << body);
-                needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
             } else if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 is more than a week old:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << body);
-                needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
             } else {
                 QVariantMap metaData;

@@ -336,9 +336,6 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
         QDateTime birthday = QDateTime::fromString(birthdayStr, Qt::ISODate);
         QString bio = blobDetails.value(QLatin1String("bio")).toString();
         QString gender = blobDetails.value(QLatin1String("gender")).toString();
-        QString significantOther = blobDetails.value(QLatin1String("significant_other")).toObject().value(QLatin1String("id")).toString();
-        QString updatedTimeStr = blobDetails.value(QLatin1String("updated_time")).toString();
-        QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
 
         // now build the appropriate QtContacts details etc.
         bool isNewContact = false;

@@ -94,8 +94,6 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
-    QString accessToken = reply->property("accessToken").toString();
-    QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Notifications), QString::number(accountId));
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();

@@ -18,12 +18,6 @@
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
 
-#include <QtContacts/QContactManager>
-#include <QtContacts/QContact>
-#include <QtContacts/QContactFetchRequest>
-
-USE_CONTACTS_NAMESPACE
-
 class TwitterHomeTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
 {
     Q_OBJECT

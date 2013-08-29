@@ -13,70 +13,23 @@
 #include <QtCore/QPair>
 #include <QtCore/QUrlQuery>
 
-#include <QtContacts/QContactManager>
-#include <QtContacts/QContactFetchHint>
-#include <QtContacts/QContactFetchRequest>
-#include <QtContacts/QContact>
-#include <QtContacts/QContactName>
-#include <QtContacts/QContactDisplayLabel>
-#include <QtContacts/QContactNickname>
-#include <QtContacts/QContactPresence>
-#include <QtContacts/QContactAvatar>
-
 //nemo-qml-plugins/notifications
 #include <notification.h>
 
 #define SOCIALD_TWITTER_MENTIONS_ID_PREFIX QLatin1String("twitter-mentions-")
 #define SOCIALD_TWITTER_MENTIONS_GROUPNAME QLatin1String("sociald-sync-twitter-mentions")
-#define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
 
 // currently, we integrate with the device notifications via nemo-qml-plugin-notification
 
 TwitterMentionTimelineSyncAdaptor::TwitterMentionTimelineSyncAdaptor(SyncService *syncService, QObject *parent)
     : TwitterDataTypeSyncAdaptor(syncService, SyncService::Notifications, parent)
-    , m_contactFetchRequest(new QContactFetchRequest(this))
 {
     // can sync, enabled
     setInitialActive(true);
-
-    // fetch all contacts.  We detect which contact a mention came from.
-    // XXX TODO: we really shouldn't do this, we should do it on demand instead
-    // of holding the contacts in memory.
-    if (m_contactFetchRequest) {
-        QContactFetchHint cfh;
-        cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-        cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
-                               << QContactDetail::TypeAvatar
-                               << QContactDetail::TypeName
-                               << QContactDetail::TypeNickname
-                               << QContactDetail::TypePresence);
-        m_contactFetchRequest->setFetchHint(cfh);
-        m_contactFetchRequest->setManager(&m_contactManager);
-        connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
-        m_contactFetchRequest->start();
-    }
 }
 
 TwitterMentionTimelineSyncAdaptor::~TwitterMentionTimelineSyncAdaptor()
 {
-}
-
-void TwitterMentionTimelineSyncAdaptor::sync(const QString &dataType)
-{
-    // refresh local cache of contacts.
-    // we do this asynchronous request in parallel to the sync code below
-    // since the network request round-trip times should far exceed the
-    // local database fetch.  If not, then the current sync run will
-    // still work, but the "notifications is from which contact" detection
-    // will be using slightly stale data.
-    if (m_contactFetchRequest &&
-            (m_contactFetchRequest->state() == QContactAbstractRequest::InactiveState ||
-             m_contactFetchRequest->state() == QContactAbstractRequest::FinishedState)) {
-        m_contactFetchRequest->start();
-    }
-
-    // call superclass impl.
-    TwitterDataTypeSyncAdaptor::sync(dataType);
 }
 
 void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
@@ -136,8 +89,6 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
-    QString oauthToken = reply->property("oauthToken").toString();
-    QString oauthTokenSecret = reply->property("oauthTokenSecret").toString();
     QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"),
                                            SyncService::dataType(SyncService::Notifications),
                                            QString::number(accountId));
@@ -160,8 +111,6 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
             return;
         }
 
-        bool needMorePages = true;
-        bool postedNew = false;
         int mentionsCount = 0;
         QString body;
         QString summary;
@@ -173,61 +122,23 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
             QString mention_id = currData.value(QLatin1String("id_str")).toString();
             QString text = currData.value(QLatin1String("text")).toString();
             QVariantMap user = currData.value(QLatin1String("user")).toMap();
-            QString user_id = user.value(QLatin1String("id_str")).toString();
-            QString user_name = user.value(QLatin1String("name")).toString();
-            QString user_screen_name = user.value(QLatin1String("screen_name")).toString();
-            link = QLatin1String("https://twitter.com/") + user_screen_name + QLatin1String("/status/") + mention_id;
+            QString userName = user.value(QLatin1String("name")).toString();
+            QString userScreenName = user.value(QLatin1String("screen_name")).toString();
+            link = QLatin1String("https://twitter.com/") + userScreenName + QLatin1String("/status/") + mention_id;
 
             // check to see if we need to post it to the notifications feed
             if (lastSync.isValid() && createdTime < lastSync) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("notification for account %1 came after last sync:"))
                         .arg(accountId) << "    " << createdTime << ":" << text);
-                needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent notifications will be even older.
             } else if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("notification for account %1 is more than a week old:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << text);
-                needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent notifications will be even older.
             } else {
-                // XXX TODO: use twitter user id to look up the contact directly, instead of heuristic detection.
-                QString nameString = user_name;
-                QString avatar = QLatin1String("icon-s-service-twitter"); // default.
-                QContact matchingContact = findMatchingContact(nameString);
-                if (matchingContact != QContact()) {
-                    QContactDisplayLabel displayLabel = matchingContact.detail<QContactDisplayLabel>();
-                    QContactName contactName = matchingContact.detail<QContactName>();
-                    QString originalNameString = nameString;
-                    if (!displayLabel.label().isEmpty()) {
-                        nameString = displayLabel.label();
-                    } else if (!contactName.value<QString>(QContactName__FieldCustomLabel).isEmpty()) {
-                        nameString = contactName.value<QString>(QContactName__FieldCustomLabel);
-                    }
-
-                    QList<QContactAvatar> allAvatars = matchingContact.details<QContactAvatar>();
-                    bool foundTwitterProfileImage = false;
-                    foreach (const QContactAvatar &avat, allAvatars) {
-                        // TODO: avat.value(QTCONTACTS_SQLITE_AVATAR_METADATA) == QLatin1String("profile")
-                        if (!avat.imageUrl().toString().isEmpty()) {
-                            // found avatar synced from Twitter sociald sync adaptor
-                            avatar = avat.imageUrl().toString();
-                            foundTwitterProfileImage = true;
-                            break;
-                        }
-                    }
-                    if (!foundTwitterProfileImage && !matchingContact.detail<QContactAvatar>().imageUrl().toString().isEmpty()) {
-                        // fallback.
-                        avatar = matchingContact.detail<QContactAvatar>().imageUrl().toString();
-                    }
-
-                    TRACE(SOCIALD_DEBUG,
-                            QString(QLatin1String("heuristically matched %1 as %2 with avatar %3"))
-                            .arg(originalNameString).arg(nameString).arg(avatar));
-                }
-
-                body = nameString;
+                body = userName;
                 summary = text;
                 timestamp = createdTime;
                 mentionsCount ++;
@@ -272,10 +183,6 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                         .arg(body));
             }
         }
-
-        if (postedNew && needMorePages) {
-            // XXX TODO: paging?
-        }
     } else {
         // error occurred during request.
         TRACE(SOCIALD_ERROR,
@@ -285,65 +192,6 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
-}
-
-void TwitterMentionTimelineSyncAdaptor::contactFetchStateChangedHandler(QContactAbstractRequest::State newState)
-{
-    // update our local cache of contacts.
-    if (m_contactFetchRequest && newState == QContactAbstractRequest::FinishedState) {
-        m_contacts = m_contactFetchRequest->contacts();
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("finished refreshing local cache of contacts, have %1"))
-                .arg(m_contacts.size()));
-    }
-}
-
-QContact TwitterMentionTimelineSyncAdaptor::findMatchingContact(const QString &nameString) const
-{
-    // TODO: This heuristic detection could definitely be improved.
-    // EG: instead of scraping the name string from the title, we
-    // could get the actual twitter id from the mention and then
-    // look the contact up directly.  But we currently don't have
-    // Twitter contact syncing done properly, so...
-    if (nameString.isEmpty()) {
-        return QContact();
-    }
-
-    QStringList firstAndLast = nameString.split(' '); // TODO: better detection of FN/LN
-
-    foreach (const QContact &c, m_contacts) {
-        QList<QContactName> names = c.details<QContactName>();
-        foreach (const QContactName &n, names) {
-            if (n.value<QString>(QContactName__FieldCustomLabel) == nameString ||
-                    (firstAndLast.size() >= 2 &&
-                     n.firstName() == firstAndLast.at(0) &&
-                     n.lastName() == firstAndLast.at(firstAndLast.size()-1))) {
-                return c;
-            }
-        }
-
-        QList<QContactNickname> nicknames = c.details<QContactNickname>();
-        foreach (const QContactNickname &n, nicknames) {
-            if (n.nickname() == nameString) {
-                return c;
-            }
-        }
-
-        QList<QContactPresence> presences = c.details<QContactPresence>();
-        foreach (const QContactPresence &p, presences) {
-            if (p.nickname() == nameString) {
-                return c;
-            }
-        }
-    }
-
-    // this isn't a "hard error" since we can still post the notification
-    // but it is a "soft error" since we _should_ have the contact in our db.
-    TRACE(SOCIALD_INFORMATION,
-            QString(QLatin1String("unable to find matching contact with name: %1"))
-            .arg(nameString));
-
-    return QContact();
 }
 
 Notification *TwitterMentionTimelineSyncAdaptor::createNotification(int accountId)

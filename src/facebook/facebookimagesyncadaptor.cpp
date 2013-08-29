@@ -238,7 +238,6 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
             m_serverAlbumIds.append(albumId);
         }
 
-        QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Images), QString::number(accountId));
         QString userName = album.value(QLatin1String("from")).toObject().value(QLatin1String("name")).toString();
         QString albumName = album.value(QLatin1String("name")).toString();        
         QString createdTimeStr = album.value(QLatin1String("created_time")).toString();

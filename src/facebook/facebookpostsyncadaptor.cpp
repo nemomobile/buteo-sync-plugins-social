@@ -253,7 +253,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
-    QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Posts), QString::number(accountId));
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
@@ -376,9 +375,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 
             // Grab the data from the current post
             uint createdTimestamp = post.value(QLatin1String("created_time")).toVariant().toString().toUInt();
-            uint updatedTimestamp = post.value(QLatin1String("updated_time")).toVariant().toString().toUInt();
             QDateTime createdTime = QDateTime::fromTime_t(createdTimestamp);
-            QDateTime updatedTime = QDateTime::fromTime_t(updatedTimestamp);
 
 
             QString postId = post.value(QLatin1String("post_id")).toVariant().toString();
