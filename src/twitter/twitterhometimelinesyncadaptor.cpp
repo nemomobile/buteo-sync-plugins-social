@@ -258,6 +258,16 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 }
             }
 
+            QJsonArray urlList = entities.value(QLatin1String("urls")).toArray();
+            foreach (const QJsonValue &urlValue, urlList) {
+                // Right now, we use a slightly inefficient algorithm, that is error-proof
+                // we just replace the old URL by the new one
+                QJsonObject urlObject = urlValue.toObject();
+                QString shortUrl = urlObject.value(QLatin1String("url")).toString();
+                QString expandedUrl = urlObject.value(QLatin1String("expanded_url")).toString();
+                text.replace(shortUrl, expandedUrl);
+            }
+
             title = userName;
             body = text;
             eventTimestamp = createdTime;
