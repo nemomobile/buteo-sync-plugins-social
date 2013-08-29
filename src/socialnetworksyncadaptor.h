@@ -11,6 +11,8 @@
 #include <QtCore/QObject>
 #include <QtCore/QDateTime>
 #include <QtCore/QString>
+#include <QtCore/QJsonObject>
+#include <QtCore/QJsonArray>
 
 #include "syncservice.h"
 
@@ -76,8 +78,12 @@ protected:
 
     // Semaphore system
     const SyncService::DataType dataType;
-    void decrementSemaphore(int accountId);
     void incrementSemaphore(int accountId);
+    void decrementSemaphore(int accountId);
+
+    // Parsing methods
+    static QJsonObject parseJsonObjectReplyData(const QByteArray &replyData, bool *ok);
+    static QJsonArray parseJsonArrayReplyData(const QByteArray &replyData, bool *ok);
 
     AccountManager *const accountManager;
     QNetworkAccessManager * const networkAccessManager; // Do not allow the pointer to be changed

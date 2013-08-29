@@ -10,8 +10,6 @@
 #include "trace.h"
 #include "constants_p.h"
 
-#include <QtCore/QJsonArray>
-#include <QtCore/QJsonValue>
 #include <QtCore/QPair>
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -237,7 +235,7 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!isError && ok && parsed.contains(QLatin1String("data"))) {
         // we expect "data" and possibly "paging"
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
@@ -336,9 +334,6 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
         QDateTime birthday = QDateTime::fromString(birthdayStr, Qt::ISODate);
         QString bio = blobDetails.value(QLatin1String("bio")).toString();
         QString gender = blobDetails.value(QLatin1String("gender")).toString();
-        QString significantOther = blobDetails.value(QLatin1String("significant_other")).toObject().value(QLatin1String("id")).toString();
-        QString updatedTimeStr = blobDetails.value(QLatin1String("updated_time")).toString();
-        QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
 
         // now build the appropriate QtContacts details etc.
         bool isNewContact = false;

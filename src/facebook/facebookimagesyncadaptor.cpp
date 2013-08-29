@@ -9,8 +9,6 @@
 #include "syncservice.h"
 #include "trace.h"
 
-#include <QtCore/QJsonArray>
-#include <QtCore/QJsonValue>
 #include <QtCore/QPair>
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -195,7 +193,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QJsonObject parsed = FacebookDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!ok || !parsed.contains(QLatin1String("data"))) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read albums response for Facebook account with id %1"))
@@ -238,7 +236,6 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
             m_serverAlbumIds.append(albumId);
         }
 
-        QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Images), QString::number(accountId));
         QString userName = album.value(QLatin1String("from")).toObject().value(QLatin1String("name")).toString();
         QString albumName = album.value(QLatin1String("name")).toString();        
         QString createdTimeStr = album.value(QLatin1String("created_time")).toString();
@@ -292,13 +289,12 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
     QString fbUserId = reply->property("fbUserId").toString();
     QString fbAlbumId = reply->property("fbAlbumId").toString();
     QString continuationUrl = reply->property("continuationUrl").toString();
-    QDateTime lastSync = lastSyncTimestamp(QLatin1String("facebook"), SyncService::dataType(SyncService::Images), QString::number(accountId));
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
 
     bool ok = false;
-    QJsonObject parsed = parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!ok || !parsed.contains(QLatin1String("data"))) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read photos response for Facebook account with id %1"))
@@ -347,8 +343,6 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
             }
         }
 
-
-        bool ok = false;
         int width = static_cast<int>(photo.value(QLatin1String("width")).toDouble());
         int height = static_cast<int>(photo.value(QLatin1String("height")).toDouble());
 
@@ -551,12 +545,11 @@ void FacebookImageSyncAdaptor::userFinishedHandler()
     QNetworkReply *reply = qobject_cast<QNetworkReply *>(sender());
     QByteArray replyData = reply->readAll();
     int accountId = reply->property("accountId").toInt();
-    QString accessToken = reply->property("accessToken").toString();
     disconnect(reply);
     reply->deleteLater();
 
     bool ok = false;
-    QJsonObject parsed = parseReplyData(replyData, &ok);
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!ok || !parsed.contains(QLatin1String("id"))) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read user response for Facebook account with id %1"))

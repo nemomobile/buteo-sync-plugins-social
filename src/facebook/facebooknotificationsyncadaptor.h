@@ -34,7 +34,8 @@ protected: // implementing FacebookDataTypeSyncAdaptor interface
 
 private:
     void requestNotifications(int accountId, const QString &accessToken,
-                              const QString &until = QString(), const QString &pagingToken = QString());
+                              const QString &until = QString(),
+                              const QString &pagingToken = QString());
 
 private Q_SLOTS:
     void finishedHandler();

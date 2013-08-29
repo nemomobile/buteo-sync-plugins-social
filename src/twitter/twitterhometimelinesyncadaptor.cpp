@@ -11,16 +11,7 @@
 #include "constants_p.h"
 
 #include <QtCore/QPair>
-
-//QtMobility
-#include <QtContacts/QContactManager>
-#include <QtContacts/QContactFetchHint>
-#include <QtContacts/QContactFetchRequest>
-#include <QtContacts/QContact>
-#include <QtContacts/QContactName>
-#include <QtContacts/QContactNickname>
-#include <QtContacts/QContactPresence>
-#include <QtContacts/QContactAvatar>
+#include <QtCore/QJsonValue>
 
 #include "eventfeedhelper_p.h"
 
@@ -173,7 +164,7 @@ void TwitterHomeTimelineSyncAdaptor::finishedMeHandler()
     reply->deleteLater();
 
     bool ok = false;
-    QVariantMap parsed = TwitterDataTypeSyncAdaptor::parseReplyData(replyData, &ok).toMap();
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (ok && parsed.contains(QLatin1String("id_str"))) {
         QString selfUserId = parsed.value(QLatin1String("id_str")).toString();
         QString selfScreenName = parsed.value(QLatin1String("screen_name")).toString();
@@ -205,18 +196,15 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
     }
 
     int accountId = reply->property("accountId").toInt();
-    QString accessToken = reply->property("accessToken").toString();
-    QString selfUserId = reply->property("selfUserId").toString();
     QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"), SyncService::dataType(SyncService::Posts), QString::number(accountId));
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
 
     bool ok = false;
-    QVariant parsed = TwitterDataTypeSyncAdaptor::parseReplyData(replyData, &ok);
-    if (ok && parsed.type() == QVariant::List) {
-        QVariantList data = parsed.toList();
-        if (!data.size()) {
+    QJsonArray tweets = parseJsonArrayReplyData(replyData, &ok);
+    if (ok) {
+        if (!tweets.size()) {
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("no feed posts received for account %1"))
                     .arg(accountId));
@@ -224,12 +212,10 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             return;
         }
 
-        bool needMorePages = true;
-        bool postedNew = false;
         QList<SyncedDatum> syncedData;
         int prefixLen = QString(SOCIALD_TWITTER_POSTS_ID_PREFIX).size();
 
-        for (int i = 0; i < data.size(); ++i) {
+        foreach (const QJsonValue &tweetValue, tweets) {
             // these are the fields we eventually need to fill out:
             QString title;
             QString body;
@@ -242,30 +228,30 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             QString retweeter;
 
             // grab the data from the current post
-            QVariantMap currData = data.at(i).toMap();
+            QJsonObject tweet = tweetValue.toObject();
 
             // Just to be sure to get the time of the current (re)tweet
-            QDateTime createdTime = parseTwitterDateTime(currData.value(QLatin1String("created_at")).toString());
+            QDateTime createdTime = parseTwitterDateTime(tweet.value(QLatin1String("created_at")).toString());
 
             // We should get data for the retweeted tweet instead of
             // getting the (often partial) retweeted tweet.
-            if (currData.contains(QLatin1String("retweeted_status"))) {
-                retweeter = currData.value(QLatin1String("user")).toMap().value("name").toString();
-                currData = currData.value(QLatin1String("retweeted_status")).toMap();
+            if (tweet.contains(QLatin1String("retweeted_status"))) {
+                retweeter = tweet.value(QLatin1String("user")).toObject().value("name").toString();
+                tweet = tweet.value(QLatin1String("retweeted_status")).toObject();
             }
 
-            QString postId = currData.value(QLatin1String("id_str")).toString();
-            QString text = currData.value(QLatin1String("text")).toString();
-            QVariantMap dataUser = currData.value(QLatin1String("user")).toMap();
-            QString userId = dataUser.value("id_str").toString();
-            QString userName = dataUser.value("name").toString();
-            QString screenName = dataUser.value("screen_name").toString();
-            QString icon = dataUser.value(QLatin1String("profile_image_url")).toString();
+            QString postId = tweet.value(QLatin1String("id_str")).toString();
+            QString text = tweet.value(QLatin1String("text")).toString();
+            QJsonObject user = tweet.value(QLatin1String("user")).toObject();
+            QString userName = user.value("name").toString();
+            QString screenName = user.value("screen_name").toString();
+            QString icon = user.value(QLatin1String("profile_image_url")).toString();
 
-            QVariantList mediaList = currData.value(QLatin1String("entities")).toMap().value(QLatin1String("media")).toList();
+            QJsonObject entities = tweet.value(QLatin1String("entities")).toObject();
+            QJsonArray mediaList = entities.value(QLatin1String("media")).toArray();
             if (!mediaList.isEmpty()) {
-                foreach (QVariant mediaVariant, mediaList) {
-                    QVariantMap mediaObject = mediaVariant.toMap();
+                foreach (const QJsonValue &mediaValue, mediaList) {
+                    QJsonObject mediaObject = mediaValue.toObject();
                     if (mediaObject.contains(QLatin1String("media_url_https"))) {
                         imageList.append(mediaObject.value(QLatin1String("media_url_https")).toString());
                     }
@@ -283,13 +269,11 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 came after last sync:"))
                         .arg(accountId) << "    " << createdTime << ":" << body);
-                needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
             } else if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 is more than a week old:\n"))
                         .arg(accountId) << "    " << createdTime << ":" << body);
-                needMorePages = false; // don't fetch more pages of results.
                 break;                 // all subsequent events will be even older.
             } else {
                 QVariantMap metaData;

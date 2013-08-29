@@ -297,22 +297,6 @@ QDateTime TwitterDataTypeSyncAdaptor::parseTwitterDateTime(const QString &tdt)
     return time;
 }
 
-QVariant TwitterDataTypeSyncAdaptor::parseReplyData(const QByteArray &replyData, bool *ok)
-{
-    QVariant parsed;
-    QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
-    *ok = !jsonDocument.isEmpty();
-    parsed = jsonDocument.toVariant();
-    if (*ok && parsed.type() == QVariant::Map) {
-        return parsed.toMap();
-    } else if (*ok && parsed.type() == QVariant::List) {
-        return parsed.toList();
-    }
-
-    *ok = false;
-    return QVariantMap();
-}
-
 void TwitterDataTypeSyncAdaptor::loadConsumerKeyAndSecret()
 {
     m_triedLoading = true;
