@@ -27,7 +27,7 @@ BuildRequires:  qt5-qttools-linguist
 Requires: sailfish-components-accounts-qt5 >= 0.0.43
 Requires: sailfish-components-textlinking
 Requires: nemo-qml-plugin-notifications-qt5
-Requires: nemo-qml-plugin-social-qt5 >= 0.0.9
+Requires: nemo-qml-plugin-social-qt5 >= 0.0.11
 Requires: buteo-syncfw-qt5-msyncd
 Requires: mkcal-qt5
 
