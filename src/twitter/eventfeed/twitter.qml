@@ -110,7 +110,7 @@ Page {
         target: twitterReplies.node
         onStatusChanged: {
             if (twitterReplies.node.status == SocialNetwork.Idle) {
-                if (view.state == "favoriting" || view.state == "retweeting") {
+                if (view.state == "favoriting" || view.state == "retweeting" || view.state == "unretweeting") {
                     view.state = "idle"
                 } else if (view.state == "replying") {
                     view.state = "reloadingModel"
@@ -128,6 +128,10 @@ Page {
                     view.state = "idle"
                     //% "Failed to retweet"
                     view.error = qsTrId("lipstick-jolla-home-twitter-error-fail-to-retweet")
+                } else if (view.state == "unretweeting") {
+                    view.state = "idle"
+                    //% "Failed to remove the retweet"
+                    view.error = qsTrId("lipstick-jolla-home-twitter-error-fail-to-unretweet")
                 } else if (view.state == "replying") {
                     view.state = "reloadingModel"
                     //% "Failed to reply"
@@ -194,7 +198,8 @@ Page {
             State { name: "reloadingModel" },       // After replying, the model is being reloaded
             State { name: "replying" },             // Start a reply operation
             State { name: "favoriting" },           // Start a favoriting operation
-            State { name: "retweeting" }            // Start a retweeting operation
+            State { name: "retweeting" },           // Start a retweeting operation
+            State { name: "unretweeting" }            // Start a retweet cancelling operation
         ]
 
         transitions: [
@@ -230,6 +235,13 @@ Page {
             },
             Transition {
                 from: "retweeting"
+                to: "idle"
+                ScriptAction {
+                    script: view.updateInfoLabelAndProperties()
+                }
+            },
+            Transition {
+                from: "unretweeting"
                 to: "idle"
                 ScriptAction {
                     script: view.updateInfoLabelAndProperties()
@@ -275,16 +287,21 @@ Page {
                                 left: parent.left
                                 right: parent.horizontalCenter
                             }
-                            enabled: view.state == "idle" && !view.retweeted
+                            enabled: view.state == "idle"
                             onClicked: {
-                                view.state = "retweeting"
-                                twitterReplies.node.uploadRetweet()
+                                if (!view.retweeted) {
+                                    view.state = "retweeting"
+                                    twitterReplies.node.uploadRetweet()
+                                } else {
+                                    view.state = "unretweeting"
+                                    twitterReplies.node.removeRetweet()
+                                }
                             }
                             icon: "image://theme/icon-m-sync"
                             //% "Retweet"
                             text: !view.retweeted ? qsTrId("lipstick-jolla-home-twitter-la-retweet")
-                                                    //% "Retweeted"
-                                                  : qsTrId("lipstick-jolla-home-twitter-la-retweeted")
+                                                    //% "Remove retweet"
+                                                  : qsTrId("lipstick-jolla-home-twitter-la-unretweet")
                         }
 
                         SocialButton {
