@@ -17,11 +17,16 @@ Page {
     property string mediaCaption
     property string mediaDescription
 
+    property bool allowLike
+    property bool allowComment
+
     onModelChanged: {
         nodeIdentifier = container.model.metaData["nodeId"]
         mediaName = container.model.metaData["postAttachmentName"]
         mediaCaption = container.model.metaData["postAttachmentCaption"]
         mediaDescription = container.model.metaData["postAttachmentDescription"]
+        allowLike = container.model.metaData["allowLike"]
+        allowComment = container.model.metaData["allowComment"]
     }
 
     Account {
@@ -299,7 +304,7 @@ Page {
 
                     SocialButton {
                         anchors.left: parent.left
-                        enabled: view.state == "idle"
+                        enabled: view.state == "idle" && container.allowLike
                         onClicked: {
                             view.state = "liking"
                             if (!view.liked) {
@@ -319,7 +324,7 @@ Page {
                     SocialButton {
                         id: commentButton
                         anchors.right: parent.right
-                        enabled: view.state == "idle"
+                        enabled: view.state == "idle" && container.allowComment
                         icon: "image://theme/icon-m-chat"
                         //% "Comment"
                         text: qsTrId("lipstick-jolla-home-facebook-la-comment")
@@ -379,7 +384,7 @@ Page {
 
         footer: SocialReplyField {
             id: replyField
-            enabled: view.state == "idle"
+            enabled: view.state == "idle" && container.allowComment
             displayMargins: facebookComments.count > 0
             avatar: facebookMe.node != null && facebookMe.node.picture != null ? facebookMe.node.picture.url : ""
             //% "Write a comment"

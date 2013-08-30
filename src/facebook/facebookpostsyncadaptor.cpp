@@ -415,8 +415,14 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             }
 
             // Create the event footer
-            int likes = post.value(QLatin1String("like_info")).toObject().value(QLatin1String("like_count")).toVariant().toInt();
-            int comments = post.value(QLatin1String("comment_info")).toObject().value(QLatin1String("comment_count")).toVariant().toInt();
+            QJsonObject likeInfo = post.value(QLatin1String("like_info")).toObject();
+            QJsonObject commentInfo = post.value(QLatin1String("comment_info")).toObject();
+
+            int likes = likeInfo.value(QLatin1String("like_count")).toVariant().toInt();
+            int comments = commentInfo.value(QLatin1String("comment_count")).toVariant().toInt();
+
+            bool allowLike = likeInfo.value(QLatin1String("can_like")).toBool();
+            bool allowComment = commentInfo.value(QLatin1String("can_comment")).toBool();
 
             //% "%n likes"
             QString likesString = qtTrId("sociald_facebook_posts-n_likes", likes);
@@ -489,9 +495,10 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 metaData.insert("postAttachmentCaption", attachmentCaption);
                 metaData.insert("postAttachmentDescription", attachmentDescription);
                 metaData.insert("clientId", clientId());
+                metaData.insert("allowLike", allowLike);
+                metaData.insert("allowComment", allowComment);
 
                 QString icon;
-
                 // Search the portrait in the contacts
                 if (contactHash.contains(title)) {
                     QContact contact = contactHash.value(title);
