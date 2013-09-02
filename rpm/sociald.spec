@@ -16,7 +16,7 @@ BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(mlite5)
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
-BuildRequires:  pkgconfig(sailfishaccounts)
+BuildRequires:  pkgconfig(sailfishaccounts) >= 0.0.45
 BuildRequires:  pkgconfig(libmkcal-qt5)
 BuildRequires:  pkgconfig(libkcalcoren-qt5)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
