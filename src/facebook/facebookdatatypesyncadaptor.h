@@ -45,7 +45,7 @@ protected Q_SLOTS:
 
 private Q_SLOTS:
     void accountStatusChangeHandler();
-    void signOnError(const QString &message);
+    void signOnError(const QString &message, int errorType);
     void signOnResponse(const QVariantMap &data);
 
 private:

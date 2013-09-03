@@ -96,7 +96,7 @@ void FacebookDataTypeSyncAdaptor::accountStatusChangeHandler()
     }
 }
 
-void FacebookDataTypeSyncAdaptor::signOnError(const QString &err)
+void FacebookDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
 {
     Account *account = qobject_cast<Account*>(sender());
     TRACE(SOCIALD_ERROR,
@@ -104,6 +104,14 @@ void FacebookDataTypeSyncAdaptor::signOnError(const QString &err)
             .arg(account->identifier()) << err);
     account->disconnect(this);
     setStatus(SocialNetworkSyncAdaptor::Error);
+
+    // if the error is because credentials have expired, we
+    // set the CredentialsNeedUpdate key.
+    if (errorType == Account::SignInCredentialsExpiredError) {
+        account->setConfigurationValue("", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+        account->sync();
+    }
+
 }
 
 void FacebookDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -191,7 +199,7 @@ void FacebookDataTypeSyncAdaptor::signIn(Account *account)
     sip->setParameter(QLatin1String("ClientId"), clientId());
     sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
 
-    connect(account, SIGNAL(signInError(QString)), this, SLOT(signOnError(QString)));
+    connect(account, SIGNAL(signInError(QString,int)), this, SLOT(signOnError(QString,int)));
     connect(account, SIGNAL(signInResponse(QVariantMap)), this, SLOT(signOnResponse(QVariantMap)));
     account->signIn("Jolla", "Jolla", sip);
 }
