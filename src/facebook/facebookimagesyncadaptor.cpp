@@ -25,73 +25,23 @@
 // Update the following version if database schema changes e.g. new
 // fields are added to the existing tables.
 // It will make old tables dropped and creates new ones.
-#define USER_VERSION 1
-#define PRAGMA_USER_VERSION   QString("PRAGMA user_version=%1").arg(USER_VERSION)
 
 // Currently, we integrate with the device image gallery via saving thumbnails to the
 // ~/.config/sociald/images directory, and filling the ~/.config/sociald/images/facebook.db
 // with appropriate data.
 
+// TODO: there is still issues with multiaccount, if an user adds two times the same
+// account, it might have some problems, like data being removed while it shouldn't.
 FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Images, parent)
 {
-    setInitialActive(false);
-
-    // we create a database at PRIVILEGED_DATA_DIR/Images/facebook.db
-    // the Jolla Gallery application will open this database for fb album support.
-    QString imageSyncDatabaseFile = QString("%1/%2/%3")
-                .arg(QLatin1String(PRIVILEGED_DATA_DIR))
-                .arg(SyncService::dataType(dataType))
-                .arg(QLatin1String("facebook.db"));
-    if (!QFile::exists(imageSyncDatabaseFile)) {
-        QDir dir(QString("%1/%2").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(dataType)));
-        if (!dir.exists()) {
-            dir.mkpath(".");
-        }
-        QString absolutePath = dir.absoluteFilePath(QLatin1String("facebook.db"));
-        QFile dbfile(absolutePath);
-        if (!dbfile.open(QIODevice::ReadWrite)) {
-            TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to create Facebook image database %1 - Facebook image sync will be inactive"))
-                .arg(absolutePath));
-            return;
-        }
-        dbfile.close();
-    }
-
-    // open the database in which we store our synced image information
-    m_imgdb = QSqlDatabase::addDatabase("QSQLITE", QString(QLatin1String("sociald/facebook/%1")).arg(SyncService::dataType(dataType)));
-    m_imgdb.setDatabaseName(imageSyncDatabaseFile);
-    if (!m_imgdb.open()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to open Facebook image database %1 - Facebook image sync will be inactive"))
-            .arg(imageSyncDatabaseFile));
-        return;
-    }
-
-    if (dbUserVersion() < USER_VERSION) {
-        // DB needs to be recreated
-        if (!dbDropTables()) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("error: failed to update database! Remove it manually and restart sociald")));
-            return;
-        }
-    }
-
-    if (!dbCreateTables()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: failed to create tables to the database!")));
-        return;
-    }
-
-    // we we were able to open the database, we can sync
-    setInitialActive(true);
+    m_db.initDatabase();
+    setInitialActive(m_db.isValid());
 }
 
 
 FacebookImageSyncAdaptor::~FacebookImageSyncAdaptor()
 {
-    m_imgdb.close();
 }
 
 void FacebookImageSyncAdaptor::sync(const QString &dataType)
@@ -107,22 +57,27 @@ void FacebookImageSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeId
 {
     foreach (int pid, purgeIds) {
         // first, purge the data from our database + our cache directory
-        purgeAccount(pid);
+        m_db.purgeAccount(pid);
 
         // second, purge all data from the sociald main database
         removeAllData(QLatin1String("facebook"),
-                SyncService::dataType(SyncService::Images),
-                QString::number(pid)); // XXX TODO: use fb id instead of QString::number(accountId)
+                      SyncService::dataType(SyncService::Images),
+                      QString::number(pid));
     }
 }
 
 void FacebookImageSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
     // XXX TODO: use a sync queue.  One for accounts + one for albums.
-    // Finish all photos from a single album, etc on down.
+    // Finish all images from a single album, etc on down.
     // That way we don't request anything "out of order" which can screw up Facebook's paging etc stuff.
     // Downside: much slower, since more (network) IO bound than previously.
     requestData(accountId, accessToken, QString(), QString(), QString());
+}
+
+void FacebookImageSyncAdaptor::finalize()
+{
+    m_db.write();
 }
 
 void FacebookImageSyncAdaptor::requestData(int accountId,
@@ -136,12 +91,12 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
         // fetch the next page.
         url = QUrl(continuationUrl);
     } else {
-        // build the request, depending on whether we're fetching albums or photos.
+        // build the request, depending on whether we're fetching albums or images.
         if (fbAlbumId.isEmpty()) {
             // fetching all albums from the me user.
             url = QUrl(QLatin1String("https://graph.facebook.com/me/albums"));
         } else {
-            // fetching photos from a particular album.
+            // fetching images from a particular album.
             url = QUrl(QString(QLatin1String("https://graph.facebook.com/%1/photos")).arg(fbAlbumId));
         }
     }
@@ -167,7 +122,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
         if (fbAlbumId.isEmpty()) {
             connect(reply, SIGNAL(finished()), this, SLOT(albumsFinishedHandler()));
         } else {
-            connect(reply, SIGNAL(finished()), this, SLOT(photosFinishedHandler()));
+            connect(reply, SIGNAL(finished()), this, SLOT(imagesFinishedHandler()));
         }
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
@@ -214,17 +169,17 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
 
     // read the albums information
     for (int i = 0; i < data.size(); ++i) {
-        QJsonObject album = data.at(i).toObject();
-        if (album.isEmpty()) {
+        QJsonObject albumObject = data.at(i).toObject();
+        if (albumObject.isEmpty()) {
             continue;
         }
 
-        QString albumId = album.value(QLatin1String("id")).toString();
-        QString userId = album.value(QLatin1String("from")).toObject().value(QLatin1String("id")).toString();
+        QString albumId = albumObject.value(QLatin1String("id")).toString();
+        QString userId = albumObject.value(QLatin1String("from")).toObject().value(QLatin1String("id")).toString();
         if (!userId.isEmpty() && userId != fbUserId) {
             // probably because the fbUserId hasn't been filled yet.
             fbUserId = userId;
-            updateAccountsTable(accountId, fbUserId);
+            m_db.syncAccount(accountId, fbUserId);
         }
         if (!albumId.isEmpty() && albumId != fbAlbumId) {
             // probably because the fbAlbumId hasn't been filled yet.
@@ -236,37 +191,46 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
             m_serverAlbumIds.append(albumId);
         }
 
-        QString userName = album.value(QLatin1String("from")).toObject().value(QLatin1String("name")).toString();
-        QString albumName = album.value(QLatin1String("name")).toString();        
-        QString createdTimeStr = album.value(QLatin1String("created_time")).toString();
-        QString updatedTimeStr = album.value(QLatin1String("updated_time")).toString();
-        QString coverPhotoId = album.value(QLatin1String("cover_photo")).toString();
-        int photoCount = static_cast<int>(album.value(QLatin1String("count")).toDouble());
+        QString albumName = albumObject.value(QLatin1String("name")).toString();
+        QString createdTimeStr = albumObject.value(QLatin1String("created_time")).toString();
+        QString updatedTimeStr = albumObject.value(QLatin1String("updated_time")).toString();
+        QString coverImageId = albumObject.value(QLatin1String("cover_photo")).toString();
+        int imageCount = static_cast<int>(albumObject.value(QLatin1String("count")).toDouble());
 
 
         // check to see whether we need to sync (any changes since last sync)
         QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
-        if (haveAlreadyCachedAlbum(fbAlbumId, updatedTime)) {
+        FacebookAlbum::ConstPtr dbAlbum = m_db.album(fbAlbumId);
+        if (!dbAlbum.isNull()
+            && QDateTime::fromString(dbAlbum->updatedTime(), Qt::ISODate) >= updatedTime) {
+
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("album with id %1 by user %2 from Facebook account with id %3 doesn't need sync"))
                     .arg(albumId).arg(userId).arg(accountId));
-            // it hasn't been modified, so none of its photos have been removed.
-            QStringList serverPhotoIdsInAlbum = photosInAlbum(fbAlbumId);
-            foreach (const QString &pid, serverPhotoIdsInAlbum) {
-                if (!m_serverPhotoIds.contains(pid)) {
-                    m_serverPhotoIds.append(pid);
+            // it hasn't been modified, so none of its images have been removed.
+            QStringList serverImageIdsInAlbum = m_db.imagesId(fbAlbumId);
+            foreach (const QString &pid, serverImageIdsInAlbum) {
+                if (!m_serverImageIds.contains(pid)) {
+                    m_serverImageIds.append(pid);
                 }
             }
             continue;
         }
 
-        // we need to sync.  See if we need to save the album entry, and request the photos for the album.
-        possiblyAddNewAlbum(albumId, userId, userName, createdTimeStr, updatedTimeStr, albumName,
-                            photoCount, coverPhotoId, accountId, accessToken);
+        // We need to sync. We save the album entry, and request the images for the album.
+        // When saving the album, we might need to add a new user
+        possiblyAddNewUser(userId, accountId, accessToken);
+
+        // We then save the album
+        m_db.addAlbum(albumId, userId, createdTimeStr, updatedTimeStr, albumName, imageCount,
+                      coverImageId);
+        // TODO: After successfully added an album, we should begin a new query to get the image
+        // information (based on cover image id).
         requestData(accountId, accessToken, QString(), fbUserId, fbAlbumId);
+
     }
 
-    // perform a continuation request if required.
+    // Perform a continuation request if required.
     QJsonObject paging = parsed.value(QLatin1String("paging")).toObject();
     QString nextUrl = paging.value(QLatin1String("next")).toString();
     if (!nextUrl.isEmpty() && nextUrl != continuationUrl) {
@@ -281,8 +245,10 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
     decrementSemaphore(accountId);
 }
 
-void FacebookImageSyncAdaptor::photosFinishedHandler()
+
+void FacebookImageSyncAdaptor::imagesFinishedHandler()
 {
+
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
     QString accessToken = reply->property("accessToken").toString();
@@ -314,26 +280,27 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
     }
 
     // read the photos information
-    for (int i = 0; i < data.size(); ++i) {
-        QJsonObject photo = data.at(i).toObject();
-        if (photo.isEmpty()) {
+    foreach (const QJsonValue imageValue, data) {
+        QJsonObject imageObject = imageValue.toObject();
+        if (imageObject.isEmpty()) {
             continue;
         }
 
-        QString photoId = photo.value(QLatin1String("id")).toString();
-        QString thumbnailUrl = photo.value(QLatin1String("picture")).toString();
-        QString imageSrcUrl = photo.value(QLatin1String("source")).toString();
-        QString createdTimeStr = photo.value(QLatin1String("created_time")).toString();
-        QString updatedTimeStr = photo.value(QLatin1String("updated_time")).toString();
-        QString photoName = photo.value(QLatin1String("name")).toString();
+        QString photoId = imageObject.value(QLatin1String("id")).toString();
+        QString thumbnailUrl = imageObject.value(QLatin1String("picture")).toString();
+        QString imageSrcUrl = imageObject.value(QLatin1String("source")).toString();
+        QString createdTimeStr = imageObject.value(QLatin1String("created_time")).toString();
+        QString updatedTimeStr = imageObject.value(QLatin1String("updated_time")).toString();
+        QString photoName = imageObject.value(QLatin1String("name")).toString();
 
         // Find the correct thumbnail size. The fallback will be the "picture" which usually
         // is too small so this is sort of best guess what sizes FB might returns. We can't
         // also hardcode the exact sizes here, because we can't be sure that certains sizes
         // will stay for ever.
-        QJsonArray images = photo.value(QLatin1String("images")).toArray();
-        for (int j = 0; j < images.size(); j++) {
-            QJsonObject image = images.at(j).toObject();
+        // TODO: we can use https://graph.facebook.com/object_id/picture?type=large
+        QJsonArray images = imageObject.value(QLatin1String("images")).toArray();
+        foreach (const QJsonValue &imageValue, images) {
+            QJsonObject image = imageValue.toObject();
             int width = static_cast<int>(image.value(QLatin1String("width")).toDouble());
             int height= static_cast<int>(image.value(QLatin1String("height")).toDouble());
             if (160 <= width && width <= 350 &&
@@ -343,12 +310,13 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
             }
         }
 
-        int width = static_cast<int>(photo.value(QLatin1String("width")).toDouble());
-        int height = static_cast<int>(photo.value(QLatin1String("height")).toDouble());
+        int width = static_cast<int>(imageObject.value(QLatin1String("width")).toDouble());
+        int height = static_cast<int>(imageObject.value(QLatin1String("height")).toDouble());
 
-        if (!m_serverPhotoIds.contains(photoId)) {
+
+        if (!m_serverImageIds.contains(photoId)) {
             // for removal detection.  Don't remove this one from cache, it still exists on the server.
-            m_serverPhotoIds.append(photoId);
+            m_serverImageIds.append(photoId);
         }
 
         // we need to sync.  Write to the database.
@@ -361,9 +329,9 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
                     QString(QLatin1String("caching new photo %1: %2"))
                     .arg(photoId).arg(imageSrcUrl));
         }
-        cacheImage(photoId, fbAlbumId, fbUserId, createdTimeStr, updatedTimeStr, thumbnailUrl, imageSrcUrl, photoName, width, height);
+        m_db.addImage(photoId, fbAlbumId, fbUserId, createdTimeStr, updatedTimeStr, photoName,
+                      width, height, thumbnailUrl, imageSrcUrl);
     }
-
     // perform a continuation request if required.
     QJsonObject paging = parsed.value(QLatin1String("paging")).toObject();
     QString nextUrl = paging.value(QLatin1String("next")).toString();
@@ -378,35 +346,13 @@ void FacebookImageSyncAdaptor::photosFinishedHandler()
     decrementSemaphore(accountId);
 }
 
-bool FacebookImageSyncAdaptor::haveAlreadyCachedAlbum(const QString &fbAlbumId, const QDateTime &updatedTime)
+
+
+bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbImageId, const QString &imageUrl, int accountId)
 {
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT fbAlbumId, updatedTime FROM albums WHERE fbAlbumId = :fbaid");
-    query.bindValue(":fbaid", fbAlbumId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QLatin1String("error reading from albums table:") << query.lastError());
-        return false; // failed query, let's assume that it needs update.
-    }
-
-    if (!query.next()) {
-        return false; // no such fb album.  we need to cache it.
-    }
-
-    QString utstr = query.value(1).toString();
-    QDateTime dbUpdatedTime = QDateTime::fromString(utstr, Qt::ISODate);
-    if (dbUpdatedTime < updatedTime) {
-        return false; // it has been updated since last cache.
-    }
-
-    // we've already cached this album and it's up-to-date.  Ignore it.
-    return true;
-}
-
-bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbPhotoId, const QString &imageUrl, int accountId)
-{
-    QStringList row = queryDatabaseRow(fbPhotoId);
+    FacebookImage::ConstPtr dbImage = m_db.image(fbImageId);
     bool socialdSynced = whenSyncedDatum(QLatin1String("facebook"), QString::number(accountId)).isValid();
-    bool imagedbSynced = row.size();
+    bool imagedbSynced = !dbImage.isNull();
 
     if (socialdSynced != imagedbSynced) {
         // sociald's central sync timestamp db has different information to
@@ -415,130 +361,53 @@ bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbPhotoId, 
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: sociald.db and Image/facebook.db are out of sync!"
                                       "\n   fbPhotoId: %1\n   socialdSynced: %2\n   imagedbSynced: %3"))
-                .arg(fbPhotoId).arg(socialdSynced).arg(imagedbSynced));
+                .arg(fbImageId).arg(socialdSynced).arg(imagedbSynced));
     }
 
     if (imagedbSynced) {
-        QString dbImageUrl = row.at(6);
+        QString dbImageUrl = dbImage->imageUrl();
         if (dbImageUrl != imageUrl) {
             TRACE(SOCIALD_ERROR,
                     QString(QLatin1String("error: Image/facebook.db has outdated data!"
                                           "\n   fbPhotoId: %1\n   cached image url: %2\n   new image url: %3"))
-                    .arg(fbPhotoId).arg(dbImageUrl).arg(imageUrl));
+                    .arg(fbImageId).arg(dbImageUrl).arg(imageUrl));
         }
     }
 
     return socialdSynced || imagedbSynced;
 }
 
-void FacebookImageSyncAdaptor::possiblyAddNewAlbum(const QString &fbAlbumId, const QString &fbUserId,
-                                                   const QString &fbUserName, const QString &createdTime,
-                                                   const QString &updatedTime, const QString &albumName,
-                                                   int photoCount, const QString &coverPhotoId,
-                                                   int accountId, const QString &accessToken)
-{
-    // first, check to see whether we need to add a new user to the users table
-    possiblyAddNewUser(fbUserId, fbUserName, accountId, accessToken);
 
-    // then, check to see whether we need to add a new album to the albums table
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT fbAlbumId FROM albums WHERE fbAlbumId = :fbaid");
-    query.bindValue(":fbaid", fbAlbumId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QLatin1String("error reading from albums table:") << query.lastError());
+void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, int accountId,
+                                                  const QString &accessToken)
+{
+    if (!m_db.user(fbUserId).isNull()) {
         return;
     }
 
-    if (query.next()) {
-        // already exists.  Don't need to add it.  But, can update the updated time + album name (might have changed).
-        QSqlQuery insertQuery(m_imgdb);
-        insertQuery.prepare("UPDATE albums SET updatedTime = :ut, albumName = :an, photoCount = :pc, coverPhotoId = :cid WHERE fbAlbumId = :fbaid");
-        insertQuery.bindValue(":ut", updatedTime);
-        insertQuery.bindValue(":an", albumName);
-        insertQuery.bindValue(":pc", photoCount);
-        insertQuery.bindValue(":fbaid", fbAlbumId);
-        insertQuery.bindValue(":cid", coverPhotoId);
-
-        if (!insertQuery.exec()) {
-            TRACE(SOCIALD_ERROR, QLatin1String("error updating albums table:") << query.lastError());
-            return;
-        }
-    } else {
-        // new album.  Add it to the table.
-        QSqlQuery insertQuery(m_imgdb);
-        insertQuery.prepare("INSERT INTO albums (fbAlbumId, fbUserId, createdTime, updatedTime, albumName, photoCount, coverPhotoId, thumbnailUrl, imageUrl, thumbnailFile, imageFile)"
-                            "VALUES (:fbaid, :fbuid, :ct, :ut, :an, :pc, :cid, :tu, :iu, :tf, :if)");
-        insertQuery.bindValue(":fbaid", fbAlbumId);
-        insertQuery.bindValue(":fbuid", fbUserId);
-        insertQuery.bindValue(":ct", createdTime);
-        insertQuery.bindValue(":ut", updatedTime);
-        insertQuery.bindValue(":an", albumName);
-        insertQuery.bindValue(":pc", photoCount);
-        insertQuery.bindValue(":cid", coverPhotoId);
-        insertQuery.bindValue(":tu", QString());
-        insertQuery.bindValue(":iu", QString());
-        insertQuery.bindValue(":tf", QString());
-        insertQuery.bindValue(":if", QString());
-        if (!insertQuery.exec()) {
-            TRACE(SOCIALD_ERROR, QLatin1String("error inserting album:")
-                                 << fbAlbumId << QLatin1String("(")
-                                 << albumName << QLatin1String(") into albums table:")
-                                 << query.lastError());
-            return;
-        }
-
-        // successfully added album.  begin a new query to get the image information (based on cover photo id).
-        // XXX TODO.
+    // We need to add the user. We call Facebook to get the informations that we
+    // need and then add it to the database
+    // me?fields=updated_time,name,picture
+    QUrl url(QLatin1String("https://graph.facebook.com/me"));
+    QList<QPair<QString, QString> > queryItems;
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("fields")),
+                                              QLatin1String("id,updated_time,name,picture")));
+    QUrlQuery query(url);
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
+    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    if (reply) {
+        reply->setProperty("accountId", accountId);
+        reply->setProperty("accessToken", accessToken);
+        connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
+                this, SLOT(errorHandler(QNetworkReply::NetworkError)));
+        connect(reply, SIGNAL(sslErrors(QList<QSslError>)),
+                this, SLOT(sslErrorsHandler(QList<QSslError>)));
+        connect(reply, SIGNAL(finished()), this, SLOT(userFinishedHandler()));
     }
 }
 
-void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, const QString &fbUserName, int accountId, const QString &accessToken)
-{
-    // check to see whether the user exists in the db.
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT fbUserId FROM users WHERE fbUserId = :fbuid");
-    query.bindValue(":fbuid", fbUserId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QLatin1String("error reading from users table:") << query.lastError());
-        return;
-    }
-
-    if (query.next()) {
-        // already exists.  Don't need to add it.
-    } else {
-        // need to add it.
-        QSqlQuery addQuery(m_imgdb);// fbUserId, updatedTime, userName, thumbnailUrl, imageUrl, thumbnailFile, imageFile
-        addQuery.prepare("INSERT INTO users (fbUserId, updatedTime, userName, thumbnailUrl, imageUrl, thumbnailFile, imageFile) VALUES (:fbuid, :ut, :un, :tu, :iu, :tf, :if)");
-        addQuery.bindValue(":fbuid", fbUserId);
-        addQuery.bindValue(":ut", QString());
-        addQuery.bindValue(":un", fbUserName);
-        addQuery.bindValue(":tu", QString());
-        addQuery.bindValue(":iu", QString());
-        addQuery.bindValue(":tf", QString());
-        addQuery.bindValue(":if", QString());
-        if (!addQuery.exec()) {
-            TRACE(SOCIALD_ERROR, QLatin1String("error writing to users table:") << query.lastError());
-            return;
-        }
-
-        // successfully added user.  begin a new query to get more information: me?fields=updated_time,name,picture,cover
-        QUrl url(QLatin1String("https://graph.facebook.com/me"));
-        QList<QPair<QString, QString> > queryItems;
-        queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
-        queryItems.append(QPair<QString, QString>(QString(QLatin1String("fields")), QLatin1String("id,updated_time,name,picture,cover")));
-        QUrlQuery query(url);
-        query.setQueryItems(queryItems);
-        url.setQuery(query);
-        QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
-        if (reply) {
-            reply->setProperty("accountId", accountId);
-            reply->setProperty("accessToken", accessToken);
-            connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
-            connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslErrorsHandler(QList<QSslError>)));
-            connect(reply, SIGNAL(finished()), this, SLOT(userFinishedHandler()));
-        }
-    }
-}
 
 void FacebookImageSyncAdaptor::userFinishedHandler()
 {
@@ -563,414 +432,8 @@ void FacebookImageSyncAdaptor::userFinishedHandler()
     QString fbPictureUrl = parsed.value(QLatin1String("picture")).toObject()
                            .value(QLatin1String("data")).toObject()
                            .value(QLatin1String("url")).toString();
-    QString fbCoverUrl = parsed.value(QLatin1String("cover")).toObject()
-                         .value(QLatin1String("source")).toString();
 
-    QSqlQuery query(m_imgdb);
-    query.prepare("UPDATE users SET updatedTime = :ut, userName = :un, thumbnailUrl = :tu, imageUrl = :iu WHERE fbUserId = :fbuid");
-    query.bindValue(":ut", updatedStr);
-    query.bindValue(":un", fbName);
-    query.bindValue(":tu", fbPictureUrl);
-    query.bindValue(":iu", fbCoverUrl);
-    query.bindValue(":fbuid", fbUserId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to update user info for Facebook account with id %1:"))
-                .arg(accountId) << query.lastError());
-    }
-}
-
-void FacebookImageSyncAdaptor::cacheImage(const QString &fbPhotoId, const QString &fbAlbumId,
-                                          const QString &fbUserId, const QString &createdTime,
-                                          const QString &updatedTime, const QString &thumbnailUrl,
-                                          const QString &imageUrl, const QString &photoName,
-                                          int width, int height)
-{
-    // first, we request the row from the database
-    QStringList row = queryDatabaseRow(fbPhotoId);
-
-    // if it exists, we delete any thumbnailUrl / imageUrl associated with it.
-    if (row.size()) {
-        // check for changes.
-        if (row.at(0) == fbPhotoId && row.at(1) == fbAlbumId && row.at(2) == fbUserId
-                && row.at(3) == createdTime && row.at(4) == updatedTime && row.at(5) == thumbnailUrl
-                && row.at(6) == imageUrl && row.at(7) == photoName && row.at(8) == QString::number(width)
-                && row.at(9) == QString::number(height)) {
-            // no change, already cached.
-            return;
-        }
-
-        QString thumbFile = row.at(10);
-        QString imageFile = row.at(11);
-
-        if (!thumbFile.isEmpty() && QFile::exists(thumbFile)) {
-            if (!QFile::remove(thumbFile)) {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to remove stale thumbnail file %1 for photo %2"))
-                        .arg(thumbFile).arg(fbPhotoId));
-            }
-        }
-
-        if (!imageFile.isEmpty() && QFile::exists(imageFile)) {
-            if (!QFile::remove(imageFile)) {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to remove stale image file %1 for photo %2"))
-                        .arg(imageFile).arg(fbPhotoId));
-            }
-        }
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("about to update cached photo in database:"
-                                      "\n   fbPhotoId: %1"
-                                      "\n   fbAlbumId: %2"
-                                      "\n    fbUserId: %3"
-                                      "\n     created: %4"
-                                      "\n     updated: %5"
-                                      "\n    thumbUrl: %6"
-                                      "\n    imageUrl: %7"
-                                      "\n   photoName: %8"
-                                      "\n       width: %9"
-                                      "\n      height: %10"))
-                .arg(fbPhotoId).arg(fbAlbumId).arg(fbUserId).arg(createdTime)
-                .arg(updatedTime).arg(thumbnailUrl).arg(imageUrl).arg(photoName)
-                .arg(width).arg(height));
-
-        // then we write the new / updated data.
-        QSqlQuery query(m_imgdb);
-        query.prepare("UPDATE photos SET fbAlbumId = :fbai, fbUserId = :fbui, createdTime = :ct, updatedTime = :ut, photoName = :pn, width = :wi, height = :hi, thumbnailUrl = :tu, imageUrl = :iu, thumbnailFile = :tf, imageFile = :if WHERE fbPhotoId = :fbpi");
-        query.bindValue(":fbpi", fbPhotoId);
-        query.bindValue(":fbai", fbAlbumId);
-        query.bindValue(":fbui", fbUserId);
-        query.bindValue(":ct", createdTime);
-        query.bindValue(":ut", updatedTime);
-        query.bindValue(":pn", photoName);
-        query.bindValue(":wi", width);
-        query.bindValue(":hi", height);
-        query.bindValue(":tu", thumbnailUrl);
-        query.bindValue(":iu", imageUrl);
-        query.bindValue(":tf", QString());
-        query.bindValue(":if", QString());
-        bool success = query.exec();
-        if (!success) {
-            TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute cache image update: %1")).arg(query.lastError().text()));
-        } else {
-            TRACE(SOCIALD_DEBUG, QString(QLatin1String("successfully executed cache image update for fb photo: %1")).arg(fbPhotoId));
-        }
-    } else {
-        // new row, insert.
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("about to insert cached photo into database:"
-                                      "\n   fbPhotoId: %1"
-                                      "\n   fbAlbumId: %2"
-                                      "\n    fbUserId: %3"
-                                      "\n     created: %4"
-                                      "\n     updated: %5"
-                                      "\n    thumbUrl: %6"
-                                      "\n    imageUrl: %7"
-                                      "\n   photoName: %8"
-                                      "\n       width: %9"
-                                      "\n      height: %10"))
-                .arg(fbPhotoId).arg(fbAlbumId).arg(fbUserId).arg(createdTime)
-                .arg(updatedTime).arg(thumbnailUrl).arg(imageUrl).arg(photoName)
-                .arg(width).arg(height));
-
-        // then we write the new / updated data.
-        QSqlQuery query(m_imgdb);
-        query.prepare("INSERT INTO photos (fbPhotoId, fbAlbumId, fbUserId, createdTime, updatedTime, photoName, width, height, thumbnailUrl, imageUrl, thumbnailFile, imageFile) VALUES (:fbpi, :fbai, :fbui, :ct, :ut, :pn, :wi, :hi, :tu, :iu, :tf, :if)");
-        query.bindValue(":fbpi", fbPhotoId);
-        query.bindValue(":fbai", fbAlbumId);
-        query.bindValue(":fbui", fbUserId);
-        query.bindValue(":ct", createdTime);
-        query.bindValue(":ut", updatedTime);
-        query.bindValue(":pn", photoName);
-        query.bindValue(":wi", width);
-        query.bindValue(":hi", height);
-        query.bindValue(":tu", thumbnailUrl);
-        query.bindValue(":iu", imageUrl);
-        query.bindValue(":tf", QString());
-        query.bindValue(":if", QString());
-        bool success = query.exec();
-        if (!success) {
-            TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute cache image insert: %1")).arg(query.lastError().text()));
-        } else {
-            TRACE(SOCIALD_DEBUG, QString(QLatin1String("successfully executed cache image insert for fb photo: %1")).arg(fbPhotoId));
-        }
-    }
-}
-
-QStringList FacebookImageSyncAdaptor::queryDatabaseRow(const QString &fbPhotoId)
-{
-    QStringList retn;
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT fbAlbumId, fbUserId, createdTime, updatedTime, thumbnailUrl, imageUrl, photoName, width, height, thumbnailFile, imageFile"
-                  " FROM photos"
-                  " WHERE fbPhotoId = :fbpi");
-    query.bindValue(":fbpi", fbPhotoId);
-    bool success = query.exec();
-    if (!success) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute image row query for photo %1: %2")).arg(fbPhotoId).arg(query.lastError().text()));
-        return retn;
-    }
-
-    if (!query.next()) {
-        // no data - looks like no such photo exists in our database - new photo.
-    } else {
-        retn.append(fbPhotoId);
-        retn.append(query.value(0).toString());
-        retn.append(query.value(1).toString());
-        retn.append(query.value(2).toString());
-        retn.append(query.value(3).toString());
-        retn.append(query.value(4).toString());
-        retn.append(query.value(5).toString());
-        retn.append(query.value(6).toString());
-        retn.append(query.value(7).toString());
-        retn.append(QString::number(query.value(8).toInt()));
-        retn.append(QString::number(query.value(9).toInt()));
-        retn.append(query.value(10).toString());
-        retn.append(query.value(11).toString());
-    }
-
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("successfully executed image row query for fb photo %1:")).arg(fbPhotoId) << retn);
-
-    return retn;
-}
-
-void FacebookImageSyncAdaptor::updateAccountsTable(int accountId, const QString &fbUserId)
-{
-    QStringList allFbUserIds;
-    QList<int> allAccountIds;
-
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT accountId, fbUserId FROM accounts");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute accounts query for account %1: %2")).arg(accountId).arg(query.lastError().text()));
-        return;
-    }
-
-    while (query.next()) {
-        allAccountIds.append(query.value(0).toInt());
-        allFbUserIds.append(query.value(1).toString());
-    }
-
-    for (int i = 0; i < allAccountIds.size(); ++i) {
-        if (allAccountIds.at(i) == accountId) {
-            // something exists in the db.  is it up to date?
-            if (allFbUserIds.at(i) == fbUserId) {
-                return; // yes, up to date.
-            } else {
-                // the user id has changed, somehow.
-                query.prepare("UPDATE accounts SET fbUserId = :fbuid WHERE accountId = :aid");
-                query.bindValue(":fbuid", fbUserId);
-                query.bindValue(":aid", accountId);
-                if (!query.exec()) {
-                    TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to update accounts table for account %1: %2")).arg(accountId).arg(query.lastError().text()));
-                } else {
-                    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("had to update fbUserId for account %1 from %2 to %3")).arg(accountId).arg(allFbUserIds.at(i)).arg(fbUserId));
-                }
-                return;
-            }
-        }
-    }
-
-    // no such account is listed in our table.  add it.
-    query.prepare("INSERT INTO accounts (accountId, fbUserId) VALUES (:aid, :fbuid)");
-    query.bindValue(":aid", accountId);
-    query.bindValue(":fbuid", fbUserId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to insert into accounts table for account %1: %2")).arg(accountId).arg(query.lastError().text()));
-    }
-
-    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Successfully created account entry with fbUserId %1 for %2")).arg(fbUserId).arg(accountId));
-}
-
-void FacebookImageSyncAdaptor::purgeAccount(int accountId)
-{
-    QStringList allFbUserIds;
-    QList<int> allAccountIds;
-
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT accountId, fbUserId FROM accounts");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute accounts query for account %1: %2")).arg(accountId).arg(query.lastError().text()));
-        return;
-    }
-
-    while (query.next()) {
-        allAccountIds.append(query.value(0).toInt());
-        allFbUserIds.append(query.value(1).toString());
-    }
-
-    // find the fb user id associated.
-    QString fbUserId;
-    for (int i = 0; i < allAccountIds.size(); ++i) {
-        if (allAccountIds.at(i) == accountId) {
-            fbUserId = allFbUserIds.at(i);
-            break;
-        }
-    }
-
-    if (fbUserId.isEmpty()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no valid fbUserId for account %1!")).arg(accountId));
-        return;
-    }
-
-    // determine whether or not the fbUserId is represented multiple times
-    bool isMultiple = false;
-    for (int i = 0; i < allAccountIds.size(); ++i) {
-        if (allFbUserIds.at(i) == fbUserId && allAccountIds.at(i) != accountId) {
-            isMultiple = true;
-        }
-    }
-
-    // now remove all required data from our database, plus associated thumbnail/image files.
-    // first, delete the account from our accounts table
-    query.prepare("DELETE FROM accounts WHERE accountId = :aid");
-    query.bindValue(":aid", accountId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete account %1: %2")).arg(accountId).arg(query.lastError().text()));
-        return;
-    }
-
-    // then, if we need to, delete the user / albums / photos.
-    if (isMultiple) {
-        TRACE(SOCIALD_INFORMATION, QString(QLatin1String("successully deleted account %1 but retaining cached data as user remains in cache")).arg(accountId));
-        return;
-    }
-
-    // users
-    query.prepare("DELETE FROM users WHERE fbUserId = :fbuid");
-    query.bindValue(":fbuid", fbUserId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete users while deleting account %1: %2")).arg(accountId).arg(query.lastError().text()));
-        return;
-    }
-
-    // albums
-    query.prepare("DELETE FROM albums WHERE fbUserId = :fbuid");
-    query.bindValue(":fbuid", fbUserId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete albums while deleting account %1: %2")).arg(accountId).arg(query.lastError().text()));
-        return;
-    }
-
-    // remove images/thumbnails
-    query.prepare("SELECT thumbnailFile, imageFile FROM photos WHERE fbUserId = :fbuid");
-    query.bindValue(":fbuid", fbUserId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to query cache files while deleting account %1: %2")).arg(accountId).arg(query.lastError().text()));
-        return;
-    }
-
-    while (query.next()) {
-        QString thumb = query.value(0).toString();
-        QString image = query.value(1).toString();
-        if (!thumb.isEmpty() && QFile::exists(thumb)) {
-            QFile::remove(thumb);
-        }
-        if (!image.isEmpty() && QFile::exists(image)) {
-            QFile::remove(image);
-        }
-    }
-
-    // photos
-    query.prepare("DELETE FROM photos WHERE fbUserId = :fbuid");
-    query.bindValue(":fbuid", fbUserId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete photos while deleting account %1: %2")).arg(accountId).arg(query.lastError().text()));
-        return;
-    }
-
-    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("successully deleted account %1 along with cached data")).arg(accountId));
-}
-
-bool FacebookImageSyncAdaptor::purgeAlbum(const QString &fbAlbumId)
-{
-    // first, grab ids of photos in this album, so we can remove them from the m_cachedPhotoIds list.
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT DISTINCT fbPhotoId FROM photos WHERE fbAlbumId = :fbaid");
-    query.bindValue(":fbaid", fbAlbumId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to query photo ids during album %1 purge: %2")).arg(fbAlbumId).arg(query.lastError().text()));
-        return false;
-    } else {
-        while (query.next()) {
-            QString pid = query.value(0).toString();
-            if (m_cachedPhotoIds.contains(pid)) {
-                m_cachedPhotoIds.removeAll(pid);
-            }
-        }
-    }
-
-    // then remove the album
-    query.prepare("DELETE FROM albums WHERE fbAlbumId = :fbaid");
-    query.bindValue(":fbaid", fbAlbumId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete album %1: %2")).arg(fbAlbumId).arg(query.lastError().text()));
-        return false;
-    }
-
-    // remove images/thumbnails
-    query.prepare("SELECT thumbnailFile, imageFile FROM photos WHERE fbAlbumId = :fbaid");
-    query.bindValue(":fbaid", fbAlbumId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to query cache files while deleting album %1: %2")).arg(fbAlbumId).arg(query.lastError().text()));
-        return false;
-    }
-
-    while (query.next()) {
-        QString thumb = query.value(0).toString();
-        QString image = query.value(1).toString();
-        if (!thumb.isEmpty() && QFile::exists(thumb)) {
-            QFile::remove(thumb);
-        }
-        if (!image.isEmpty() && QFile::exists(image)) {
-            QFile::remove(image);
-        }
-    }
-
-    // remove photos
-    query.prepare("DELETE FROM photos WHERE fbAlbumId = :fbaid");
-    query.bindValue(":fbaid", fbAlbumId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete photos while deleting album %1: %2")).arg(fbAlbumId).arg(query.lastError().text()));
-        return false;
-    }
-
-    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("successully deleted album %1 along with cached data")).arg(fbAlbumId));
-    return true;
-}
-
-bool FacebookImageSyncAdaptor::purgePhoto(const QString &fbPhotoId)
-{
-    // remove images/thumbnails
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT thumbnailFile, imageFile FROM photos WHERE fbPhotoId = :fbpid");
-    query.bindValue(":fbpid", fbPhotoId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to query cache files while deleting photo %1: %2")).arg(fbPhotoId).arg(query.lastError().text()));
-        return false;
-    }
-
-    while (query.next()) {
-        QString thumb = query.value(0).toString();
-        QString image = query.value(1).toString();
-        if (!thumb.isEmpty() && QFile::exists(thumb)) {
-            QFile::remove(thumb);
-        }
-        if (!image.isEmpty() && QFile::exists(image)) {
-            QFile::remove(image);
-        }
-    }
-
-    // remove photo
-    query.prepare("DELETE FROM photos WHERE fbPhotoId = :fbpid");
-    query.bindValue(":fbpid", fbPhotoId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to delete photo %1: %2")).arg(fbPhotoId).arg(query.lastError().text()));
-        return false;
-    }
-
-    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("successully deleted photo %1 along with cached data")).arg(fbPhotoId));
-    return true;
+    m_db.addUser(fbUserId, updatedStr, fbName, fbPictureUrl);
 }
 
 void FacebookImageSyncAdaptor::initRemovalDetectionLists()
@@ -980,30 +443,18 @@ void FacebookImageSyncAdaptor::initRemovalDetectionLists()
     // We have to do it this way, as results can be spread across multiple requests
     // if Facebook returns results in paginated form.
     m_cachedAlbumIds = QStringList();
-    m_cachedPhotoIds = QStringList();
+    m_cachedImageIds = QStringList();
     m_serverAlbumIds = QStringList();
-    m_serverPhotoIds = QStringList();
+    m_serverImageIds = QStringList();
 
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT DISTINCT fbAlbumId FROM photos");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute album ids query: %1")).arg(query.lastError().text()));
+    bool ok = false;
+    m_cachedAlbumIds = m_db.allAlbumIds(&ok);
+
+    if (!ok) {
         return;
-    } else {
-        while (query.next()) {
-            m_cachedAlbumIds.append(query.value(0).toString());
-        }
     }
 
-    query.prepare("SELECT DISTINCT fbPhotoId FROM photos");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute photo ids query: %1")).arg(query.lastError().text()));
-        return;
-    } else {
-        while (query.next()) {
-            m_cachedPhotoIds.append(query.value(0).toString());
-        }
-    }
+    m_cachedImageIds = m_db.allImageIds(&ok);
 }
 
 void FacebookImageSyncAdaptor::clearRemovalDetectionLists()
@@ -1011,27 +462,11 @@ void FacebookImageSyncAdaptor::clearRemovalDetectionLists()
     // This function should be called if a request errors out.
     // If the lists are empty, we won't purge anything.
     m_cachedAlbumIds = QStringList();
-    m_cachedPhotoIds = QStringList();
+    m_cachedImageIds = QStringList();
 }
 
-QStringList FacebookImageSyncAdaptor::photosInAlbum(const QString &fbAlbumId)
-{
-    QStringList retn;
-    QSqlQuery query(m_imgdb);
-    query.prepare("SELECT DISTINCT fbPhotoId FROM photos WHERE fbAlbumId = :fbaid");
-    query.bindValue(":fbaid", fbAlbumId);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute photo ids query from album %1: %2")).arg(fbAlbumId).arg(query.lastError().text()));
-        clearRemovalDetectionLists(); // in this case, we shouldn't clear synced data because it's probably still valid.
-    } else {
-        while (query.next()) {
-            retn.append(query.value(0).toString());
-        }
-    }
-
-    return retn;
-}
-
+// TODO v where is it used ? Defined but not used in the class
+/*
 void FacebookImageSyncAdaptor::purgeDetectedRemovals()
 {
     // This function should be called once the synchronization process is completed.
@@ -1066,153 +501,4 @@ void FacebookImageSyncAdaptor::purgeDetectedRemovals()
     }
 }
 
-int FacebookImageSyncAdaptor::dbUserVersion()
-{
-    const QString queryStr = QString("PRAGMA user_version");
-
-    QSqlQuery query(m_imgdb);
-    if (!query.exec(queryStr)) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: unable to query db version: %1 - Facebook image sync will be inactive"))
-              .arg(query.lastError().text()));
-        return -1;
-    }
-    QSqlRecord rec = query.record();
-    if (query.isActive() && query.isSelect()) {
-        query.first();
-        QString v = query.value(rec.indexOf("user_version")).toString();
-        if (v.isEmpty()) {
-            return -1;
-        }
-        return v.toInt();
-    }
-    return -1;
-}
-
-bool FacebookImageSyncAdaptor::dbCreateTables()
-{
-    // create the facebook image db tables
-    // photos = fbPhotoId, fbAlbumId, fbUserId, createdTime, updatedTime, photoName, width, height, thumbnailUrl, imageUrl, thumbnailFile, imageFile
-    // albums = fbAlbumId, fbUserId, createdTime, updatedTime, albumName, photoCount, thumbnailUrl, imageUrl, thumbnailFile, imageFile
-    // users = fbUserId, updatedTime, userName, thumbnailUrl, imageUrl, thumbnailFile, imageFile
-    QSqlQuery query(m_imgdb);
-    query.prepare( "CREATE TABLE IF NOT EXISTS photos ("
-                   "fbPhotoId VARCHAR(50) UNIQUE PRIMARY KEY,"
-                   "fbAlbumId VARCHAR(50),"
-                   "fbUserId VARCHAR(50),"
-                   "createdTime VARCHAR(30),"
-                   "updatedTime VARCHAR(30),"
-                   "photoName VARCHAR(100),"
-                   "width INTEGER,"
-                   "height INTEGER,"
-                   "thumbnailUrl VARCHAR(100),"
-                   "imageUrl VARCHAR(100),"
-                   "thumbnailFile VARCHAR(100),"
-                   "imageFile VARCHAR(100))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create photos table: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-
-    query.prepare( "CREATE TABLE IF NOT EXISTS albums ("
-                   "fbAlbumId VARCHAR(50) UNIQUE PRIMARY KEY,"
-                   "fbUserId VARCHAR(50),"
-                   "createdTime VARCHAR(30),"
-                   "updatedTime VARCHAR(30),"
-                   "albumName VARCHAR(100),"
-                   "photoCount INTEGER,"
-                   "coverPhotoId VARCHAR(50),"
-                   "thumbnailUrl VARCHAR(100),"
-                   "imageUrl VARCHAR(100),"
-                   "thumbnailFile VARCHAR(100),"
-                   "imageFile VARCHAR(100))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create albums table: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-
-    query.prepare( "CREATE TABLE IF NOT EXISTS users ("
-                   "fbUserId VARCHAR(50) UNIQUE PRIMARY KEY,"
-                   "updatedTime VARCHAR(30),"
-                   "userName VARCHAR(100),"
-                   "thumbnailUrl VARCHAR(100),"
-                   "imageUrl VARCHAR(100),"
-                   "thumbnailFile VARCHAR(100),"
-                   "imageFile VARCHAR(100))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create users table: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-
-    query.prepare( "CREATE TABLE IF NOT EXISTS accounts ("
-                   "accountId INTEGER UNIQUE PRIMARY KEY,"
-                   "fbUserId VARCHAR(50))");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create accounts table: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-
-    query.prepare(PRAGMA_USER_VERSION);
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: unable to create pragma user_version: %1 - Facebook image sync will be inactive"))
-            .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-    return true;
-}
-
-bool FacebookImageSyncAdaptor::dbDropTables()
-{
-    QSqlQuery query(m_imgdb);
-    query.prepare("DROP TABLE IF EXISTS photos");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: failed to delete photos table: %1"))
-              .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-
-    query.prepare("DROP TABLE IF EXISTS albums");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: failed to delete albums table: %1"))
-              .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-
-    query.prepare("DROP TABLE IF EXISTS users");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: failed to delete user table: %1"))
-              .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-
-    query.prepare("DROP TABLE IF EXISTS accounts");
-    if (!query.exec()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: failed to delete accounts table: %1"))
-              .arg(query.lastError().text()));
-        m_imgdb.close();
-        return false;
-    }
-
-    return true;
-}
+}*/

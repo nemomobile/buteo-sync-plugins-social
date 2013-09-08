@@ -9,11 +9,11 @@
 #define FACEBOOKCALENDARTYPESYNCADAPTOR_H
 
 #include "facebookdatatypesyncadaptor.h"
-#include "databasemanipulationinterface.h"
+#include "internaldatabasemanipulationinterface.h"
 
 class FacebookCalendarTypeSyncAdaptor
         : public FacebookDataTypeSyncAdaptor
-        , private DatabaseManipulationInterface
+        , private InternalDatabaseManipulationInterface
 {
     Q_OBJECT
 

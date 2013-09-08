@@ -128,6 +128,15 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
 
 /*!
     \internal
+    Called when the semaphores decreased to 0, this method is used
+    to finalize something, like saving all data to a database.
+ */
+void SocialNetworkSyncAdaptor::finalize()
+{
+}
+
+/*!
+    \internal
     Returns the last sync timestamp for the given service, account and data type.
     If data from prior to this timestamp is received in subsequent requests, it does not need to be synced.
     This function will return an invalid QDateTime if no synchronisation has occurred.
@@ -570,6 +579,8 @@ void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
     m_accountSyncSemaphores.insert(accountId, semaphoreValue);
 
     if (semaphoreValue == 0) {
+        finalize();
+
         // finished all outstanding sync requests for this account.
         // update the sync time in the global sociald database.
         updateLastSyncTimestamp(m_serviceName,

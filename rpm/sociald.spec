@@ -22,6 +22,7 @@ BuildRequires:  pkgconfig(libkcalcoren-qt5)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
+BuildRequires:  pkgconfig(socialcache)
 # for lupdate
 BuildRequires:  qt5-qttools-linguist
 Requires: sailfish-components-accounts-qt5 >= 0.0.43
