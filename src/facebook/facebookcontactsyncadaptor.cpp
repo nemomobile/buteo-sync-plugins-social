@@ -121,7 +121,6 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
 
     // can sync, enabled
     setInitialActive(true);
-    setStatus(SocialNetworkSyncAdaptor::Inactive);
 }
 
 FacebookContactSyncAdaptor::~FacebookContactSyncAdaptor()
@@ -323,8 +322,7 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
         QString website = blobDetails.value(QLatin1String("website")).toString(); // personal website.
         QString picture;
         QJsonObject pictureData = blobDetails.value(QLatin1String("picture")).toObject().value(QLatin1String("data")).toObject();
-        QString isSilhouette = pictureData.value(QLatin1String("is_silhouette")).toString();
-        if (!isSilhouette.isEmpty() && isSilhouette != QLatin1String("1") && isSilhouette != QLatin1String("true")) {
+        if (!pictureData.value(QLatin1String("is_silhouette")).toBool()) {
             picture = pictureData.value(QLatin1String("url")).toString();
         }
         QString cover = blobDetails.value(QLatin1String("cover")).toObject().value(QLatin1String("source")).toString();
@@ -663,6 +661,7 @@ void FacebookContactSyncAdaptor::saveAvatars()
     QList<int> accountIds;
 
     // save a batch of avatars to disk
+    int batchSize = m_avatarsToSave.size();
     while (m_avatarsToSave.size()) {
         FacebookContactSyncAdaptor::AvatarReplyData ard = m_avatarsToSave.takeFirst();
         QString currFileName = saveImageToDisk(ard.accountId, ard.type, ard.fbuid, ard.data);
@@ -678,6 +677,10 @@ void FacebookContactSyncAdaptor::saveAvatars()
 
     // update database with updated info.
     updateDatabaseWithImageInfo(avatarTypes, fileNames, avatarUrls, fbFriendIds, accountIds);
+
+    TRACE(SOCIALD_DEBUG,
+            QString(QLatin1String("saved a batch of %1 avatars"))
+            .arg(batchSize));
 }
 
 void FacebookContactSyncAdaptor::avatarFinishedHandler()

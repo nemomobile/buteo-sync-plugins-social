@@ -75,6 +75,7 @@ protected:
     bool endTransaction();
     void setStatus(Status status);
     void setInitialActive(bool enabled);
+    void setFinishedInactive();
 
     // Semaphore system
     const SyncService::DataType dataType;
