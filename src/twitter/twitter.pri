@@ -11,7 +11,7 @@ SOURCES += \
     $$PWD/twitterhometimelinesyncadaptor.cpp
 
 # lipstick event feed subview
-twitter_eventfeed.files = $$PWD/eventfeed/twitter.qml
+twitter_eventfeed.files = $$PWD/eventfeed/twitter.qml $$PWD/eventfeed/twitter-update.qml
 twitter_eventfeed.path = /usr/share/lipstick/eventfeed/
 
 # translations

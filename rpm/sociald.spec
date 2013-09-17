@@ -45,7 +45,9 @@ A daemon process which provides data synchronization with various social service
 %{_datadir}/translations/lipstick-jolla-home-facebook_eng_en.qm
 %{_datadir}/translations/lipstick-jolla-home-twitter_eng_en.qm
 %{_datadir}/lipstick/eventfeed/facebook.qml
+%{_datadir}/lipstick/eventfeed/facebook-update.qml
 %{_datadir}/lipstick/eventfeed/twitter.qml
+%{_datadir}/lipstick/eventfeed/twitter-update.qml
 %{_datadir}/lipstick/eventfeed/shared/*.qml
 
 %package ts-devel

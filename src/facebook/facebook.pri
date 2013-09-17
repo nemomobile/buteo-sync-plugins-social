@@ -17,7 +17,7 @@ SOURCES += \
     $$PWD/facebookcalendartypesyncadaptor.cpp
 
 # lipstick event feed subview
-facebook_eventfeed.files = $$PWD/eventfeed/facebook.qml
+facebook_eventfeed.files = $$PWD/eventfeed/facebook.qml $$PWD/eventfeed/facebook-update.qml
 facebook_eventfeed.path = /usr/share/lipstick/eventfeed/
 
 # translations
