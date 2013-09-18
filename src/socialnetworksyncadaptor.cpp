@@ -112,11 +112,14 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
             continue; // not same account as m_serviceName.  Ignore it.
         }
 
-        if (knownIds.contains(currId)) {
-            knownIds.removeOne(currId);
-            updateIds->append(currId);
-        } else {
-            newIds->append(currId);
+        // if the account has been disabled with the sync service, we purge it.
+        if (act->isEnabledWithService(QString(QLatin1String("%1-sync")).arg(m_serviceName))) {
+            if (knownIds.contains(currId)) {
+                knownIds.removeOne(currId);
+                updateIds->append(currId);
+            } else {
+                newIds->append(currId);
+            }
         }
     }
 
@@ -541,16 +544,28 @@ void SocialNetworkSyncAdaptor::setInitialActive(bool enabled)
     }
 }
 
+/*!
+ * \internal
+ * Should be called by any specific sync adapter when
+ * they've finished syncing data.  The transition from
+ * busy status to inactive status is what causes the
+ * Buteo plugin to emit the sync results (and allows
+ * subsequent syncs to occur).
+ */
+void SocialNetworkSyncAdaptor::setFinishedInactive()
+{
+    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished %1 %2 sync at: %3"))
+                               .arg(m_serviceName, SyncService::dataType(dataType),
+                                    QDateTime::currentDateTime().toString(Qt::ISODate)));
+    setStatus(SocialNetworkSyncAdaptor::Inactive);
+}
+
 void SocialNetworkSyncAdaptor::incrementSemaphore(int accountId)
 {
     int semaphoreValue = m_accountSyncSemaphores.value(accountId);
     semaphoreValue += 1;
     m_accountSyncSemaphores.insert(accountId, semaphoreValue);
     TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
-
-    if (status() == SocialNetworkSyncAdaptor::Inactive) {
-        setStatus(SocialNetworkSyncAdaptor::Busy);
-    }
 }
 
 void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
@@ -589,10 +604,7 @@ void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
         }
 
         if (allAreZero) {
-            TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished %1 %2 sync at: %3"))
-                                       .arg(m_serviceName, SyncService::dataType(dataType),
-                                            QDateTime::currentDateTime().toString(Qt::ISODate)));
-            setStatus(SocialNetworkSyncAdaptor::Inactive);
+            setFinishedInactive(); // Finished!
         }
     }
 }

@@ -60,7 +60,6 @@ SyncServicePrivate::SyncServicePrivate(const QString &connectionName, SyncServic
                                     SyncService::dataType(SyncService::Posts) <<
                                     SyncService::dataType(SyncService::Contacts) <<
                                     SyncService::dataType(SyncService::Calendars));
-        // TODO: Contacts, Calendar Events
     }
 
     // Google+

@@ -61,6 +61,7 @@ void TwitterDataTypeSyncAdaptor::sync(const QString &dataTypeString)
     // 1) if an account has been removed, we need to purge the data we retrieved with it
     // 2) if an account has been added, we need to pull data for the account
     // 3) for existing accounts, pull new data for the existing account
+    setStatus(SocialNetworkSyncAdaptor::Busy);
 
     QList<int> newIds, purgeIds, updateIds;
     checkAccounts(dataType, &newIds, &purgeIds, &updateIds);
@@ -71,6 +72,10 @@ void TwitterDataTypeSyncAdaptor::sync(const QString &dataTypeString)
     TRACE(SOCIALD_DEBUG,
             QString(QLatin1String("successfully triggered sync of %1: %2 purged, %3 new, %4 updated accounts"))
             .arg(SyncService::dataType(dataType)).arg(purgeIds.size()).arg(newIds.size()).arg(updateIds.size()));
+
+    if (newIds.count() == 0 && updateIds.count() == 0) {
+        setFinishedInactive(); // just had to purge, and we're done.
+    }
 }
 
 void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
