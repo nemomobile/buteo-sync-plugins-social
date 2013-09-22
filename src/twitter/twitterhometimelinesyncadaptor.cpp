@@ -15,25 +15,11 @@
 
 #include "eventfeedhelper_p.h"
 
-// meegotouchevents/meventfeed
-#include <meventfeed.h>
-
-#define SOCIALD_TWITTER_POSTS_ID_PREFIX QLatin1String("twitter-posts-")
-#define SOCIALD_TWITTER_POSTS_GROUPNAME QLatin1String("twitter")
-#define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
-
-// currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
-
 TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *syncService, QObject *parent)
     : TwitterDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
 {
-    if (!MEventFeed::instance()) {
-        setInitialActive(false);
-        return; // can't sync to the local device's event feed, so not enabled.
-    }
-
-    // can sync, enabled
-    setInitialActive(true);
+    m_db.initDatabase();
+    setInitialActive(m_db.isValid());
 }
 
 TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
@@ -42,7 +28,8 @@ TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
 
 void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int accountIdentifier, purgeIds) {
+    /*
+     *foreach (int accountIdentifier, purgeIds) {
         bool ok;
         QStringList localIdentifiers = removeAllData(serviceName(), SyncService::dataType(dataType),
                                                      QString::number(accountIdentifier), &ok);
@@ -64,12 +51,18 @@ void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &p
                         .arg(eventIdString));
             }
         }
-    }
+    }*/
+    // TODO ^
 }
 
 void TwitterHomeTimelineSyncAdaptor::beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret)
 {
     requestMe(accountId, oauthToken, oauthTokenSecret);
+}
+
+void TwitterHomeTimelineSyncAdaptor::finalize()
+{
+    m_db.write();
 }
 
 void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oauthToken, const QString &oauthTokenSecret)
@@ -196,7 +189,9 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
     }
 
     int accountId = reply->property("accountId").toInt();
-    QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"), SyncService::dataType(SyncService::Posts), QString::number(accountId));
+    QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"),
+                                           SyncService::dataType(SyncService::Posts),
+                                           accountId);
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
@@ -213,25 +208,17 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
         }
 
         QList<SyncedDatum> syncedData;
-        int prefixLen = QString(SOCIALD_TWITTER_POSTS_ID_PREFIX).size();
 
         foreach (const QJsonValue &tweetValue, tweets) {
             // these are the fields we eventually need to fill out:
-            QString title;
-            QString body;
-            QStringList imageList;
-            QDateTime eventTimestamp;
-            QString footer;
-            bool isVideo;
-            QString url;
-
+            QList<QPair<QString, SocialPostImage::ImageType> > imageList;
             QString retweeter;
 
             // grab the data from the current post
             QJsonObject tweet = tweetValue.toObject();
 
             // Just to be sure to get the time of the current (re)tweet
-            QDateTime createdTime = parseTwitterDateTime(tweet.value(QLatin1String("created_at")).toString());
+            QDateTime eventTimestamp = parseTwitterDateTime(tweet.value(QLatin1String("created_at")).toString());
 
             // We should get data for the retweeted tweet instead of
             // getting the (often partial) retweeted tweet.
@@ -241,9 +228,9 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             }
 
             QString postId = tweet.value(QLatin1String("id_str")).toString();
-            QString text = tweet.value(QLatin1String("text")).toString();
+            QString body = tweet.value(QLatin1String("text")).toString();
             QJsonObject user = tweet.value(QLatin1String("user")).toObject();
-            QString userName = user.value("name").toString();
+            QString name = user.value("name").toString();
             QString screenName = user.value("screen_name").toString();
             QString icon = user.value(QLatin1String("profile_image_url")).toString();
 
@@ -253,7 +240,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 foreach (const QJsonValue &mediaValue, mediaList) {
                     QJsonObject mediaObject = mediaValue.toObject();
                     if (mediaObject.contains(QLatin1String("media_url_https"))) {
-                        imageList.append(mediaObject.value(QLatin1String("media_url_https")).toString());
+                        QString imageUrl = mediaObject.value(QLatin1String("media_url_https")).toString();
+                        imageList.append(qMakePair<QString, SocialPostImage::ImageType>(imageUrl, SocialPostImage::Photo));
                     }
                 }
             }
@@ -265,49 +253,24 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 QJsonObject urlObject = urlValue.toObject();
                 QString shortUrl = urlObject.value(QLatin1String("url")).toString();
                 QString expandedUrl = urlObject.value(QLatin1String("expanded_url")).toString();
-                text.replace(shortUrl, expandedUrl);
+                body.replace(shortUrl, expandedUrl);
             }
 
-            title = userName;
-            body = text;
-            eventTimestamp = createdTime;
-            isVideo = false; // XXX TODO: Twitter Vine posts?
-            url = QLatin1String("https://twitter.com/") + screenName + QLatin1String("/status/") + postId;
 
             // check to see if we need to post it to the events feed
-            if (lastSync.isValid() && createdTime < lastSync) {
+            if (lastSync.isValid() && eventTimestamp < lastSync) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 came after last sync:"))
-                        .arg(accountId) << "    " << createdTime << ":" << body);
+                        .arg(accountId) << "    " << eventTimestamp << ":" << body);
                 break;                 // all subsequent events will be even older.
-            } else if (createdTime.daysTo(QDateTime::currentDateTime()) > 7) {
+            } else if (eventTimestamp.daysTo(QDateTime::currentDateTime()) > 7) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("event for account %1 is more than a week old:\n"))
-                        .arg(accountId) << "    " << createdTime << ":" << body);
+                        .arg(accountId) << "    " << eventTimestamp << ":" << body);
                 break;                 // all subsequent events will be even older.
             } else {
-                QVariantMap metaData;
-                metaData.insert("consumerKey", consumerKey());
-                metaData.insert("consumerSecret", consumerSecret());
-                metaData.insert("nodeId", postId);
-                metaData.insert("retweeter", retweeter);
-                QString localIdentifier = syncedDatumLocalIdentifier(serviceName(), SyncService::dataType(dataType), postId).mid(prefixLen);
-
-                QList<int> accountIds;
-                if (!localIdentifier.isEmpty()) {
-                    accountIds.append(syncedDatumAccountIds(QString(SOCIALD_TWITTER_POSTS_ID_PREFIX + localIdentifier)));
-                }
-                if (!accountIds.contains(accountId)) {
-                    accountIds.append(accountId);
-                }
-
-                EventFeedHelper::manageEvent(icon, title, body, imageList, createdTime,
-                                             footer, isVideo, url, serviceName(),
-                                             // TODO: translate the string below
-                                             QLatin1String("Twitter"), metaData, accountId,
-                                             accountIds, m_accountProfileImage, localIdentifier,
-                                             SOCIALD_TWITTER_POSTS_ID_PREFIX, dataType, postId,
-                                             syncedData);
+                m_db.addTwitterPost(postId, name, body, eventTimestamp, icon, imageList,
+                                    screenName, retweeter, consumerKey(), consumerSecret(), accountId);
             }
         }
         markSyncedData(syncedData);

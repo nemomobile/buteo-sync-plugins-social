@@ -164,7 +164,7 @@ void FacebookContactSyncAdaptor::requestData(int accountId, const QString &acces
     QDateTime timestamp = syncTimestamp.isValid() ? syncTimestamp :
                           lastSyncTimestamp(QLatin1String("facebook"),
                                             SyncService::dataType(SyncService::Contacts),
-                                            QString::number(accountId));
+                                            accountId);
 
     bool isAvatarRequest = false;
     if (!continuationRequest.isEmpty()) {
