@@ -40,7 +40,7 @@
 #define SOCIALD_FACEBOOK_CONTACTS_GROUPNAME QLatin1String("sociald-sync-facebook-contacts")
 #define SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET QLatin1String("facebook")
 #define SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbFriendId, avatarType) QString("%1/%2/%3-%4.jpg").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SyncService::dataType(dataType)).arg(fbFriendId).arg(avatarType)
-#define SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE 50
+#define SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE 20
 
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
@@ -190,6 +190,11 @@ void FacebookContactSyncAdaptor::requestData(int accountId, const QString &acces
         // note: we don't need the access token in this, as it's not a graph API query
         isAvatarRequest = true;
         url = QUrl(avatarUrl);
+        QList<QPair<QString, QString> > avatarSizeQuery;
+        avatarSizeQuery.append(QPair<QString, QString>(QString(QLatin1String("type")), QString(QLatin1String("large"))));
+        QUrlQuery query(url);
+        query.setQueryItems(avatarSizeQuery);
+        url.setQuery(query);
     }
 
     QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
@@ -207,6 +212,7 @@ void FacebookContactSyncAdaptor::requestData(int accountId, const QString &acces
         connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
         connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslErrorsHandler(QList<QSslError>)));
         if (isAvatarRequest) {
+            reply->setProperty("redirectCount", 0);
             connect(reply, SIGNAL(finished()), this, SLOT(avatarFinishedHandler()));
         } else {
             connect(reply, SIGNAL(finished()), this, SLOT(friendsFinishedHandler()));
@@ -479,7 +485,7 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
                     FacebookContactSyncAdaptor::AvatarRequestData ard;
                     ard.accountId = accountId;
                     ard.fbuid = fbuid;
-                    ard.url = picture;
+                    ard.url = QString(QLatin1String("http://graph.facebook.com/%1/picture")).arg(fbuid);
                     ard.type = QLatin1String("picture");
                     m_avatarsToRequest.append(ard);
                 }
@@ -505,7 +511,7 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
             FacebookContactSyncAdaptor::AvatarRequestData ard;
             ard.accountId = accountId;
             ard.fbuid = fbuid;
-            ard.url = picture;
+            ard.url = QString(QLatin1String("http://graph.facebook.com/%1/picture")).arg(fbuid);
             ard.type = QLatin1String("picture");
             m_avatarsToRequest.append(ard);
         }
@@ -692,34 +698,68 @@ void FacebookContactSyncAdaptor::avatarFinishedHandler()
     QString avatarType = reply->property("avatarType").toString();
     QString fbFriendId = reply->property("fbFriendId").toString();
     QString avatarUrl = reply->property("avatarUrl").toString();
-    QByteArray allData = reply->readAll();
-    if (!isError) {
-        // queue avatar for saving.
-        FacebookContactSyncAdaptor::AvatarReplyData ard;
-        ard.accountId = accountId;
-        ard.fbuid = fbFriendId;
-        ard.type = avatarType;
-        ard.url = avatarUrl;
-        ard.data = allData;
-        m_avatarsToSave.append(ard);
-    } else {
+    int redirectCount = reply->property("redirectCount").toInt();
+    QUrl redirectUrl = reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
+    bool needRedirect = false;
+
+    if (isError) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error occurred during friend %1 avatar request: %2 %3"))
-                .arg(fbFriendId).arg(reply->url().toString()).arg(QLatin1String(allData)));
+                .arg(fbFriendId).arg(reply->url().toString()).arg(QLatin1String(reply->readAll())));
+    } else if (redirectUrl.isValid()) {
+        if (redirectCount >= 4) {
+            isError = true;
+        } else {
+            QNetworkReply *redirectReply = networkAccessManager->get(QNetworkRequest(redirectUrl));
+            if (redirectReply) {
+                needRedirect = true;
+                redirectReply->setProperty("accountId", accountId);
+                redirectReply->setProperty("accessToken", accessToken);
+                redirectReply->setProperty("avatarType", avatarType);
+                redirectReply->setProperty("fbFriendId", fbFriendId);
+                redirectReply->setProperty("avatarUrl", avatarUrl);
+                redirectReply->setProperty("redirectCount", redirectCount+1);
+                connect(redirectReply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
+                connect(redirectReply, SIGNAL(finished()), this, SLOT(avatarFinishedHandler()));
+            } else {
+                isError = 1;
+            }
+        }
+
+        if (isError) {
+            TRACE(SOCIALD_ERROR,
+                    QString(QLatin1String("error occurred during friend %1 avatar redirect request: %2 # %3"))
+                    .arg(fbFriendId).arg(redirectUrl.toString()).arg(redirectCount));
+        }
+    } else {
+        QByteArray allData = reply->readAll();
+        if (!isError) {
+            // queue avatar for saving.
+            FacebookContactSyncAdaptor::AvatarReplyData ard;
+            ard.accountId = accountId;
+            ard.fbuid = fbFriendId;
+            ard.type = avatarType;
+            ard.url = avatarUrl;
+            ard.data = allData;
+            m_avatarsToSave.append(ard);
+        }
     }
+
     disconnect(reply);
     reply->deleteLater();
 
-    m_avatarsSemaphore--;
-    if ((m_avatarsSemaphore % SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE) == 0) {
-        // request more avatars if they exist
-        // Note: due to the use of the modulo, the first few avatar writes might
-        // be queued unfairly.
-        requestAvatars(accessToken);
-    }
+    if (!needRedirect) {
+        m_avatarsSemaphore--;
+        if ((m_avatarsSemaphore % SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE) == 0) {
+            // request more avatars if they exist
+            // Note: due to the use of the modulo, the first few avatar writes might
+            // be queued unfairly.
+            requestAvatars(accessToken);
+        }
 
-    // we're finished this request.  Decrement our busy semaphore.
-    decrementSemaphore(accountId);
+        // we're finished this request.  Decrement our busy semaphore.
+        decrementSemaphore(accountId);
+    }
 }
 
 bool FacebookContactSyncAdaptor::avatarUrlIsDifferent(const QString &avatarType, const QString &fbFriendId, int accountId, const QString &avatarUrl)
