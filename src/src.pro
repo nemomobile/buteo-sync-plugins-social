@@ -70,7 +70,8 @@ shared_eventfeed.files =    $$PWD/eventfeed/SocialAvatar.qml \
                             $$PWD/eventfeed/SocialComment.qml \
                             $$PWD/eventfeed/SocialReplyField.qml \
                             $$PWD/eventfeed/SocialAccountPullDownMenu.qml \
-                            $$PWD/eventfeed/SocialAccountPage.qml
+                            $$PWD/eventfeed/SocialAccountPage.qml \
+                            $$PWD/eventfeed/SocialStatusUpdater.qml
 shared_eventfeed.path = /usr/share/lipstick/eventfeed/shared/
 
 
