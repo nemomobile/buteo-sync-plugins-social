@@ -27,9 +27,6 @@ target.path += /usr/lib/buteo-plugins-qt5
 client.path = /etc/buteo/profiles/client
 client.files = xml/sociald.xml
 
-sync.path = /etc/buteo/profiles/sync
-sync.files = xml/sync/*
-
 QT += \
     network \
     dbus \
@@ -57,23 +54,25 @@ SOURCES += \
     $$PWD/syncservice.cpp \
     $$PWD/databasemanipulationinterface.cpp
 
+OTHER_FILES += shared_eventfeed.files
+
 MOC_DIR = $$PWD/../.moc
 OBJECTS_DIR = $$PWD/../.obj
 
 # lipstick event feed subview shared components
-shared_eventfeed.files =    $$PWD/eventfeed/SocialAvatar.qml \
-                            $$PWD/eventfeed/SocialBody.qml \
-                            $$PWD/eventfeed/SocialButton.qml \
-                            $$PWD/eventfeed/SocialContent.qml \
-                            $$PWD/eventfeed/SocialMediaRow.qml \
-                            $$PWD/eventfeed/SocialInfoLabel.qml \
-                            $$PWD/eventfeed/SocialComment.qml \
-                            $$PWD/eventfeed/SocialReplyField.qml \
-                            $$PWD/eventfeed/SocialAccountPullDownMenu.qml \
-                            $$PWD/eventfeed/SocialAccountPage.qml \
-                            $$PWD/eventfeed/SocialStatusUpdater.qml
+shared_eventfeed.files = \
+    $$PWD/eventfeed/SocialAvatar.qml \
+    $$PWD/eventfeed/SocialBody.qml \
+    $$PWD/eventfeed/SocialButton.qml \
+    $$PWD/eventfeed/SocialContent.qml \
+    $$PWD/eventfeed/SocialMediaRow.qml \
+    $$PWD/eventfeed/SocialInfoLabel.qml \
+    $$PWD/eventfeed/SocialComment.qml \
+    $$PWD/eventfeed/SocialReplyField.qml \
+    $$PWD/eventfeed/SocialAccountPullDownMenu.qml \
+    $$PWD/eventfeed/SocialAccountPage.qml \
+    $$PWD/eventfeed/SocialStatusUpdater.qml
 shared_eventfeed.path = /usr/share/lipstick/eventfeed/shared/
-
 
 # translations
 TS_FILE = $$OUT_PWD/sociald.ts
@@ -99,9 +98,5 @@ engineering_english_install.CONFIG += no_check_exist
 QMAKE_EXTRA_TARGETS += ts engineering_english
 PRE_TARGETDEPS += ts engineering_english
 
-# lipstick notification categories
-notification_categories.files = facebook/x-nemo.social.facebook.notification.conf twitter/x-nemo.social.twitter.mention.conf
-notification_categories.path = /usr/share/lipstick/notificationcategories/
-
-INSTALLS += target client sync shared_eventfeed notification_categories ts_install engineering_english_install
+INSTALLS += target client shared_eventfeed ts_install engineering_english_install
 
