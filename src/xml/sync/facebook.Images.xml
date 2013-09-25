@@ -13,8 +13,10 @@
         <key name="Sync Direction" value="from-remote" />
     </profile>
 
+    <key name="destinationtype" value="online" />
+
     <!--This is used by sync-fw to set customized scheduling information for the profile -->
-    <schedule enabled="false" interval="1" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="">
-    </schedule>
+    <schedule enabled="true" interval="" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="0500" />
+
     <key name="category" value="facebook.Images" />
 </profile>

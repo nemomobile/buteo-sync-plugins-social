@@ -10,9 +10,24 @@ SOURCES += \
     $$PWD/twittermentiontimelinesyncadaptor.cpp \
     $$PWD/twitterhometimelinesyncadaptor.cpp
 
+OTHER_FILES += \
+    twitter_sync_profiles.files \
+    twitter_eventfeed.files \
+    twitter_notification_category
+
+# twitter buteo sync profiles
+twitter_sync_profiles.path = /etc/buteo/profiles/sync
+twitter_sync_profiles.files = \
+    $$PWD/../xml/sync/twitter.Posts.xml \
+    $$PWD/../xml/sync/twitter.Notifications.xml
+
 # lipstick event feed subview
 twitter_eventfeed.files = $$PWD/eventfeed/twitter.qml $$PWD/eventfeed/twitter-update.qml
 twitter_eventfeed.path = /usr/share/lipstick/eventfeed/
+
+# lipstick notification category
+twitter_notification_category.files = twitter/x-nemo.social.twitter.mention.conf
+twitter_notification_category.path = /usr/share/lipstick/notificationcategories/
 
 # translations
 TWITTER_TS_FILE = $$OUT_PWD/lipstick-jolla-home-twitter.ts
@@ -38,4 +53,4 @@ twitter_engineering_english_install.CONFIG += no_check_exist
 QMAKE_EXTRA_TARGETS += twitter_ts twitter_engineering_english
 PRE_TARGETDEPS += twitter_ts twitter_engineering_english
 
-INSTALLS += twitter_eventfeed twitter_ts_install twitter_engineering_english_install
+INSTALLS += twitter_sync_profiles twitter_eventfeed twitter_notification_category twitter_ts_install twitter_engineering_english_install

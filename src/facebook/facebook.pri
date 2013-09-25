@@ -16,9 +16,27 @@ SOURCES += \
     $$PWD/facebookpostsyncadaptor.cpp \
     $$PWD/facebookcalendartypesyncadaptor.cpp
 
+OTHER_FILES += \
+    facebook_sync_profiles.files \
+    facebook_eventfeed.files \
+    facebook_notification_category.files
+
+# facebook buteo sync profiles
+facebook_sync_profiles.path = /etc/buteo/profiles/sync
+facebook_sync_profiles.files = \
+    $$PWD/../xml/sync/facebook.Calendars.xml \
+    $$PWD/../xml/sync/facebook.Contacts.xml \
+    $$PWD/../xml/sync/facebook.Images.xml \
+    $$PWD/../xml/sync/facebook.Notifications.xml \
+    $$PWD/../xml/sync/facebook.Posts.xml
+
 # lipstick event feed subview
 facebook_eventfeed.files = $$PWD/eventfeed/facebook.qml $$PWD/eventfeed/facebook-update.qml
 facebook_eventfeed.path = /usr/share/lipstick/eventfeed/
+
+# lipstick notification category
+facebook_notification_category.files = facebook/x-nemo.social.facebook.notification.conf
+facebook_notification_category.path = /usr/share/lipstick/notificationcategories/
 
 # translations
 FACEBOOK_TS_FILE = $$OUT_PWD/lipstick-jolla-home-facebook.ts
@@ -44,4 +62,4 @@ facebook_engineering_english_install.CONFIG += no_check_exist
 QMAKE_EXTRA_TARGETS += facebook_ts facebook_engineering_english
 PRE_TARGETDEPS += facebook_ts facebook_engineering_english
 
-INSTALLS += facebook_eventfeed facebook_ts_install facebook_engineering_english_install
+INSTALLS += facebook_sync_profiles facebook_eventfeed facebook_notification_category facebook_ts_install facebook_engineering_english_install
