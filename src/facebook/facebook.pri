@@ -31,7 +31,11 @@ facebook_sync_profiles.files = \
     $$PWD/../xml/sync/facebook.Posts.xml
 
 # lipstick event feed subview
-facebook_eventfeed.files = $$PWD/eventfeed/facebook.qml $$PWD/eventfeed/facebook-update.qml
+facebook_eventfeed.files = $$PWD/eventfeed/FacebookPostPage.qml \
+                           $$PWD/eventfeed/facebook-update.qml \
+                           $$PWD/eventfeed/facebook-delegate.qml \
+                           $$PWD/eventfeed/FacebookFeedItem.qml \
+                           $$PWD/eventfeed/FacebookFeedPage.qml
 facebook_eventfeed.path = /usr/share/lipstick/eventfeed/
 
 # lipstick notification category

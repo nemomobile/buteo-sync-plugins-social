@@ -3,7 +3,7 @@ import Sailfish.Silica 1.0
 
 Item {
     id: container
-    property alias avatar: socialAvatar.icon
+    property alias avatar: socialAvatar.source
     property alias source: header.title
     property date timestamp
     property alias body: body.text
@@ -14,10 +14,6 @@ Item {
     anchors {
         left: parent.left
         right: parent.right
-    }
-
-    Formatter {
-        id: formatter
     }
 
     Rectangle {
@@ -45,7 +41,7 @@ Item {
             rightMargin: Theme.paddingLarge
         }
 
-        time: formatter.formatDate(container.timestamp, Formatter.DurationElapsed)
+        time: Format.formatDate(container.timestamp, Formatter.DurationElapsed)
     }
 
     // This item is used to anchors social buttons and full-row social buttons content

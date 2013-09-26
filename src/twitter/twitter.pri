@@ -22,7 +22,11 @@ twitter_sync_profiles.files = \
     $$PWD/../xml/sync/twitter.Notifications.xml
 
 # lipstick event feed subview
-twitter_eventfeed.files = $$PWD/eventfeed/twitter.qml $$PWD/eventfeed/twitter-update.qml
+twitter_eventfeed.files = $$PWD/eventfeed/TwitterPostPage.qml \
+                          $$PWD/eventfeed/twitter-update.qml \
+                          $$PWD/eventfeed/twitter-delegate.qml \
+                          $$PWD/eventfeed/TwitterFeedItem.qml \
+                          $$PWD/eventfeed/TwitterFeedPage.qml
 twitter_eventfeed.path = /usr/share/lipstick/eventfeed/
 
 # lipstick notification category

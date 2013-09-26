@@ -8,15 +8,17 @@ import "shared"
 Page {
     id: container
 
+    property Item subviewModel
     property variant model
     property string nodeIdentifier
     property string retweeter
+    property string userId
 
     onModelChanged: {
-        nodeIdentifier = container.model.metaData["nodeId"]
-        twitter.consumerKey = container.model.metaData["consumerKey"]
-        twitter.consumerSecret = container.model.metaData["consumerSecret"]
-        retweeter = container.model.metaData["retweeter"]
+        nodeIdentifier = model.twitterId
+        twitter.consumerKey = model.consumerKey
+        twitter.consumerSecret = model.consumerSecret
+        retweeter = model.retweeter
     }
 
     Account {
@@ -26,6 +28,7 @@ Page {
                 // Reset token
                 twitter.oauthToken = ""
                 twitter.oauthTokenSecret = ""
+                container.userId = ""
 
                 // Sign in, and get credentials.
                 var params = signInParameters("twitter-sync")
@@ -35,25 +38,30 @@ Page {
                 signIn("Jolla", "Jolla", params)
             }
         }
-        identifier: -1
 
-        onStatusChanged: performSignIn()
         onIdentifierChanged: performSignIn()
+        onStatusChanged: performSignIn()
+        onErrorChanged: console.log("Twitter account error: " + error + "\n")
 
         onSignInResponse: {
             var accessTok = data["AccessToken"]
-            if (accessTok != "") {
+            if (accessTok !== "") {
                 twitter.oauthToken = accessTok
             }
             var tokenSec = data["TokenSecret"]
-            if (tokenSec != "") {
+            if (tokenSec !== "") {
                 twitter.oauthTokenSecret = tokenSec
+            }
+            var userId = data["UserId"]
+            if (userId !== "") {
+                container.userId = userId
             }
         }
     }
 
     Twitter {
         id: twitter
+        currentUserIdentifier: container.userId
         onInitializedChanged: populateIfInitialized()
         onConsumerKeyChanged: populateIfInitialized()
         onConsumerSecretChanged: populateIfInitialized()
@@ -77,8 +85,18 @@ Page {
             checkCredentialsReady()
             if (credentialsReady) {
                 twitterReplies.repopulate()
+                twitterUser.reload()
             }
         }
+    }
+
+    TwitterUser {
+        id: twitterUser
+        socialNetwork: twitter
+        identifier: container.userId
+
+        onErrorChanged: console.log("TwitterUser error: " + error + "\n")
+        onErrorMessageChanged: console.log("TwitterUser errorMessage: " + errorMessage + "\n")
     }
 
     SocialNetworkModel {
@@ -91,58 +109,57 @@ Page {
                 return
             }
 
-            if (view.state == "") {
+            if (view.state === "") {
                 view.state = "loadingModel"
             }
         }
 
         onStatusChanged: {
             if (twitterReplies.status == SocialNetwork.Idle) {
-                if (view.state == "loadingModel"
-                    || view.state == "reloadingModel") {
+                if (view.state === "loadingModel"
+                    || view.state === "reloadingModel") {
                     view.state = "idle"
                 }
             }
         }
+
+        onErrorChanged: console.log("Twitter network model error: " + error + "\n")
+        onErrorMessageChanged: console.log("Twitter network model error message: " + errorMessage + "\n")
     }
 
     Connections {
         target: twitterReplies.node
         onStatusChanged: {
             if (twitterReplies.node.status == SocialNetwork.Idle) {
-                if (view.state == "favoriting" || view.state == "retweeting" || view.state == "unretweeting") {
+                if (view.state === "favoriting" || view.state === "retweeting" || view.state === "unretweeting") {
                     view.state = "idle"
-                } else if (view.state == "replying") {
+                } else if (view.state === "replying") {
                     view.state = "reloadingModel"
-                } else if (view.state == "reloadingNode") {
+                } else if (view.state === "reloadingNode") {
                     view.state = "idle"
                 }
             } else if (twitterReplies.node.status == SocialNetwork.Error) {
                 // We simply display an error in the status, but
                 // continue the flow to the "idle" state.
-                if (view.state == "favoriting") {
+                if (view.state === "favoriting") {
                     view.state = "idle"
                     //% "Failed to favorite"
                     view.error = qsTrId("lipstick-jolla-home-twitter-error-fail-to-favorite")
-                } else if (view.state == "retweeting") {
+                } else if (view.state === "retweeting") {
                     view.state = "idle"
                     //% "Failed to retweet"
                     view.error = qsTrId("lipstick-jolla-home-twitter-error-fail-to-retweet")
-                } else if (view.state == "unretweeting") {
+                } else if (view.state === "unretweeting") {
                     view.state = "idle"
                     //% "Failed to remove the retweet"
                     view.error = qsTrId("lipstick-jolla-home-twitter-error-fail-to-unretweet")
-                } else if (view.state == "replying") {
+                } else if (view.state === "replying") {
                     view.state = "reloadingModel"
                     //% "Failed to reply"
                     view.error = qsTrId("lipstick-jolla-home-twitter-error-fail-to-reply")
                 }
             }
         }
-    }
-
-    Formatter {
-        id: formatter
     }
 
     SilicaListView {
@@ -169,9 +186,9 @@ Page {
             if (tweet.retweetCount > 0 && tweet.favoriteCount > 0) {
                 //% "%1 and %2"
                 info += qsTrId("lipstick-jolla-home-twitter-retweets-favourited-link").arg(retweet).arg(favourited)
-            } else if (tweet.retweetCount > 0 && tweet.favoriteCount == 0) {
+            } else if (tweet.retweetCount > 0 && tweet.favoriteCount === 0) {
                 info += retweet
-            } else if (tweet.retweetCount == 0 && tweet.favoriteCount > 0) {
+            } else if (tweet.retweetCount === 0 && tweet.favoriteCount > 0) {
                 info += favourited
             }
 
@@ -199,7 +216,7 @@ Page {
             State { name: "replying" },             // Start a reply operation
             State { name: "favoriting" },           // Start a favoriting operation
             State { name: "retweeting" },           // Start a retweeting operation
-            State { name: "unretweeting" }            // Start a retweet cancelling operation
+            State { name: "unretweeting" }          // Start a retweet cancelling operation
         ]
 
         transitions: [
@@ -283,11 +300,9 @@ Page {
                         height: childrenRect.height
 
                         SocialButton {
-                            anchors {
-                                left: parent.left
-                                right: parent.horizontalCenter
-                            }
-                            enabled: view.state == "idle"
+                            id: retweetButton
+                            anchors.verticalCenter: parent.verticalCenter
+                            enabled: view.state === "idle"
                             onClicked: {
                                 if (!view.retweeted) {
                                     view.state = "retweeting"
@@ -306,11 +321,11 @@ Page {
 
                         SocialButton {
                             anchors {
-                                left: parent.horizontalCenter
-                                right: parent.right
+                                left: retweetButton.right
+                                leftMargin: Theme.paddingMedium
                                 verticalCenter: parent.verticalCenter
                             }
-                            enabled: view.state == "idle"
+                            enabled: view.state === "idle"
                             icon: "image://theme/icon-m-chat"
                             //% "Reply"
                             text: qsTrId("lipstick-jolla-home-twitter-la-reply")
@@ -320,7 +335,7 @@ Page {
 
                     MouseArea {
                         id: favorite
-                        enabled: view.state == "idle"
+                        enabled: view.state === "idle"
                         anchors {
                             right: parent.right
                             verticalCenter: parent.verticalCenter
@@ -348,7 +363,7 @@ Page {
 
             SocialMediaRow {
                 id: mediaRow
-                imageList: container.model.imageList
+                imageList: container.model.images
             }
 
             // Label for retweet
@@ -393,15 +408,23 @@ Page {
         }
         footer: SocialReplyField {
             id: replyField
-            enabled: view.state == "idle"
-            avatar: socialAccountPullDown.avatar
+            enabled: view.state === "idle"
+            avatar: twitterUser.profileImageUrlHttps
+            //: Label indicating text field is used for entering a reply to Twitter post
+            //% "Reply (%0)"
+            label: qsTrId("lipstick-jolla-home-twitter-la-reply").arg(text.length)
             displayMargins: twitterReplies.count > 0
+            //: Write twitter reply
             //% "Write a reply"
             placeholderText: qsTrId("lipstick-jolla-home-twitter-ph-write-reply")
-            allowComment: view.state == "idle"
+            allowComment: view.state === "idle"
+            errorHighlight: text.length > 140
             onEnterKeyClicked: {
-                view.state = "replying"
-                twitterReplies.node.uploadReply("@" + twitterReplies.node.user.screenName + " " + text)
+                if (text.length > 0) {
+                    view.state = "replying"
+                    twitterReplies.node.uploadReply("@" + twitterReplies.node.user.screenName + " " + replyField.text)
+                }
+                replyField.close()
             }
 
             Connections {
@@ -416,7 +439,7 @@ Page {
             avatar: model.contentItem.user.profileImageUrlHttps
             message: model.contentItem.text
             footer: model.contentItem.user.name + " \u2022 "
-                    + formatter.formatDate(model.contentItem.createdAt, Formatter.DurationElapsed)
+                    + Format.formatDate(model.contentItem.createdAt, Formatter.DurationElapsed)
             extraVisible: false
         }
 
@@ -424,14 +447,11 @@ Page {
 
         SocialAccountPullDownMenu {
             id: socialAccountPullDown
-            property string avatar
             pageContainer: container.pageContainer
-            metaData: container.model.metaData
             onCurrentAccountChanged: {
                 view.state = ""
                 account.identifier = currentAccount
             }
-            onCurrentAccountIndexChanged: avatar = model.metaData["profilePicture" + currentAccountIndex]
             //% "Select account"
             selectAccountString: qsTrId("lipstick-jolla-home-la-select-account")
             //% "Change to %1"
@@ -442,7 +462,7 @@ Page {
             // We should not set the identifier of account when we are syncing or signin in
             switchEnabled: account.status != Account.SigningIn
                            && account.status != Account.SyncInProgress
+            serviceName: "twitter"
         }
     }
-
 }

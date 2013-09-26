@@ -8,10 +8,17 @@ Item {
     property alias placeholderText: textField.placeholderText
     property alias text: textField.text
     property alias allowComment: textField.enabled
+    property alias errorHighlight: textField.errorHighlight
+    property alias label: textField.label
     signal enterKeyClicked()
 
     function forceActiveFocus() {
         textField.forceActiveFocus()
+    }
+
+    function close() {
+        textField.focus = false
+        textField.text = ""
     }
 
     function clear() {
@@ -53,6 +60,8 @@ Item {
             right: parent.right
         }
 
+        EnterKey.highlighted: text.length > 0
+        EnterKey.iconSource: "image://theme/icon-m-enter-" + (text.length > 0 ? "accept" : "close")
         EnterKey.onClicked: {
             container.enterKeyClicked()
         }

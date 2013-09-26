@@ -25,5 +25,6 @@ MouseArea {
         }
         color: container.pressed ? Theme.highlightColor : Theme.primaryColor
         opacity: container.enabled ? 1 : 0.5
+        font.pixelSize: Theme.fontSizeSmall
     }
 }
