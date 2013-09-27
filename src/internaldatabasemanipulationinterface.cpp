@@ -5,7 +5,7 @@
  **
  ****************************************************************************/
 
-#include "databasemanipulationinterface.h"
+#include "internaldatabasemanipulationinterface.h"
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtSql/QSqlQuery>
@@ -14,11 +14,11 @@
 #include "trace.h"
 #include "syncservice.h"
 
-DatabaseManipulationInterface::~DatabaseManipulationInterface()
+InternalDatabaseManipulationInterface::~InternalDatabaseManipulationInterface()
 {
 }
 
-bool DatabaseManipulationInterface::initDatabase(const QString &serviceName,
+bool InternalDatabaseManipulationInterface::initDatabase(const QString &serviceName,
                                                  const QString &dataType, const QString &baseDir,
                                                  const QString &dbFile, int userVersion)
 {
@@ -75,7 +75,7 @@ bool DatabaseManipulationInterface::initDatabase(const QString &serviceName,
     return true;
 }
 
-bool DatabaseManipulationInterface::createPragmaVersion(const QString &serviceName,
+bool InternalDatabaseManipulationInterface::createPragmaVersion(const QString &serviceName,
                                                         const QString &dataType, int version)
 {
     QSqlQuery query (db);
@@ -90,7 +90,7 @@ bool DatabaseManipulationInterface::createPragmaVersion(const QString &serviceNa
     return true;
 }
 
-int DatabaseManipulationInterface::dbUserVersion(const QString &serviceName,
+int InternalDatabaseManipulationInterface::dbUserVersion(const QString &serviceName,
                                                  const QString &dataType) const
 {
     const QString queryStr = QString("PRAGMA user_version");

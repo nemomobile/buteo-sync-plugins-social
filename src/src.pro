@@ -12,7 +12,8 @@ PKGCONFIG += Qt5Contacts \
     nemonotifications-qt5 \
     buteosyncfw5 \
     libmkcal-qt5 \
-    libkcalcoren-qt5
+    libkcalcoren-qt5 \
+    socialcache
 
 DEFINES *= USING_QTPIM
 DEFINES *= BEGIN_CONTACTS_NAMESPACE=QT_BEGIN_NAMESPACE_CONTACTS
@@ -46,13 +47,13 @@ HEADERS += \
     $$PWD/syncservice.h \
     $$PWD/syncservice_p.h \
     $$PWD/trace.h \
-    $$PWD/databasemanipulationinterface.h
+    $$PWD/internaldatabasemanipulationinterface.h
 
 SOURCES += \
     $$PWD/buteosocialsync.cpp \
     $$PWD/socialnetworksyncadaptor.cpp \
     $$PWD/syncservice.cpp \
-    $$PWD/databasemanipulationinterface.cpp
+    $$PWD/internaldatabasemanipulationinterface.cpp
 
 OTHER_FILES += shared_eventfeed.files
 

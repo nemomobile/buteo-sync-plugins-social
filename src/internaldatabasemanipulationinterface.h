@@ -5,15 +5,15 @@
  **
  ****************************************************************************/
 
-#ifndef DATABASEMANIPULATIONINTERFACE_H
-#define DATABASEMANIPULATIONINTERFACE_H
+#ifndef INTERNALDATABASEMANIPULATIONINTERFACE_H
+#define INTERNALDATABASEMANIPULATIONINTERFACE_H
 
 #include <QtSql/QSqlDatabase>
 
-class DatabaseManipulationInterface
+class InternalDatabaseManipulationInterface
 {
 public:
-    virtual ~DatabaseManipulationInterface();
+    virtual ~InternalDatabaseManipulationInterface();
 protected:
     bool initDatabase(const QString &serviceName, const QString &dataType, const QString &baseDir,
                       const QString &dbFile, int userVersion);
@@ -25,4 +25,4 @@ private:
     int dbUserVersion(const QString &serviceName, const QString &dataType) const;
 };
 
-#endif // DATABASEMANIPULATIONINTERFACE_H
+#endif // INTERNALDATABASEMANIPULATIONINTERFACE_H

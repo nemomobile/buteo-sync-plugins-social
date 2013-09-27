@@ -63,6 +63,7 @@ Q_SIGNALS:
     void enabledChanged();
 
 protected:
+    virtual void finalize();
     QDateTime lastSyncTimestamp(const QString &serviceName, const QString &dataType, const QString &accountId) const;
     bool updateLastSyncTimestamp(const QString &serviceName, const QString &dataType, const QString &accountId, const QDateTime &timestamp);
     QDateTime whenSyncedDatum(const QString &serviceName, const QString &datumIdentifier) const;
