@@ -20,6 +20,7 @@ class QSqlDatabase;
 class SyncService;
 class QNetworkAccessManager;
 class AccountManager;
+class SocialNetworkSyncDatabase;
 
 struct SyncedDatum
 {
@@ -64,8 +65,10 @@ Q_SIGNALS:
 
 protected:
     virtual void finalize();
-    QDateTime lastSyncTimestamp(const QString &serviceName, const QString &dataType, const QString &accountId) const;
-    bool updateLastSyncTimestamp(const QString &serviceName, const QString &dataType, const QString &accountId, const QDateTime &timestamp);
+    QDateTime lastSyncTimestamp(const QString &serviceName, const QString &dataType,
+                                int accountId) const;
+    bool updateLastSyncTimestamp(const QString &serviceName, const QString &dataType,
+                                 int accountId, const QDateTime &timestamp);
     QDateTime whenSyncedDatum(const QString &serviceName, const QString &datumIdentifier) const;
     bool markSyncedData(const QList<SyncedDatum> &data);
     QString syncedDatumLocalIdentifier(const QString &serviceName, const QString &dataType, const QString &datumIdentifier);
@@ -92,6 +95,7 @@ protected:
 
 
 private:
+    SocialNetworkSyncDatabase *m_syncDb;
     Status m_status;
     bool m_enabled;
     QString m_serviceName;

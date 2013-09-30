@@ -22,6 +22,8 @@
 #include <QtContacts/QContact>
 #include <QtContacts/QContactFetchRequest>
 
+#include <socialcache/facebookpostsdatabase.h>
+
 USE_CONTACTS_NAMESPACE
 
 class FacebookPostSyncAdaptor : public FacebookDataTypeSyncAdaptor
@@ -37,6 +39,7 @@ public:
 protected: // implementing FacebookDataTypeSyncAdaptor interface
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
+    void finalize();
 
 private:
     void requestMe(int accountId, const QString &accessToken);
@@ -50,6 +53,7 @@ private Q_SLOTS:
     void contactFetchStateChangedHandler(QContactAbstractRequest::State newState);
 
 private:
+    FacebookPostsDatabase m_db;
     QContactManager *m_contactManager;
     QList<QContact> m_contacts;
     QContact m_selfContact;

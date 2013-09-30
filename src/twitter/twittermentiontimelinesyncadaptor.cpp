@@ -92,7 +92,7 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
     int accountId = reply->property("accountId").toInt();
     QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"),
                                            SyncService::dataType(SyncService::Notifications),
-                                           QString::number(accountId));
+                                           accountId);
     TRACE(SOCIALD_DEBUG,
             QString(QLatin1String("Last sync:")) << lastSync);
 
