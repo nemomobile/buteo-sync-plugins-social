@@ -88,27 +88,13 @@ void SocialNetworkSyncAdaptor::sync(const QString &dataType)
 
 void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds)
 {
-    QList<int> knownIds;
-    QStringList knownIdStrings = accountIdsWithSyncTimestamp(m_serviceName, SyncService::dataType(dataType));
-    foreach (const QString &kis, knownIdStrings) {
-        bool ok = true;
-        int intId = kis.toInt(&ok);
-        if (ok) {
-            knownIds.append(intId);
-        } else {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: unable to convert known id string to int: %1"))
-                    .arg(kis));
-        }
-    }
-
+    QList<int> knownIds = syncedAccounts(SyncService::dataType(dataType));
     QList<int> currentIds = accountManager->accountIdentifiers();
     TRACE(SOCIALD_DEBUG,
             QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
             .arg(currentIds.size()));
 
-    for (int i = 0; i < currentIds.size(); ++i) {
-        int currId = currentIds.at(i);
+    foreach (int currId, currentIds) {
         Account *act = accountManager->account(currId);
         if (!act || !(act->supportedServiceNames().size() > 0 &&
                       act->supportedServiceNames().at(0).startsWith(m_serviceName))) {
@@ -121,7 +107,7 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
         // if the account has been disabled with the sync service, we purge it.
         if (act->isEnabledWithService(QString(QLatin1String("%1-sync")).arg(m_serviceName))) {
             if (knownIds.contains(currId)) {
-                knownIds.removeOne(currId);
+                knownIds.removeAll(currId);
                 updateIds->append(currId);
             } else {
                 newIds->append(currId);
@@ -130,8 +116,8 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
     }
 
     // anything left in knownIds must belong to an old, removed account.
-    for (int i = 0; i < knownIds.size(); ++i) {
-        purgeIds->append(knownIds.at(i));
+    foreach (int id, knownIds) {
+        purgeIds->append(id);
     }
 }
 
@@ -407,35 +393,11 @@ QStringList SocialNetworkSyncAdaptor::removeAllData(const QString &serviceName,
 /*!
     \internal
     Returns the list of identifiers of accounts which have been synced for
-    the given \a serviceName and \a dataType.
+    the given \a dataType.
 */
-QStringList SocialNetworkSyncAdaptor::accountIdsWithSyncTimestamp(const QString &serviceName, const QString &dataType)
+QList<int> SocialNetworkSyncAdaptor::syncedAccounts(const QString &dataType)
 {
-    if (!m_syncService->database()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: database not available")));
-        return QStringList();
-    }
-
-    QStringList retn;
-
-    QSqlQuery query(*m_syncService->database());
-    query.prepare("SELECT DISTINCT accountIdentifier FROM syncTimestamps "\
-                  "WHERE serviceName=:serviceName AND dataType=:dataType");
-    query.bindValue(":serviceName", serviceName);
-    query.bindValue(":dataType", dataType);
-    bool success = query.exec();
-    if (!success) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: unable to execute query: %1")).arg(query.lastError().text()));
-    }
-
-    while (query.next()) {
-        QString accountIdent = query.value(0).toString();
-        if (!retn.contains(accountIdent)) {
-            retn.append(accountIdent);
-        }
-    }
-
-    return retn;
+    return m_syncDb->syncedAccounts(m_serviceName, dataType);
 }
 
 QList<int> SocialNetworkSyncAdaptor::syncedDatumAccountIds(const QString &localIdentifier)
