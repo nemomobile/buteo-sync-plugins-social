@@ -12,8 +12,7 @@
 
 #include <QtCore/QPair>
 #include <QtCore/QJsonValue>
-
-#include "eventfeedhelper_p.h"
+#include <QtCore/QUrlQuery>
 
 TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *syncService, QObject *parent)
     : TwitterDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
