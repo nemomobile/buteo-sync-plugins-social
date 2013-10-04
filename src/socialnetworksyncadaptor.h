@@ -73,7 +73,7 @@ protected:
     bool markSyncedData(const QList<SyncedDatum> &data);
     QString syncedDatumLocalIdentifier(const QString &serviceName, const QString &dataType, const QString &datumIdentifier);
     QStringList removeAllData(const QString &serviceName, const QString &dataType, const QString &accountId, bool *ok = 0);
-    QStringList accountIdsWithSyncTimestamp(const QString &serviceName, const QString &dataType);
+    QList<int> syncedAccounts(const QString &dataType);
     QList<int> syncedDatumAccountIds(const QString &localIdentifier);
     bool beginTransaction();
     bool endTransaction();
