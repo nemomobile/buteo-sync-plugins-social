@@ -11,9 +11,10 @@
 #include "facebookdatatypesyncadaptor.h"
 #include "internaldatabasemanipulationinterface.h"
 
+#include <socialcache/facebookcalendardatabase.h>
+
 class FacebookCalendarTypeSyncAdaptor
         : public FacebookDataTypeSyncAdaptor
-        , private InternalDatabaseManipulationInterface
 {
     Q_OBJECT
 
@@ -33,8 +34,7 @@ private Q_SLOTS:
     void finishedHandler();
 
 private:
-    bool dbCreateTables();
-    bool dbDropTables();
+    FacebookCalendarDatabase m_db;
 };
 
 #endif // FACEBOOKCALENDARTYPESYNCADAPTOR_H
