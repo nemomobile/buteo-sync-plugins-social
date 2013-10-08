@@ -1,22 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <profile name="facebook.Notifications" type="sync" >
-   <!--This key is used for display name of the profile in UI -->
-    <key name="displayname" value="Facebook Notifications"/>
-    <!--This key is used to tell sync-fw if the profile is enabled or not -->
+    <key name="category" value="eventfeed" />
     <key name="enabled" value="true" />
-    <!--This key is used if accounts fw is used -->
     <key name="use_accounts" value="false" />
-    <!--This key is used if profile needs to be hidden in UI -->
-    <key name="hidden" value="false" />
-    <!--This key is used to tell the sync-fw which service to use -->
+    <key name="destinationtype" value="online" />
+    <key name="hidden" value="true" />
+    <key name="displayname" value="Facebook Notifications"/>
+
+    <schedule enabled="true" interval="30" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="" />
+
     <profile name="sociald" type="client" >
         <key name="Sync Direction" value="from-remote" />
     </profile>
-
-    <key name="destinationtype" value="online" />
-
-    <!--This is used by sync-fw to set customized scheduling information for the profile -->
-    <schedule enabled="true" interval="30" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="" />
-
-    <key name="category" value="eventfeed" />
 </profile>
