@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.33
+Version:    0.0.37
 Release:    1
 Group:      System/Applications
 License:    TBD
@@ -31,6 +31,8 @@ Requires: nemo-qml-plugin-notifications-qt5
 Requires: nemo-qml-plugin-social-qt5 >= 0.0.11
 Requires: buteo-syncfw-qt5-msyncd
 Requires: mkcal-qt5
+Obsoletes: buteo-sync-plugins-google-simple <= 0.0.2
+Provides: buteo-sync-plugins-google-simple
 
 %description
 A daemon process which provides data synchronization with various social services.
@@ -46,6 +48,7 @@ A daemon process which provides data synchronization with various social service
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Posts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Posts.xml
+%config %{_sysconfdir}/buteo/profiles/sync/google.Contacts.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.mention.conf
 %{_datadir}/translations/sociald_eng_en.qm

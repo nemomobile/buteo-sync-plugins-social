@@ -35,6 +35,7 @@ QT += \
 
 include(facebook/facebook.pri)
 include(twitter/twitter.pri)
+include(google/google.pri)
 
 DEFINES += 'PRIVILEGED_DATA_DIR=\'\"/home/nemo/.local/share/system/privileged/\"\''
 DEFINES += 'SYNC_DATABASE_DIR=\'\"Sync\"\''

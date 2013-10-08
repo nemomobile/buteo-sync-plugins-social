@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<profile name="google.Contacts" type="sync" >
+
+    <key name="category" value="google.Contacts" />
+    <key name="displayname" value="Google Contacts"/>
+    <key name="enabled" value="true" />
+    <key name="use_accounts" value="false" />
+    <key name="hidden" value="true" />
+    <key name="destinationtype" value="online" />
+
+    <schedule enabled="true" interval="" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="0500" />
+
+    <profile name="sociald" type="client" >
+        <key name="Sync Direction" value="from-remote" />
+    </profile>
+
+</profile>

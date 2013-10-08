@@ -16,6 +16,7 @@
 #include "facebook/facebooknotificationsyncadaptor.h"
 #include "facebook/facebookpostsyncadaptor.h"
 #include "facebook/facebookcalendartypesyncadaptor.h"
+#include "google/googlecontactsyncadaptor.h"
 
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -64,7 +65,10 @@ SyncServicePrivate::SyncServicePrivate(const QString &connectionName, SyncServic
 
     // Google+
     {
-        // TODO
+        QLatin1String googleService("google");
+        m_supportedServices.append(googleService);
+        m_supportedDataTypes.insert(googleService, QStringList() <<
+                                    SyncService::dataType(SyncService::Contacts));
     }
 
     // Twitter
@@ -105,6 +109,12 @@ SocialNetworkSyncAdaptor *SyncServicePrivate::createAdaptor(const QString &socia
             return new FacebookContactSyncAdaptor(q, parent);
         } else if (dataType == SyncService::dataType(SyncService::Calendars)) {
             return new FacebookCalendarTypeSyncAdaptor(q, parent);
+        } else {
+            return 0;
+        }
+    } else if (socialService == "google") {
+        if (dataType == SyncService::dataType(SyncService::Contacts)) {
+            return new GoogleContactSyncAdaptor(q, parent);
         } else {
             return 0;
         }
