@@ -19,6 +19,7 @@ BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  pkgconfig(sailfishaccounts) >= 0.0.45
 BuildRequires:  pkgconfig(libmkcal-qt5)
 BuildRequires:  pkgconfig(libkcalcoren-qt5)
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
