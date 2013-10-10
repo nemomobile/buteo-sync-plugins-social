@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import Sailfish.TextLinking 1.0
 
 Item {
     id: container
@@ -45,17 +46,7 @@ Item {
                 }
                 asynchronous: true
                 fillMode: Image.PreserveAspectCrop
-                source: {
-                    if (container.imageList[index] == "") {
-                        return container.imageList[index]
-                    } else if (container.imageList[index].indexOf("http") == 0) {
-                        return container.imageList[index]
-                    } else if (container.imageList[index].indexOf("/") == 0) {
-                        return "image://nemoThumbnail/" + container.imageList[index]
-                    } else {
-                        return "image://theme/" + container.imageList[index]
-                    }
-                }
+                source: model.modelData.url
             }
         }
 
@@ -64,7 +55,7 @@ Item {
             height: repeater.imageSize
             visible: container.imageList.length === 1
 
-            Label {
+            LinkedText {
                 anchors {
                     top: parent.top
                     topMargin: Theme.paddingMedium
@@ -75,13 +66,15 @@ Item {
                     bottom: caption.top
                     bottomMargin: Theme.paddingSmall
                 }
-                text: container.mediaName
-                font.pixelSize: Theme.fontSizeSmall
+                plainText: container.mediaName
+                font.pixelSize: Theme.fontSizeExtraSmall
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
+                shortenUrl: true
+                opacity: .6
             }
 
-            Label {
+            LinkedText {
                 id: caption
                 anchors {
                     bottom: parent.bottom
@@ -91,15 +84,14 @@ Item {
                     right: parent.right
                     rightMargin: Theme.paddingMedium
                 }
-                text: container.mediaCaption
+                plainText: container.mediaCaption
                 color: Theme.highlightColor
                 font.pixelSize: Theme.fontSizeExtraSmall
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
                 maximumLineCount: 1
+                shortenUrl: true
             }
         }
     }
 }
-
-

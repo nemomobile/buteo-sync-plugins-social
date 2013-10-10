@@ -9,33 +9,28 @@ Page {
     id: container
 
     property variant model
+    property Item subviewModel
 
     property string accessToken
     property string nodeIdentifier
-
-    property string mediaName
-    property string mediaCaption
-    property string mediaDescription
 
     property bool allowLike
     property bool allowComment
 
     onModelChanged: {
-        nodeIdentifier = container.model.metaData["nodeId"]
-        mediaName = container.model.metaData["postAttachmentName"]
-        mediaCaption = container.model.metaData["postAttachmentCaption"]
-        mediaDescription = container.model.metaData["postAttachmentDescription"]
-        allowLike = container.model.metaData["allowLike"]
-        allowComment = container.model.metaData["allowComment"]
+        nodeIdentifier = container.model.facebookId
+        allowLike = container.model.allowLike
+        allowComment = container.model.allowComment
     }
 
     Account {
         id: account
         function performSign() {
             if (status == Account.Initialized && identifier != -1) {
+                container.accessToken = ""
                 // Sign in, and get access token.
                 var params = signInParameters("facebook-sync")
-                params.setParameter("ClientId", container.model.metaData["clientId"])
+                params.setParameter("ClientId", container.model.clientId)
                 params.setParameter("UiPolicy", SignInParameters.NoUserInteractionPolicy)
                 signIn("Jolla", "Jolla", params)
             }
@@ -43,10 +38,7 @@ Page {
 
         onStatusChanged: performSign()
         onIdentifierChanged: performSign()
-
-        onSignInResponse: {
-            container.accessToken = data["AccessToken"]
-        }
+        onSignInResponse: container.accessToken = data["AccessToken"]
     }
 
     Facebook {
@@ -56,8 +48,8 @@ Page {
         onAccessTokenChanged: populateIfInitialized()
         function populateIfInitialized() {
             if (initialized && accessToken.length > 0) {
-                facebookMe.populate()
-                facebookLikes.populate()
+                facebookMe.repopulate()
+                facebookLikes.repopulate()
             }
         }
     }
@@ -70,14 +62,9 @@ Page {
         onStatusChanged: view.checkContinueLoading()
     }
 
-    // If you have a lot of likes, Facebook will provide
-    // them as paginated. So it is not reliable to get
-    // the likes by counting the number of elements in
-    // this model.
-    //
-    // We still need (up to) the first 3 people who liked
-    // that photo to display the "a, b and c liked that"
-    // string. So we only need to retrieve 3 likes.
+    // We need (up to) first two people who liked
+    // to display the "a, b and N others liked that"
+    // string.
     SocialNetworkModel {
         id: facebookLikes
         filters: ContentItemTypeFilter { type: Facebook.Like; limit: 3 }
@@ -86,7 +73,7 @@ Page {
         onStatusChanged: {
             view.checkContinueLoading()
             if (status == SocialNetwork.Idle) {
-                if (view.state == "reloadingLikes") {
+                if (view.state === "reloadingLikes") {
                     view.state = "idle"
                 }
             }
@@ -97,21 +84,21 @@ Page {
         target: facebookLikes.node
         onStatusChanged: {
             if (facebookLikes.node.status == SocialNetwork.Idle) {
-                if (view.state == "liking") {
+                if (view.state === "liking") {
                     view.state = "reloadingLikes"
-                } else if (view.state == "commenting") {
+                } else if (view.state === "commenting") {
                     view.state = "reloadingComments"
                 }
             } else if (facebookLikes.node.status == SocialNetwork.Error) {
                 // We simply display an error in the status, but
                 // continue the flow to the "idle" state.
-                if (view.state == "liking") {
+                if (view.state === "liking") {
                     view.state = "reloadingLikes"
                     //% "Failed to like"
                     view.error = !view.liked ? qsTrId("lipstick-jolla-home-facebook-error-fail-to-like")
                                                //% "Failed to remove like"
                                              : qsTrId("lipstick-jolla-home-facebook-error-fail-to-remove-like")
-                } else if (view.state == "commenting") {
+                } else if (view.state === "commenting") {
                     view.state = "reloadingComments"
                     //% "Failed to comment"
                     view.error = qsTrId("lipstick-jolla-home-facebook-error-fail-to-comment")
@@ -133,16 +120,12 @@ Page {
         nodeIdentifier: container.nodeIdentifier
         onStatusChanged: {
             if (facebookComments.status == SocialNetwork.Idle) {
-                if (view.state == "loadingComments"
-                    || view.state == "reloadingComments") {
+                if (view.state === "loadingComments"
+                    || view.state === "reloadingComments") {
                     view.state = "idle"
                 }
             }
         }
-    }
-
-    Formatter {
-        id: formatter
     }
 
     SilicaListView {
@@ -159,7 +142,7 @@ Page {
         // Check point, to continue loading when both facebookMe and facebookLikes
         // got loaded
         function checkContinueLoading() {
-            if (view.state != "") {
+            if (view.state !== "") {
                 return
             }
 
@@ -304,7 +287,7 @@ Page {
 
                     SocialButton {
                         anchors.left: parent.left
-                        enabled: view.state == "idle" && container.allowLike
+                        enabled: view.state === "idle" && container.allowLike
                         onClicked: {
                             view.state = "liking"
                             if (!view.liked) {
@@ -314,6 +297,7 @@ Page {
                             }
                         }
                         icon: "image://theme/icon-m-like"
+                        //: Press button to unlike
                         //% "Unlike"
                         text: view.liked ? qsTrId("lipstick-jolla-home-facebook-la-unlike")
                                            //% "Like"
@@ -324,8 +308,9 @@ Page {
                     SocialButton {
                         id: commentButton
                         anchors.right: parent.right
-                        enabled: view.state == "idle" && container.allowComment
+                        enabled: view.state === "idle" && container.allowComment
                         icon: "image://theme/icon-m-chat"
+                        //: Press button to write facebook comment
                         //% "Comment"
                         text: qsTrId("lipstick-jolla-home-facebook-la-comment")
                         onClicked: view.forceReplyFieldActiveFocus()
@@ -335,10 +320,10 @@ Page {
 
             SocialMediaRow {
                 id: mediaRow
-                imageList: container.model.imageList
-                mediaName: container.mediaName
-                mediaCaption: container.mediaCaption
-                mediaDescription: container.mediaDescription
+                imageList: container.model.images
+                mediaName: container.model.attachmentName
+                mediaCaption: container.model.attachmentCaption
+                mediaDescription: container.attachmentDescription
             }
 
             SocialInfoLabel { text: view.likers }
@@ -349,7 +334,9 @@ Page {
                     left: parent.left
                     right: parent.right
                 }
-                visible: facebookLikes.node == null ? false : (facebookLikes.node.commentsCount > facebookComments.count && facebookComments.hasPrevious)
+                visible: facebookLikes.node == null ? false
+                                                    : (facebookLikes.node.commentsCount > facebookComments.count
+                                                         && facebookComments.hasPrevious)
                 onClicked: {
                     view.state = "loadingComments"
                     facebookComments.loadPrevious()
@@ -363,6 +350,7 @@ Page {
                         rightMargin: Theme.paddingMedium
                         verticalCenter: parent.verticalCenter
                     }
+                    //: Load previous comments
                     //% "Load previous comments"
                     text: qsTrId("lipstick-jolla-home-facebook-la-load-previous-comments")
                     color: loadPreviousButton.highlighted ? Theme.highlightColor
@@ -376,23 +364,31 @@ Page {
             avatar: "http://graph.facebook.com/"+ model.contentItem.from.objectIdentifier + "/picture"
             message: model.contentItem.message
             footer: model.contentItem.from.objectName + " \u2022 "
-                    + formatter.formatDate(model.contentItem.createdTime, Formatter.DurationElapsed)
+                    + Format.formatDate(model.contentItem.createdTime, Formatter.DurationElapsed)
             extraVisible: model.contentItem.likeCount > 0
-            extra : qsTrId("lipstick-jolla-home-facebook-la-number-of-likes-for-comment",
-                           model.contentItem.likeCount)
+            //: Number of Facebook likes for a comment
+            //% "%n like(s)"
+            extra: qsTrId("lipstick-jolla-home-facebook-la-number_of_likes_for_comment", model.contentItem.likeCount)
         }
 
         footer: SocialReplyField {
             id: replyField
-            enabled: view.state == "idle" && container.allowComment
+            enabled: view.state === "idle" && container.allowComment
             displayMargins: facebookComments.count > 0
-            avatar: facebookMe.node != null && facebookMe.node.picture != null ? facebookMe.node.picture.url : ""
+            //: Label indicating text field is used for entering a comment to Facebook post
+            //% "Comment"
+            label: qsTrId("lipstick-jolla-home-facebook-la-comment")
+            avatar: facebookMe.node != null && facebookMe.node.picture !== null ? facebookMe.node.picture.url : ""
+            //: Write a Facebook comment
             //% "Write a comment"
             placeholderText: qsTrId("lipstick-jolla-home-facebook-ph-write-comment")
-            allowComment: view.state == "idle"
+            allowComment: view.state === "idle"
             onEnterKeyClicked: {
-                facebookLikes.node.uploadComment(replyField.text)
-                view.state = "commenting"
+                if (replyField.text.length > 0) {
+                    facebookLikes.node.uploadComment(replyField.text)
+                    view.state = "commenting"
+                }
+                replyField.close()
             }
 
             Connections {
@@ -406,7 +402,6 @@ Page {
 
         SocialAccountPullDownMenu {
             pageContainer: container.pageContainer
-            metaData: container.model.metaData
             onCurrentAccountChanged: account.identifier = currentAccount
             //% "Select account"
             selectAccountString: qsTrId("lipstick-jolla-home-la-select-account")
@@ -417,7 +412,8 @@ Page {
 
             // We should not set the identifier of account when we are syncing or signin in
             switchEnabled: account.status != Account.SigningIn
-                           && account.status != Account.SyncInProgress
+                             && account.status != Account.SyncInProgress
+            serviceName: "facebook"
         }
     }
 }

@@ -6,20 +6,13 @@ PullDownMenu {
     id: container
     property int currentAccount
     property int currentAccountIndex: -1
-    property var metaData
     property string selectAccountString
     property string changeToAccountString
     property string accountString
     property var pageContainer
+    property string serviceName
     property bool switchEnabled
-    onMetaDataChanged: refreshAccountList()
 
-    // We distinguish internal.index and container.currentAccountIndex
-    // It is because internal.accounts is not matching the accounts
-    // data carried by the metadata. This is because accounts might
-    // got deleted between two sync, and that metadata contains
-    // data that should not exist.
-    //
     // internal.index stores the index of the current account in
     // internal.account, while container.currentAccountIndex
     // is used to store the index for the metadata. If metadata
@@ -27,16 +20,15 @@ PullDownMenu {
     // are indexed, then container.currentAccountIndex contains
     // the good index, even if accounts got removed
     function refreshAccountList() {
+        var subviewAccounts = subviewModel.accountList(serviceName)
         internal.accounts = []
-        for (var i = 0; i < container.metaData["accountIdCount"]; i++) {
+        for (var i = 0; i < subviewAccounts.length; ++i) {
             var accountData = new Object
-            accountData["id"] = container.metaData["accountId" + i]
-            var account = accountManager.account(accountData["id"])
-            if (account != null) {
-                accountData["name"] = account.displayName
-                accountData["index"] = i
-                internal.accounts.push(accountData)
-            }
+            var account = subviewAccounts[i]
+            accountData["id"] = account.identifier
+            accountData["name"] = account.displayName
+            accountData["index"] = internal.accounts.length
+            internal.accounts.push(accountData)
         }
         internal.accountCount = internal.accounts.length
         container.currentAccount = internal.accounts[0]["id"]
@@ -54,9 +46,6 @@ PullDownMenu {
             property var accounts
             property int index
             property int otherIndex
-        },
-        AccountManager {
-            id: accountManager
         }
     ]
 
@@ -90,5 +79,9 @@ PullDownMenu {
 
     MenuLabel {
         text: container.accountString.arg(internal.accounts[internal.index]["name"])
+    }
+
+    Component.onCompleted: {
+        refreshAccountList()
     }
 }
