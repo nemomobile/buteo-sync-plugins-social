@@ -44,7 +44,7 @@ SocialMediaFeedItem {
             elide: Text.ElideRight
             wrapMode: Text.Wrap
             color: Theme.highlightColor
-            font.pixelSize: Theme.fontSizeSmall
+            font.pixelSize: Theme.fontSizeExtraSmall
             plainText: model.attachmentDescription
             shortenUrl: true
         }
@@ -55,7 +55,7 @@ SocialMediaFeedItem {
             maximumLineCount: 50
             elide: Text.ElideRight
             wrapMode: Text.Wrap
-            font.pixelSize: Theme.fontSizeSmall
+            font.pixelSize: Theme.fontSizeExtraSmall
             color: item.pressed ? Theme.highlightColor : Theme.primaryColor
             shortenUrl: true
             plainText: model.body
@@ -68,7 +68,7 @@ SocialMediaFeedItem {
             elide: Text.ElideRight
             wrapMode: Text.Wrap
             color: Theme.highlightColor
-            font.pixelSize: Theme.fontSizeSmall
+            font.pixelSize: Theme.fontSizeExtraSmall
             text: model.name + " \u2022 " + formattedTime
         }
 
@@ -81,7 +81,7 @@ SocialMediaFeedItem {
             visible: text.length > 0
             color: Theme.highlightColor
             opacity: .6
-            font.pixelSize: Theme.fontSizeSmall
+            font.pixelSize: Theme.fontSizeExtraSmall
             text:  _countFieldCommentCount + _countFieldLikeCount
         }
 

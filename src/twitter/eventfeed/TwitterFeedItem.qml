@@ -53,6 +53,7 @@ SocialMediaFeedItem {
                 elide: Text.ElideRight
                 opacity: .6
                 text: model.retweeter
+                font.pixelSize: Theme.fontSizeExtraSmall
             }
         }
 
@@ -61,6 +62,7 @@ SocialMediaFeedItem {
             elide: Text.ElideRight
             opacity: .6
             text: "@" + model.screenName
+            font.pixelSize: Theme.fontSizeExtraSmall
         }
 
         LinkedText {
@@ -68,7 +70,7 @@ SocialMediaFeedItem {
             maximumLineCount: 50
             elide: Text.ElideRight
             wrapMode: Text.Wrap
-            font.pixelSize: Theme.fontSizeSmall
+            font.pixelSize: Theme.fontSizeExtraSmall
             shortenUrl: true
             color: item.pressed ? Theme.highlightColor : Theme.primaryColor
             plainText: model.body
@@ -81,7 +83,7 @@ SocialMediaFeedItem {
             elide: Text.ElideRight
             wrapMode: Text.Wrap
             color: Theme.highlightColor
-            font.pixelSize: Theme.fontSizeSmall
+            font.pixelSize: Theme.fontSizeExtraSmall
             text: item.formattedTime + _nameFieldCommentsText + _nameFieldRetweetsText
         }
 
