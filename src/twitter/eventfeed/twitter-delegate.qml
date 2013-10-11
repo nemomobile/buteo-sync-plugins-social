@@ -6,6 +6,9 @@ SocialMediaAccountDelegate {
     id: delegate
     iconSource: "image://theme/graphic-service-twitter"
     feedPage: twitterFeedPage
+    //: New twitter tweets
+    //% "New tweets"
+    text: qsTrId("lipstick-jolla-home-la-new_twitter_tweets")
     resources: TwitterFeedPage {
         id: twitterFeedPage
     }
