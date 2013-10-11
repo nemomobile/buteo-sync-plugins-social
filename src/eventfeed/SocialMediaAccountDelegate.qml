@@ -10,10 +10,22 @@ BackgroundItem {
     property Item subviewModel
     property alias text: label.text
     property alias iconSource: icon.source
+    property int unseenPostCount
 
     onClicked: {
         pageStack.push(feedPage)
         feedPage.positionViewAtBeginning()
+    }
+
+    Label {
+        anchors {
+            right: icon.left
+            rightMargin: Theme.paddingLarge
+            verticalCenter: parent.verticalCenter
+        }
+        color: item.pressed ? Theme.highlightColor : Theme.primaryColor
+        text: item.unseenPostCount
+        visible: item.unseenPostCount > 0
     }
 
     Image {

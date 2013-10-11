@@ -5,7 +5,8 @@ import "shared"
 
 SocialMediaFeedPage {
     id: page
-
+    configKey: "/sailfish/events_view/twitter"
+    timestampRole: 4 //TwitterPostsModel.Timestamp
     listModel: TwitterPostsModel {
         id: twitterPostsModel
     }

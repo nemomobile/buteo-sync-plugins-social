@@ -6,12 +6,14 @@ SocialMediaAccountDelegate {
     id: delegate
     iconSource: "image://theme/graphic-service-twitter"
     feedPage: twitterFeedPage
+    unseenPostCount: twitterFeedPage.unseenPostCount
     //: New twitter tweets
     //% "New tweets"
-    text: qsTrId("lipstick-jolla-home-la-new_twitter_tweets")
+    text: unseenPostCount > 0 ? qsTrId("lipstick-jolla-home-la-new_twitter_tweets")
+                                //: Twitter tweets
+                                //% "Tweets"
+                              : qsTrId("lipstick-jolla-home-la-twitter_tweets")
     resources: TwitterFeedPage {
         id: twitterFeedPage
     }
-
-    // TODO: Add indicator row as soon as libsocialcache provides them
 }

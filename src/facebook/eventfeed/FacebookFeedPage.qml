@@ -5,9 +5,12 @@ import "shared"
 
 SocialMediaFeedPage {
     id: page
+    configKey: "/sailfish/events_view/facebook"
+    timestampRole: 3 //FacebookPostsModel.Timestamp
     listModel: FacebookPostsModel {
         id: facebookPostsModel
     }
+
     //: Facebook service name
     //% "Facebook"
     headerTitle: qsTrId("lipstick-jolla-home-la-facebook")
