@@ -6,24 +6,10 @@ SocialMediaAccountDelegate {
     id: delegate
     iconSource: "image://theme/graphic-service-facebook"
     feedPage: facebookFeedPage
+    //: New facebook posts
+    //% "New posts"
+    text: qsTrId("lipstick-jolla-home-la-new_facebook_posts")
     resources: FacebookFeedPage {
         id: facebookFeedPage
-    }
-
-    Row {
-        height: parent.height
-        x: Theme.paddingLarge
-
-/*
-        // TODO: Activate indicators as soon as libsocial cache supports them
-        SocialMediaIndicator {
-            icon: "image://theme/icon-m-people"
-        }
-        SocialMediaIndicator {
-            icon: "image://theme/icon-lock-social"
-        }
-        SocialMediaIndicator {
-            icon: "image://theme/icon-m-document"
-        } */
     }
 }
