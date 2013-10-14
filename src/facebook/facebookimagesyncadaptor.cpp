@@ -208,7 +208,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
                     QString(QLatin1String("album with id %1 by user %2 from Facebook account with id %3 doesn't need sync"))
                     .arg(albumId).arg(userId).arg(accountId));
             // it hasn't been modified, so none of its images have been removed.
-            QStringList serverImageIdsInAlbum = m_db.imagesId(fbAlbumId);
+            QStringList serverImageIdsInAlbum = m_db.imageIds(fbAlbumId);
             foreach (const QString &pid, serverImageIdsInAlbum) {
                 if (!m_serverImageIds.contains(pid)) {
                     m_serverImageIds.append(pid);
