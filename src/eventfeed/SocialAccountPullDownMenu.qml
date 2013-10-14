@@ -33,19 +33,29 @@ PullDownMenu {
         internal.accountCount = internal.accounts.length
         container.currentAccount = internal.accounts[0]["id"]
         container.currentAccountIndex = internal.accounts[0]["index"]
+        internal.setCurrentAccountName()
     }
     resources: [
         QtObject {
             id: internal
+
+            property int accountCount
+            property var accounts
+            property int index
+            property int otherIndex
+            property string currentAccountName
+
+            onIndexChanged: setCurrentAccountName()
+
             function setIndex(index) {
                 internal.index = index
                 container.currentAccountIndex = internal.accounts[index]["index"]
                 pageContainer.pop()
             }
-            property int accountCount
-            property var accounts
-            property int index
-            property int otherIndex
+
+            function setCurrentAccountName() {
+                currentAccountName = internal.index < internal.accounts.length ? container.accountString.arg(internal.accounts[internal.index]["name"]) : ""
+            }
         }
     ]
 
@@ -78,7 +88,7 @@ PullDownMenu {
     }
 
     MenuLabel {
-        text: container.accountString.arg(internal.accounts[internal.index]["name"])
+        text: internal.currentAccountName
     }
 
     Component.onCompleted: {
