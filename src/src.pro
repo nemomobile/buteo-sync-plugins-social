@@ -20,9 +20,6 @@ DEFINES *= BEGIN_CONTACTS_NAMESPACE=QT_BEGIN_NAMESPACE_CONTACTS
 DEFINES *= END_CONTACTS_NAMESPACE=QT_END_NAMESPACE_CONTACTS
 DEFINES *= USE_CONTACTS_NAMESPACE=QTCONTACTS_USE_NAMESPACE
 
-HEADERS += constants_p.h \
-    databasemanipulationinterface.h
-
 target.path += /usr/lib/buteo-plugins-qt5
 
 client.path = /etc/buteo/profiles/client
@@ -42,6 +39,7 @@ DEFINES += 'SYNC_DATABASE_DIR=\'\"Sync\"\''
 DEFINES += 'SOCIALD_SYNC_DATABASE_NAME=\'\"sociald.db\"\''
 
 HEADERS += \
+    $$PWD/constants_p.h \
     $$PWD/buteosocialsync.h \
     $$PWD/eventfeedhelper_p.h \
     $$PWD/socialnetworksyncadaptor.h \

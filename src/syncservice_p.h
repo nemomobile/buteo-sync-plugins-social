@@ -13,7 +13,6 @@
 #include <QtCore/QMap>
 #include <QtCore/QPair>
 #include <QtCore/QStringList>
-#include <QtSql/QSqlDatabase>
 
 class SocialNetworkSyncAdaptor;
 class SyncService;
@@ -30,12 +29,6 @@ public:
     SyncService *q;
     QStringList m_supportedServices;
     QMap<QString, QStringList> m_supportedDataTypes;
-
-    QSqlDatabase m_db;
-private:
-    bool openDb(const QString &connectionName);
-    int checkDbVersion();
-    bool createTables();
 };
 
 #endif // SYNCSERVICE_P_H

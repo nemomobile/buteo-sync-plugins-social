@@ -93,13 +93,6 @@ void FacebookCalendarTypeSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
 
     storage->save();
     storage->close();
-
-    foreach (int pid, oldIds) {
-        // purge all data from our database
-        removeAllData(QLatin1String("facebook"),
-                SyncService::dataType(SyncService::Calendars),
-                QString::number(pid));
-    }
 }
 
 void FacebookCalendarTypeSyncAdaptor::beginSync(int accountId, const QString &accessToken)

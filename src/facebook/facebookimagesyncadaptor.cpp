@@ -58,11 +58,6 @@ void FacebookImageSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeId
     foreach (int pid, purgeIds) {
         // first, purge the data from our database + our cache directory
         m_db.purgeAccount(pid);
-
-        // second, purge all data from the sociald main database
-        removeAllData(QLatin1String("facebook"),
-                      SyncService::dataType(SyncService::Images),
-                      QString::number(pid));
     }
 }
 

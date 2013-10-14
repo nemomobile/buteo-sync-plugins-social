@@ -12,8 +12,7 @@ HEADERS += \
     $$PWD/googledatatypesyncadaptor.h \
     $$PWD/googlecontactsyncadaptor.h \
     $$PWD/googlecontactstream.h \
-    $$PWD/googlecontactatom.h \
-    $$PWD/googlecontactatom_global.h
+    $$PWD/googlecontactatom.h
 
 OTHER_FILES += google_sync_profiles.files
 

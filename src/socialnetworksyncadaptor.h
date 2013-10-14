@@ -22,17 +22,6 @@ class QNetworkAccessManager;
 class AccountManager;
 class SocialNetworkSyncDatabase;
 
-struct SyncedDatum
-{
-    QString accountIdentifier;
-    QString localIdentifier;
-    QString serviceName;
-    QString dataType;
-    QDateTime createdTimestamp;
-    QDateTime syncedTimestamp;
-    QString datumIdentifier;
-};
-
 class SocialNetworkSyncAdaptor : public QObject
 {
     Q_OBJECT
@@ -69,14 +58,7 @@ protected:
                                 int accountId) const;
     bool updateLastSyncTimestamp(const QString &serviceName, const QString &dataType,
                                  int accountId, const QDateTime &timestamp);
-    QDateTime whenSyncedDatum(const QString &serviceName, const QString &datumIdentifier) const;
-    bool markSyncedData(const QList<SyncedDatum> &data);
-    QString syncedDatumLocalIdentifier(const QString &serviceName, const QString &dataType, const QString &datumIdentifier);
-    QStringList removeAllData(const QString &serviceName, const QString &dataType, const QString &accountId, bool *ok = 0);
     QList<int> syncedAccounts(const QString &dataType);
-    QList<int> syncedDatumAccountIds(const QString &localIdentifier);
-    bool beginTransaction();
-    bool endTransaction();
     void setStatus(Status status);
     void setInitialActive(bool enabled);
     void setFinishedInactive();

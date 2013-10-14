@@ -81,11 +81,6 @@ void GoogleContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeId
     foreach (int pid, purgeIds) {
         // first, purge all data from QtContacts
         purgeAccount(pid);
-
-        // second, purge all data from the sociald database
-        removeAllData(QLatin1String("google"),
-                SyncService::dataType(SyncService::Contacts),
-                QString::number(pid));
     }
 }
 

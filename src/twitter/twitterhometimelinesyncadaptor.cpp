@@ -206,8 +206,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             return;
         }
 
-        QList<SyncedDatum> syncedData;
-
         foreach (const QJsonValue &tweetValue, tweets) {
             // these are the fields we eventually need to fill out:
             QList<QPair<QString, SocialPostImage::ImageType> > imageList;
@@ -272,7 +270,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                                     screenName, retweeter, consumerKey(), consumerSecret(), accountId);
             }
         }
-        markSyncedData(syncedData);
     } else {
         // error occurred during request.
         TRACE(SOCIALD_ERROR,
