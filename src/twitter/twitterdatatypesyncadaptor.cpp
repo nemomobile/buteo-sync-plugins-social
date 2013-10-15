@@ -119,7 +119,8 @@ void TwitterDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
     if (errorType == Account::SignInCredentialsExpiredError) {
-        account->setConfigurationValue("", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+        account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+        account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
         account->sync();
     }
 }
