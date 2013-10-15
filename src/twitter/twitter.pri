@@ -26,7 +26,7 @@ twitter_eventfeed.files = $$PWD/eventfeed/TwitterPostPage.qml \
                           $$PWD/eventfeed/twitter-update.qml \
                           $$PWD/eventfeed/twitter-delegate.qml \
                           $$PWD/eventfeed/TwitterFeedItem.qml \
-                          $$PWD/eventfeed/TwitterFeedPage.qml
+                          $$PWD/eventfeed/twitter-feed.qml
 twitter_eventfeed.path = /usr/share/lipstick/eventfeed/
 
 # lipstick notification category

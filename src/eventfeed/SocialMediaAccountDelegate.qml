@@ -10,7 +10,7 @@ BackgroundItem {
     property Item subviewModel
     property alias text: label.text
     property alias iconSource: icon.source
-    property int unseenPostCount
+    property int unseenPostCount: feedPage ? feedPage.unseenPostCount : 0
 
     onClicked: {
         pageStack.push(feedPage)
