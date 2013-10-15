@@ -38,7 +38,7 @@ public:
 protected: // implementing FacebookDataTypeSyncAdaptor interface
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
-    void finalize();
+    void finalize(int accountId);
 
 private:
     void requestData(int accountId, const QString &accessToken, const QString &continuationUrl,

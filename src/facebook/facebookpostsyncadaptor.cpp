@@ -155,8 +155,9 @@ void FacebookPostSyncAdaptor::beginSync(int accountId, const QString &accessToke
     requestMe(accountId, accessToken);
 }
 
-void FacebookPostSyncAdaptor::finalize()
+void FacebookPostSyncAdaptor::finalize(int accountId)
 {
+    Q_UNUSED(accountId)
     m_db.write();
 }
 

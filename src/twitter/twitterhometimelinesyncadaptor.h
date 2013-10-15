@@ -31,7 +31,7 @@ public:
 protected: // implementing TwitterDataTypeSyncAdaptor interface
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret);
-    void finalize();
+    void finalize(int accountId);
 
 private:
     void requestMe(int accountId, const QString &oauthToken, const QString &oauthTokenSecret);
