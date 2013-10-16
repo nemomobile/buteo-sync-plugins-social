@@ -113,7 +113,8 @@ void FacebookDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
     if (errorType == Account::SignInCredentialsExpiredError) {
-        account->setConfigurationValue("", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+        account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+        account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-facebook")));
         account->sync();
     }
 
