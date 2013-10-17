@@ -35,7 +35,7 @@ facebook_eventfeed.files = $$PWD/eventfeed/FacebookPostPage.qml \
                            $$PWD/eventfeed/facebook-update.qml \
                            $$PWD/eventfeed/facebook-delegate.qml \
                            $$PWD/eventfeed/FacebookFeedItem.qml \
-                           $$PWD/eventfeed/FacebookFeedPage.qml
+                           $$PWD/eventfeed/facebook-feed.qml
 facebook_eventfeed.path = /usr/share/lipstick/eventfeed/
 
 # lipstick notification category
