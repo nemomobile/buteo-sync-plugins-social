@@ -73,6 +73,12 @@ void FacebookImageSyncAdaptor::beginSync(int accountId, const QString &accessTok
 void FacebookImageSyncAdaptor::finalize(int accountId)
 {
     Q_UNUSED(accountId)
+    // Remove albums
+    m_db.removeAlbums(m_cachedAlbums.keys());
+
+    // Remove images
+    m_db.removeImages(m_removedImages);
+
     m_db.write();
 }
 
@@ -182,24 +188,24 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
             fbAlbumId = albumId;
         }
 
-        if (!m_serverAlbumIds.contains(albumId)) {
-            // for removal detection.  Don't remove this one from cache, it still exists on the server.
-            m_serverAlbumIds.append(albumId);
-        }
-
         QString albumName = albumObject.value(QLatin1String("name")).toString();
         QString createdTimeStr = albumObject.value(QLatin1String("created_time")).toString();
         QString updatedTimeStr = albumObject.value(QLatin1String("updated_time")).toString();
-        QString coverImageId = albumObject.value(QLatin1String("cover_photo")).toString();
         int imageCount = static_cast<int>(albumObject.value(QLatin1String("count")).toDouble());
 
 
         // check to see whether we need to sync (any changes since last sync)
+        // Note that we also check if the image count is the same, since, when
+        // removing an image, the updatedTime is not changed
+        QDateTime createdTime = QDateTime::fromString(createdTimeStr, Qt::ISODate);
         QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
-        FacebookAlbum::ConstPtr dbAlbum = m_db.album(fbAlbumId);
-        if (!dbAlbum.isNull()
-            && QDateTime::fromString(dbAlbum->updatedTime(), Qt::ISODate) >= updatedTime) {
 
+        // Removal detection
+        m_cachedAlbums.remove(fbAlbumId);
+
+        const FacebookAlbum::ConstPtr &dbAlbum = m_cachedAlbums.value(fbAlbumId);
+        if (!dbAlbum.isNull() && (dbAlbum->updatedTime() >= updatedTime
+                                  && dbAlbum->imageCount() == imageCount)) {
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("album with id %1 by user %2 from Facebook account with id %3 doesn't need sync"))
                     .arg(albumId).arg(userId).arg(accountId));
@@ -218,8 +224,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
         possiblyAddNewUser(userId, accountId, accessToken);
 
         // We then save the album
-        m_db.addAlbum(albumId, userId, createdTimeStr, updatedTimeStr, albumName, imageCount,
-                      coverImageId);
+        m_db.addAlbum(albumId, userId, createdTime, updatedTime, albumName, imageCount);
         // TODO: After successfully added an album, we should begin a new query to get the image
         // information (based on cover image id).
         requestData(accountId, accessToken, QString(), fbUserId, fbAlbumId);
@@ -271,6 +276,7 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("Album with id %1 from Facebook account with id %2 has no photos"))
                 .arg(fbAlbumId).arg(accountId));
+        checkRemovedImages(fbAlbumId);
         decrementSemaphore(accountId);
         return;
     }
@@ -308,15 +314,16 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
 
         int width = static_cast<int>(imageObject.value(QLatin1String("width")).toDouble());
         int height = static_cast<int>(imageObject.value(QLatin1String("height")).toDouble());
+        QDateTime createdTime = QDateTime::fromString(createdTimeStr, Qt::ISODate);
+        QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
 
 
-        if (!m_serverImageIds.contains(photoId)) {
-            // for removal detection.  Don't remove this one from cache, it still exists on the server.
-            m_serverImageIds.append(photoId);
+        if (!m_serverImageIds[fbAlbumId].contains(photoId)) {
+            m_serverImageIds[fbAlbumId].insert(photoId);
         }
 
         // we need to sync.  Write to the database.
-        if (haveAlreadyCachedImage(photoId, imageSrcUrl, accountId)) {
+        if (haveAlreadyCachedImage(photoId, imageSrcUrl)) {
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("updating previously cached photo %1: %2"))
                     .arg(photoId).arg(imageSrcUrl));
@@ -325,7 +332,7 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
                     QString(QLatin1String("caching new photo %1: %2"))
                     .arg(photoId).arg(imageSrcUrl));
         }
-        m_db.addImage(photoId, fbAlbumId, fbUserId, createdTimeStr, updatedTimeStr, photoName,
+        m_db.addImage(photoId, fbAlbumId, fbUserId, createdTime, updatedTime, photoName,
                       width, height, thumbnailUrl, imageSrcUrl);
     }
     // perform a continuation request if required.
@@ -339,38 +346,31 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
     }
 
     // we're finished this request.  Decrement our busy semaphore.
+    checkRemovedImages(fbAlbumId);
     decrementSemaphore(accountId);
 }
 
 
 
-bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbImageId, const QString &imageUrl, int accountId)
+bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbImageId, const QString &imageUrl)
 {
     FacebookImage::ConstPtr dbImage = m_db.image(fbImageId);
-    bool socialdSynced = whenSyncedDatum(QLatin1String("facebook"), QString::number(accountId)).isValid();
     bool imagedbSynced = !dbImage.isNull();
 
-    if (socialdSynced != imagedbSynced) {
-        // sociald's central sync timestamp db has different information to
-        // the facebook image sync adaptor's local db... You know a sync
-        // adaptor has problems when it doesn't stay in sync with itself.
+    if (!imagedbSynced) {
+        return false;
+    }
+
+    QString dbImageUrl = dbImage->imageUrl();
+    if (dbImageUrl != imageUrl) {
         TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: sociald.db and Image/facebook.db are out of sync!"
-                                      "\n   fbPhotoId: %1\n   socialdSynced: %2\n   imagedbSynced: %3"))
-                .arg(fbImageId).arg(socialdSynced).arg(imagedbSynced));
+                QString(QLatin1String("error: Image/facebook.db has outdated data!"
+                                      "\n   fbPhotoId: %1\n   cached image url: %2\n   new image url: %3"))
+                .arg(fbImageId).arg(dbImageUrl).arg(imageUrl));
+        return false;
     }
 
-    if (imagedbSynced) {
-        QString dbImageUrl = dbImage->imageUrl();
-        if (dbImageUrl != imageUrl) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: Image/facebook.db has outdated data!"
-                                          "\n   fbPhotoId: %1\n   cached image url: %2\n   new image url: %3"))
-                    .arg(fbImageId).arg(dbImageUrl).arg(imageUrl));
-        }
-    }
-
-    return socialdSynced || imagedbSynced;
+    return true;
 }
 
 
@@ -425,11 +425,8 @@ void FacebookImageSyncAdaptor::userFinishedHandler()
     QString fbUserId = parsed.value(QLatin1String("id")).toString();
     QString fbName = parsed.value(QLatin1String("name")).toString();
     QString updatedStr = parsed.value(QLatin1String("updated_time")).toString();
-    QString fbPictureUrl = parsed.value(QLatin1String("picture")).toObject()
-                           .value(QLatin1String("data")).toObject()
-                           .value(QLatin1String("url")).toString();
 
-    m_db.addUser(fbUserId, updatedStr, fbName, fbPictureUrl);
+    m_db.addUser(fbUserId, QDateTime::fromString(updatedStr, Qt::ISODate), fbName);
 }
 
 void FacebookImageSyncAdaptor::initRemovalDetectionLists()
@@ -438,27 +435,31 @@ void FacebookImageSyncAdaptor::initRemovalDetectionLists()
     // Clear our internal state variables which we use to track server-side deletions.
     // We have to do it this way, as results can be spread across multiple requests
     // if Facebook returns results in paginated form.
-    m_cachedAlbumIds = QStringList();
-    m_cachedImageIds = QStringList();
-    m_serverAlbumIds = QStringList();
-    m_serverImageIds = QStringList();
+    clearRemovalDetectionLists();
 
-    bool ok = false;
-    m_cachedAlbumIds = m_db.allAlbumIds(&ok);
-
-    if (!ok) {
-        return;
+    QList<FacebookAlbum::ConstPtr> albums = m_db.albums();
+    foreach (const FacebookAlbum::ConstPtr &album, albums) {
+        m_cachedAlbums.insert(album->fbAlbumId(), album);
     }
-
-    m_cachedImageIds = m_db.allImageIds(&ok);
 }
 
 void FacebookImageSyncAdaptor::clearRemovalDetectionLists()
 {
-    // This function should be called if a request errors out.
-    // If the lists are empty, we won't purge anything.
-    m_cachedAlbumIds = QStringList();
-    m_cachedImageIds = QStringList();
+    m_cachedAlbums.clear();
+    m_serverImageIds.clear();
+    m_removedImages.clear();
+}
+
+void FacebookImageSyncAdaptor::checkRemovedImages(const QString &fbAlbumId)
+{
+    const QSet<QString> &serverImageIds = m_serverImageIds.value(fbAlbumId);
+    QSet<QString> cachedImageIds = m_db.imageIds(fbAlbumId).toSet();
+
+    foreach (const QString &fbImageId, serverImageIds) {
+        cachedImageIds.remove(fbImageId);
+    }
+
+    m_removedImages.append(cachedImageIds.toList());
 }
 
 // TODO v where is it used ? Defined but not used in the class

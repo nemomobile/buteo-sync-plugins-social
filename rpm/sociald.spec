@@ -23,7 +23,7 @@ BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
-BuildRequires:  pkgconfig(socialcache)
+BuildRequires:  pkgconfig(socialcache) == 0.0.6
 # for lupdate
 BuildRequires:  qt5-qttools-linguist
 Requires: sailfish-components-accounts-qt5 >= 0.0.43

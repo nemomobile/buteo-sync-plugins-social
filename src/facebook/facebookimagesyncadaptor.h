@@ -43,7 +43,7 @@ protected: // implementing FacebookDataTypeSyncAdaptor interface
 private:
     void requestData(int accountId, const QString &accessToken, const QString &continuationUrl,
                      const QString &fbUserId, const QString &fbAlbumId);
-    bool haveAlreadyCachedImage(const QString &fbImageId, const QString &imageUrl, int accountId);
+    bool haveAlreadyCachedImage(const QString &fbImageId, const QString &imageUrl);
     void possiblyAddNewUser(const QString &fbUserId, int accountId, const QString &accessToken);
 
 
@@ -56,11 +56,10 @@ private:
     // for server-side removal detection.
     void initRemovalDetectionLists();
     void clearRemovalDetectionLists();
-    // void purgeDetectedRemovals();
-    QStringList m_cachedAlbumIds;
-    QStringList m_cachedImageIds;
-    QStringList m_serverAlbumIds;
-    QStringList m_serverImageIds;
+    void checkRemovedImages(const QString &fbAlbumId);
+    QMap<QString, FacebookAlbum::ConstPtr> m_cachedAlbums;
+    QMap<QString, QSet<QString> > m_serverImageIds;
+    QStringList m_removedImages;
 
     FacebookImagesDatabase m_db;
 };
