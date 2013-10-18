@@ -142,11 +142,6 @@ void FacebookContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purge
     foreach (int pid, purgeIds) {
         // first, purge all data from QtContacts and also our cache db.
         purgeAccount(pid);
-
-        // second, purge all data from the sociald database
-        removeAllData(QLatin1String("facebook"),
-                SyncService::dataType(SyncService::Contacts),
-                QString::number(pid));
     }
 }
 

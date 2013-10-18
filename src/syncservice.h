@@ -47,7 +47,6 @@ public:
     SocialNetworkSyncAdaptor *createAdaptor(const QString &socialService, const QString &dataType, QObject *parent);
 
 private:
-    QSqlDatabase *database() const;
     friend class SocialNetworkSyncAdaptor;
 
 private:

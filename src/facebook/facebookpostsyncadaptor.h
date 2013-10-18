@@ -44,7 +44,6 @@ protected: // implementing FacebookDataTypeSyncAdaptor interface
 private:
     void requestMe(int accountId, const QString &accessToken);
     void requestPosts(int accountId, const QString &accessToken);
-    bool haveAlreadyPostedEvent(const QString &postId, const QString &title, const QDateTime &createdTime);
     bool fromIsSelfContact(const QString &fromName, const QString &fromFbUid) const;
 
 private Q_SLOTS:

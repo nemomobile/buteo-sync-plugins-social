@@ -280,8 +280,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
         // name easier.
         QMap<QString, QString> actorNames;
         QJsonArray mainData;
-        QList<SyncedDatum> syncedData;
-
         foreach (QJsonValue entry, data) {
             QJsonObject entryObject = entry.toObject();
             QString name = entryObject.value(QUERY_NAME_KEY).toString();
@@ -498,8 +496,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                                      allowLike, allowComment, clientId(), accountId);
             }
         }
-
-        markSyncedData(syncedData);
     } else {
         // error occurred during request.
         TRACE(SOCIALD_ERROR,
@@ -556,16 +552,4 @@ bool FacebookPostSyncAdaptor::fromIsSelfContact(const QString &fromName, const Q
 
     // not the self contact.
     return false;
-}
-
-bool FacebookPostSyncAdaptor::haveAlreadyPostedEvent(const QString &postId, const QString &eventBody, const QDateTime &createdTime)
-{
-    Q_UNUSED(eventBody);
-    Q_UNUSED(createdTime);
-
-    QDateTime syncedDatum = whenSyncedDatum(QLatin1String("facebook"), postId);
-
-
-
-    return (syncedDatum.isValid());
 }
