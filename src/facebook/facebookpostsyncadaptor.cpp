@@ -54,7 +54,7 @@ static const char *FQL_QUERY = "{"\
 #define QUERY_PAGEID_KEY QLatin1String("page_id")
 #define QUERY_GID_KEY QLatin1String("gid")
 #define QUERY_EID_KEY QLatin1String("eid")
-static const int QUERY_SIZE = 1000;
+static const int QUERY_SIZE = 30;
 
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
@@ -70,8 +70,6 @@ static QContactManager *aggregatingContactManager(QObject *parent)
 
     return retn;
 }
-
-// currently, we integrate with the device events feed via libeventfeed / meegotouchevents' meventfeed.
 
 FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
@@ -123,35 +121,17 @@ void FacebookPostSyncAdaptor::sync(const QString &dataType)
 
 void FacebookPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    // TODO: do the purging
-    /*
-    foreach (int accountIdentifier, purgeIds) {
-        bool ok;
-        QStringList localIdentifiers = removeAllData(serviceName(), SyncService::dataType(dataType),
-                                                     QString::number(accountIdentifier), &ok);
-        if (!ok) {
-            continue;
+    if (purgeIds.size()) {
+        foreach (int accountIdentifier, purgeIds) {
+            m_db.removePosts(accountIdentifier);
         }
-
-
-        int prefixLength = QString(SOCIALD_FACEBOOK_POSTS_ID_PREFIX).size();
-        // Remove entries in the event feed
-        foreach (const QString &localIdentifier, localIdentifiers) {
-            QString eventIdString = localIdentifier.mid(prefixLength);
-            qlonglong eventId = eventIdString.toLongLong(&ok);
-            if (ok) {
-                MEventFeed::instance()->removeItem(eventId);
-            } else {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to remove event %1"))
-                        .arg(eventIdString));
-            }
-        }
-    }*/
+        m_db.write();
+    }
 }
 
 void FacebookPostSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
+    m_db.removePosts(accountId); // always purge all posts for the account, prior to syncing most recent.
     requestMe(accountId, accessToken);
 }
 
@@ -190,8 +170,7 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
 
 void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
 {
-    // No need to use paging, FB API will limit us, so we just query a huge number
-    // with a time limit and that should do the work
+    // We query only the most recent 30 posts.  We set a long time limit.
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     uint timeLimit = QDateTime::currentDateTimeUtc().toTime_t();
@@ -334,7 +313,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
         // useless information. Sometimes, Facebook generates "stories", to notify
         // the user that something happened. These stories, like "Someone liked something"
         // or "A 'comment' on someone's wall" do not carry metadata, and are hard to
-        // render in a nice way., so we should discard them.
+        // render in a nice way.
         //
         // The problem is that sometimes, Facebook generates good stories as well,
         // like "Someone shared this link", with meaningful content.
@@ -401,6 +380,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             if (!isMessagePost && (!attachment.contains(QLatin1String("media")))) {
                 continue;
             }
+
             // Create the event body
             // We use the name of the attachment if the event body is empty
             body = isMessagePost ? message : story;

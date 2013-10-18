@@ -27,35 +27,17 @@ TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
 
 void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    /*
-     *foreach (int accountIdentifier, purgeIds) {
-        bool ok;
-        QStringList localIdentifiers = removeAllData(serviceName(), SyncService::dataType(dataType),
-                                                     QString::number(accountIdentifier), &ok);
-        if (!ok) {
-            continue;
+    if (purgeIds.size()) {
+        foreach (int accountIdentifier, purgeIds) {
+            m_db.removePosts(accountIdentifier);
         }
-
-
-        int prefixLength = QString(SOCIALD_TWITTER_POSTS_ID_PREFIX).size();
-        // Remove entries in the event feed
-        foreach (const QString &localIdentifier, localIdentifiers) {
-            QString eventIdString = localIdentifier.mid(prefixLength);
-            qlonglong eventId = eventIdString.toLongLong(&ok);
-            if (ok) {
-                MEventFeed::instance()->removeItem(eventId);
-            } else {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to remove event %1"))
-                        .arg(eventIdString));
-            }
-        }
-    }*/
-    // TODO ^
+        m_db.write();
+    }
 }
 
 void TwitterHomeTimelineSyncAdaptor::beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret)
 {
+    m_db.removePosts(accountId); // always purge all tweets for the account, prior to syncing most recent.
     requestMe(accountId, oauthToken, oauthTokenSecret);
 }
 
@@ -103,7 +85,7 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
                                                   const QString &sinceTweetId, const QString &fromUserId)
 {
     QList<QPair<QString, QString> > queryItems;
-    queryItems.append(QPair<QString, QString>(QString(QLatin1String("count")), QString(QLatin1String("50"))));
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("count")), QString(QLatin1String("10")))); // limit to 10 Tweets.
     if (!sinceTweetId.isEmpty()) {
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("since_id")), sinceTweetId));
     }
@@ -255,21 +237,22 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             }
 
 
-            // check to see if we need to post it to the events feed
-            if (lastSync.isValid() && eventTimestamp < lastSync) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("event for account %1 came after last sync:"))
-                        .arg(accountId) << "    " << eventTimestamp << ":" << body);
-                break;                 // all subsequent events will be even older.
-            } else if (eventTimestamp.daysTo(QDateTime::currentDateTime()) > 7) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("event for account %1 is more than a week old:\n"))
-                        .arg(accountId) << "    " << eventTimestamp << ":" << body);
-                break;                 // all subsequent events will be even older.
-            } else {
+            // We always purge, so even if we've synced it in the past, we need it.
+            // Check to see if we need to post it to the events feed
+            //if (lastSync.isValid() && eventTimestamp < lastSync) {
+            //    TRACE(SOCIALD_DEBUG,
+            //            QString(QLatin1String("event for account %1 came after last sync:"))
+            //            .arg(accountId) << "    " << eventTimestamp << ":" << body);
+            //    break;                 // all subsequent events will be even older.
+            //} else if (eventTimestamp.daysTo(QDateTime::currentDateTime()) > 7) {
+            //    TRACE(SOCIALD_DEBUG,
+            //            QString(QLatin1String("event for account %1 is more than a week old:\n"))
+            //            .arg(accountId) << "    " << eventTimestamp << ":" << body);
+            //    break;                 // all subsequent events will be even older.
+            //} else {
                 m_db.addTwitterPost(postId, name, body, eventTimestamp, icon, imageList,
                                     screenName, retweeter, consumerKey(), consumerSecret(), accountId);
-            }
+            //}
         }
     } else {
         // error occurred during request.
