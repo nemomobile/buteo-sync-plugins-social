@@ -59,8 +59,9 @@ void TwitterHomeTimelineSyncAdaptor::beginSync(int accountId, const QString &oau
     requestMe(accountId, oauthToken, oauthTokenSecret);
 }
 
-void TwitterHomeTimelineSyncAdaptor::finalize()
+void TwitterHomeTimelineSyncAdaptor::finalize(int accountId)
 {
+    Q_UNUSED(accountId)
     m_db.write();
 }
 

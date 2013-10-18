@@ -75,8 +75,9 @@ void FacebookImageSyncAdaptor::beginSync(int accountId, const QString &accessTok
     requestData(accountId, accessToken, QString(), QString(), QString());
 }
 
-void FacebookImageSyncAdaptor::finalize()
+void FacebookImageSyncAdaptor::finalize(int accountId)
 {
+    Q_UNUSED(accountId)
     m_db.write();
 }
 

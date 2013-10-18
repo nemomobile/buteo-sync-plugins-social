@@ -125,9 +125,23 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
     \internal
     Called when the semaphores decreased to 0, this method is used
     to finalize something, like saving all data to a database.
+    
+    You can call incrementSemaphore to perform asynchronous tasks
+    in this method. finalize will then be called again when the 
+    asynchronous task is finished (and when decrementSemaphore is
+    called), be sure to have a condition check in order not to run
+    into an infinite loop.
+    
+    It is unsafe to call decrementSemaphore in this method, as 
+    the semaphore handling method will find that the semaphore
+    went to 0 twice and will perform cleanup operations twice.
+    Please call decrementSemaphore at the end of the asynchronous
+    task (preferably in a slot), and only call incrementSemaphore 
+    for asynchronous tasks.
  */
-void SocialNetworkSyncAdaptor::finalize()
+void SocialNetworkSyncAdaptor::finalize(int accountId)
 {
+    Q_UNUSED(accountId)
 }
 
 /*!
@@ -526,7 +540,14 @@ void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
     m_accountSyncSemaphores.insert(accountId, semaphoreValue);
 
     if (semaphoreValue == 0) {
-        finalize();
+        finalize(accountId);
+
+        // With the newer implementation, in finalize we can rereaise semaphores,
+        // so if after calling finalize, the semaphore count is not the same anymore,
+        // we shouldn't update the sync timestamp
+        if (m_accountSyncSemaphores.value(accountId) > 0) {
+            return;
+        }
 
         // finished all outstanding sync requests for this account.
         // update the sync time in the global sociald database.
