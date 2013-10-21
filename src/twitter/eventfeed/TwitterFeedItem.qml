@@ -5,20 +5,13 @@ import "shared"
 
 SocialMediaFeedItem {
     id: item
-    height: Math.max(content.height, avatar.height) + Theme.paddingLarge
+    height: Math.max(content.height, avatar.height) + Theme.paddingMedium * 3
     width: parent.width
 
     property variant imageList
     property int likeCount
     property int commentCount
     property int retweetCount
-
-    //: Number of twitter comments
-    //% "%n comment(s)"
-    property string _nameFieldCommentsText: commentCount > 0 ? " \u2022 " + qsTrId("lipstick-jolla-home-la-tweet_comment_count", commentCount) : ""
-    //: Number of twitter re-tweets
-    //% "%n re-tweet(s)"
-    property string _nameFieldRetweetsText: retweetCount > 0 ? " \u2022 " + qsTrId("lipstick-jolla-home-la-tweet_retweet_count", retweetCount) : ""
 
     Column {
         id: content
@@ -29,7 +22,7 @@ SocialMediaFeedItem {
             rightMargin: Theme.paddingMedium
         }
 
-        SocialMediaRow {
+        SocialMediaPreviewRow {
             imageList: item.imageList
         }
 
@@ -67,7 +60,7 @@ SocialMediaFeedItem {
 
         LinkedText {
             width: parent.width
-            maximumLineCount: 50
+            maximumLineCount: 4
             elide: Text.ElideRight
             wrapMode: Text.Wrap
             font.pixelSize: Theme.fontSizeExtraSmall
@@ -77,19 +70,13 @@ SocialMediaFeedItem {
         }
 
         Label {
-            id: nameField
             width: parent.width
-            maximumLineCount: 3
+            maximumLineCount: 1
             elide: Text.ElideRight
             wrapMode: Text.Wrap
             color: Theme.highlightColor
             font.pixelSize: Theme.fontSizeExtraSmall
-            text: item.formattedTime + _nameFieldCommentsText + _nameFieldRetweetsText
-        }
-
-        Item {
-            width: 1
-            height: Theme.paddingLarge
+            text: item.formattedTime
         }
     }
 }

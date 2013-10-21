@@ -15,7 +15,7 @@ Image {
     Rectangle {
         anchors.fill: parent
         color: Theme.highlightColor
-        opacity: 0.5
+        opacity: 0.1
         visible: image.status !== Image.Ready
     }
 }

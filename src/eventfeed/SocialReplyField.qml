@@ -37,7 +37,7 @@ Item {
     Rectangle {
         anchors.fill: avatar
         color: Theme.highlightColor
-        opacity: 0.5
+        opacity: 0.1
     }
 
     Image {
