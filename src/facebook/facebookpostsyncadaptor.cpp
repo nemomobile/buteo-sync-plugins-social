@@ -13,6 +13,8 @@
 #include <QtCore/QPair>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonValue>
+#include <QtCore/QJsonObject>
+#include <QtCore/QJsonDocument>
 #include <QtCore/QUrlQuery>
 
 //QtMobility
@@ -170,7 +172,7 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
 
 void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
 {
-    // We query only the most recent 30 posts.  We set a long time limit.
+    // We query only the most recent QUERY_SIZE posts.  We set a long time limit.
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     uint timeLimit = QDateTime::currentDateTimeUtc().toTime_t();
@@ -251,7 +253,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
         }
 
         // The FQL query will return 5 query results
-        // The 1st one contains information about 30 entries of an user's home feed
+        // The 1st one contains information about QUERY_SIZE entries of an user's home feed
         // The 4 others contains name that relates to the actor_id (the id of the entity
         // who post the posts listed in the 1st query)
 
@@ -336,48 +338,64 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
         // We also need to be careful about that "parent_post_id" property, because
         // some posts now seems to contain other posts like: "Someone commented on this comment",
         // containing the comment "Another one commented this post", containing the post etc.
-        // Just to be secure, we discard all posts containing a parent_post_id.
+        // For this reason, we only cache posts whose "parent_post_id" is not the id of
+        // another post we're caching.
+        //
+        // The "target_id" is the wall to which the post was posted. If the user has liked
+        // someone else, posts on those walls will appear in the stream.
 
+        // First, build up a list of "primary" posts, and a list of their ids.
+        QList<QString> postObjectIds;
+        QList<QJsonObject> postObjects;
         foreach (QJsonValue entry, mainData) {
             QJsonObject post = entry.toObject();
+            QString currPostId = post.value(QLatin1String("post_id")).toVariant().toString();
+            if (!postObjectIds.contains(currPostId)) {
+                postObjectIds.append(currPostId);
+                postObjects.append(post);
+            }
+        }
+
+        // Second, convert the post into a cacheable post, and determine whether or
+        // not we should cache it (based on our heuristics).
+        foreach (const QJsonObject &post, postObjects) {
+            // Any post with a parent_post_id will be discarded if that parent_post_id
+            // is contained in the list of primary post ids, as we already cache that parent post,
+            // unless the post_id is the same as the parent_post_id.
+            QString postId = post.value(QLatin1String("post_id")).toVariant().toString();
+            QString parentPostId = post.value(QLatin1String("parent_post_id")).toVariant().toString();
+            if (!parentPostId.isEmpty() && postObjectIds.contains(parentPostId) && parentPostId != postId) {
+                TRACE(SOCIALD_DEBUG,
+                        QString(QLatin1String("Discarding post:\n%1because parent_post_id is already cached.\n"))
+                        .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson())));
+                continue;
+            }
+
             // These are the fields we eventually need to fill out
             QString actorId = post.value(QLatin1String("actor_id")).toVariant().toString();
             QString name = actorNames.value(actorId);
             QString body;
             QList<QPair<QString, SocialPostImage::ImageType> > imageList;
 
-
             // Grab the data from the current post
+            uint postType = post.value(QLatin1String("type")).toVariant().toString().toUInt();
             uint createdTimestamp = post.value(QLatin1String("created_time")).toVariant().toString().toUInt();
             QDateTime createdTime = QDateTime::fromTime_t(createdTimestamp);
-
-
-            QString postId = post.value(QLatin1String("post_id")).toVariant().toString();
-
-            bool isMessagePost = false;
-
-            // We discard posts with a target id (from now)
-            if (!post.value(QLatin1String("target_id")).isNull()
-                && post.value(QLatin1String("target_id")) != m_selfFacebookUserIds.value(accountId)) {
-                continue;
-            }
-
-            // We discard posts with a parent_post_id
-            if (!post.value(QLatin1String("parent_post_id")).isNull()) {
-                continue;
-            }
-
-            // We keep posts with messages
-            QString message = post.value(QLatin1String("message")).toString();
-            isMessagePost = !message.isEmpty();
-
             QString story = post.value(QLatin1String("description")).toString();
-
             QJsonObject attachment = post.value(QLatin1String("attachment")).toObject();
-            // If we don't have a message post, we will check if there is
-            // a media  in the attachment. If not, we will trash the post
-            // TODO: check if the media is valid
-            if (!isMessagePost && (!attachment.contains(QLatin1String("media")))) {
+            QString message = post.value(QLatin1String("message")).toString();
+            bool isMessagePost = !message.isEmpty();
+
+            // We have to discard the post if it's a raw comment or like, as we
+            // don't have any information which can be rendered in the feed.
+            // XXX TODO: improve the query to fetch the actual post data, for
+            // any stream item which is a like/comment on an actual post.
+            QList<uint> likesPostTypes; likesPostTypes << 161 << 245 << 283 << 347;
+            QList<uint> commentsPostTypes; commentsPostTypes << 257;
+            if (!isMessagePost && (likesPostTypes.contains(postType) || commentsPostTypes.contains(postType))) {
+                TRACE(SOCIALD_DEBUG,
+                        QString(QLatin1String("Discarding post:\n%1because it's a like or comment.\n"))
+                        .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson())));
                 continue;
             }
 
@@ -391,22 +409,24 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             // Create the event footer
             QJsonObject likeInfo = post.value(QLatin1String("like_info")).toObject();
             QJsonObject commentInfo = post.value(QLatin1String("comment_info")).toObject();
-
             bool allowLike = likeInfo.value(QLatin1String("can_like")).toBool();
             bool allowComment = commentInfo.value(QLatin1String("can_comment")).toBool();
 
             // Pass the description of the media to the subview via metadata
-            // (TODO: libeventfeed is lacking support of this, or maybe lipstick ?)
             QString attachmentName = attachment.value(QLatin1String("name")).toString();
             QString attachmentCaption = attachment.value(QLatin1String("caption")).toString();
             QString attachmentDescription = attachment.value(QLatin1String("description")).toString();
 
-            if (!attachment.value("media").isNull()) {
+            // If media was provided, we need to ensure that it's valid, else discard the post.
+            if (attachment.keys().contains("media") && !attachment.value("media").isNull()) {
                 bool wrongMediaFound = false;
                 QJsonArray media = attachment.value("media").toArray();
 
                 // If the media is empty (but exists) we discard
                 if (media.isEmpty()) {
+                    TRACE(SOCIALD_DEBUG,
+                            QString(QLatin1String("Discarding post:\n%1because no valid media was found.\n"))
+                            .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson())));
                     continue;
                 }
 
@@ -444,6 +464,9 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 }
 
                 if (wrongMediaFound) {
+                    TRACE(SOCIALD_DEBUG,
+                            QString(QLatin1String("Discarding post:\n%1because media url was empty.\n"))
+                            .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson())));
                     continue;
                 }
             }
@@ -470,6 +493,16 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 if (icon.isEmpty()) {
                     icon = QString(FACEBOOK_AVATAR).arg(actorId);
                 }
+
+                TRACE(SOCIALD_DEBUG,
+                        QString(QLatin1String("Adding post:\n%1into the Posts database as:\n%2, %3, %4, %5, %6, %7\n"))
+                        .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson()))
+                        .arg(postId)
+                        .arg(icon)
+                        .arg(name)
+                        .arg(body)
+                        .arg(attachmentCaption)
+                        .arg(attachmentDescription));
 
                 m_db.addFacebookPost(postId, name, body, createdTime, icon, imageList,
                                      attachmentName, attachmentCaption, attachmentDescription,
