@@ -104,8 +104,8 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
             continue; // not same account as m_serviceName.  Ignore it.
         }
 
-        // if the account has been disabled with the sync service, we purge it.
-        if (act->isEnabledWithService(QString(QLatin1String("%1-sync")).arg(m_serviceName))) {
+        // if the account has been disabled or disabled with the sync service, we purge it.
+        if (act->enabled() && act->isEnabledWithService(QString(QLatin1String("%1-sync")).arg(m_serviceName))) {
             if (knownIds.contains(currId)) {
                 knownIds.removeAll(currId);
                 updateIds->append(currId);
