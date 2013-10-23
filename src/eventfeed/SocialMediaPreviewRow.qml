@@ -5,7 +5,7 @@ import Sailfish.TextLinking 1.0
 Item {
     id: container
 
-    property variant imageList
+    property var imageList
     property string mediaName
     property string mediaCaption
     property string mediaDescription

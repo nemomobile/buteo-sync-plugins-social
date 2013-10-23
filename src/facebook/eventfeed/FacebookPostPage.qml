@@ -279,7 +279,7 @@ Page {
                 source: container.model.title
                 timestamp: model.timestamp
                 body: model.body
-                socialButtons: Item {
+                fullRowSocialButtons: Item {
                     anchors {
                         left: parent.left
                         right: parent.right
@@ -330,6 +330,7 @@ Page {
             Item {
                 width: 1
                 height: Theme.paddingLarge
+                visible: description.visible
             }
 
             LinkedText {
@@ -342,7 +343,6 @@ Page {
                 }
                 visible: text.length > 0
                 elide: Text.ElideRight
-                wrapMode: Text.Wrap
                 color: Theme.highlightColor
                 font.pixelSize: Theme.fontSizeExtraSmall
                 plainText: container.model.attachmentDescription
