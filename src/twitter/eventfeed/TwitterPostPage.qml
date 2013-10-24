@@ -12,7 +12,7 @@ Page {
     property variant model
     property string nodeIdentifier
     property string retweeter
-    property string userId
+    property QtObject twitterUser
 
     onModelChanged: {
         nodeIdentifier = model.twitterId
@@ -28,7 +28,7 @@ Page {
                 // Reset token
                 twitter.oauthToken = ""
                 twitter.oauthTokenSecret = ""
-                container.userId = ""
+                twitter.userId = ""
 
                 // Sign in, and get credentials.
                 var params = signInParameters("twitter-sync")
@@ -54,27 +54,33 @@ Page {
             }
             var userId = data["UserId"]
             if (userId !== "") {
-                container.userId = userId
+                twitter.userId = userId
             }
         }
     }
 
     Twitter {
         id: twitter
-        currentUserIdentifier: container.userId
+
+        property string userId
+        property bool credentialsReady
+
         onInitializedChanged: populateIfInitialized()
         onConsumerKeyChanged: populateIfInitialized()
         onConsumerSecretChanged: populateIfInitialized()
         onOauthTokenChanged: populateIfInitialized()
         onOauthTokenSecretChanged: populateIfInitialized()
-        property bool credentialsReady
+        onUserIdChanged: populateIfInitialized()
 
-        // Seems that creating a propert with 4 checks is buggy,
+        // Seems that creating a property with 5 checks is buggy,
         // so we do it as a function
         function checkCredentialsReady() {
-            if (initialized && (consumerKey.length > 0)
-                && (consumerSecret.length > 0) && (oauthToken.length > 0)
-                && (oauthTokenSecret.length > 0)) {
+            if (initialized
+                  && consumerKey.length > 0
+                  && consumerSecret.length > 0
+                  && oauthToken.length > 0
+                  && userId.length > 0
+                  && oauthTokenSecret.length > 0) {
                 credentialsReady = true
             } else {
                 credentialsReady = false
@@ -85,18 +91,25 @@ Page {
             checkCredentialsReady()
             if (credentialsReady) {
                 twitterReplies.repopulate()
-                twitterUser.reload()
+                // Currently TwitterUser will fail if identifier is changed.
+                // Work around by creating new user for each account.
+                if (container.twitterUser) {
+                    container.twitterUser.destroy()
+                }
+                container.twitterUser = twitterUserComponent.createObject()
             }
         }
     }
 
-    TwitterUser {
-        id: twitterUser
-        socialNetwork: twitter
-        identifier: container.userId
+    Component {
+        id: twitterUserComponent
 
-        onErrorChanged: console.log("TwitterUser error: " + error + "\n")
-        onErrorMessageChanged: console.log("TwitterUser errorMessage: " + errorMessage + "\n")
+        TwitterUser {
+            socialNetwork: twitter
+            identifier: twitter.userId
+            onErrorChanged: console.log("TwitterUser error: " + error + "\n")
+            onErrorMessageChanged: console.log("TwitterUser errorMessage: " + errorMessage + "\n")
+        }
     }
 
     SocialNetworkModel {
@@ -409,7 +422,7 @@ Page {
         footer: SocialReplyField {
             id: replyField
             enabled: view.state === "idle"
-            avatar: twitterUser.profileImageUrlHttps
+            avatar: twitterUser ? twitterUser.profileImageUrlHttps : ""
             //: Label indicating text field is used for entering a reply to Twitter post
             //% "Reply (%0)"
             label: qsTrId("lipstick-jolla-home-twitter-la-reply").arg(text.length)
