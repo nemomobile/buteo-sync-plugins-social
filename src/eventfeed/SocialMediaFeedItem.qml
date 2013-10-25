@@ -15,14 +15,7 @@ BackgroundItem {
         height: Theme.itemSizeMedium
     }
 
-    Connections {
-        target: refreshTimer
-        onTriggered: formatTime()
-    }
-
     function formatTime() {
         formattedTime = Format.formatDate(timestamp, Formatter.DurationElapsed)
     }
-
-    Component.onCompleted: formatTime()
 }

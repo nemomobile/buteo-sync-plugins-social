@@ -26,6 +26,7 @@ SocialMediaFeedPage {
                 console.log(error)
             }
         }
+        Component.onCompleted: page.refreshTime.connect(formatTime)
     }
     socialNetwork: SocialSync.Facebook
 
