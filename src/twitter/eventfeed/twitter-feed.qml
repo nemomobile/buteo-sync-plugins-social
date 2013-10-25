@@ -31,6 +31,7 @@ SocialMediaFeedPage {
 
     PullDownMenu {
         flickable: page.listView
+        busy: page.updating
 
         MenuItem {
             //: Opens Twitter in browser

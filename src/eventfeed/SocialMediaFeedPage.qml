@@ -14,6 +14,7 @@ Page {
     property int unseenPostCount
     property string headerTitle
     property SilicaListView listView: _listView
+    property alias updating: syncHelper.loading
 
     signal refreshTime
 
