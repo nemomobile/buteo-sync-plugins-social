@@ -29,6 +29,13 @@ Page {
         onCountChanged: page.listUpdated()
     }
 
+    Timer {
+        interval: 60000
+        running: page.visible && page.status === PageStatus.Active
+        repeat: true
+        onTriggered: page.refreshTime()
+    }
+
     onStatusChanged: {
         if (status === PageStatus.Active) {
             page.unseenPostCount = 0
