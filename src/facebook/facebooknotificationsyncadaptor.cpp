@@ -108,13 +108,24 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                     notification->setHintValue("x-nemo.sociald.account-id", accountId);
                 }
 
-                //: The title of the Facebook Notifications device notification
-                //% "You have %1 new Facebook notification(s)!"
-                QString title = qtTrId("sociald_facebook_posts-notification_title").arg(notificationCount);
-                notification->setSummary(title);
-                notification->setBody(QString());
-                notification->setPreviewSummary(title);
-                notification->setPreviewBody(QString());
+                // When clicked, take the user to their notifications list page
+                QStringList openUrlArgs(QLatin1String("https://touch.facebook.com/notifications"));
+                notification->setRemoteDBusCallServiceName("org.sailfishos.browser");
+                notification->setRemoteDBusCallObjectPath("/");
+                notification->setRemoteDBusCallInterface("org.sailfishos.browser");
+                notification->setRemoteDBusCallMethodName("openUrl");
+                notification->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
+
+                //: The summary text of the Facebook Notifications device notification
+                //% "You have %1 new notification(s)!"
+                QString summary = qtTrId("sociald_facebook_notifications-notification_body").arg(notificationCount);
+                //: The body text of the Facebook Notifications device notification, describing that it came from Facebook.
+                //% "Facebook"
+                QString body = qtTrId("sociald_facebook_notifications-notification_summary");
+                notification->setSummary(summary);
+                notification->setBody(body);
+                notification->setPreviewSummary(summary);
+                notification->setPreviewBody(body);
                 notification->setItemCount(notificationCount);
                 notification->setTimestamp(QDateTime::currentDateTime());
                 notification->publish();
