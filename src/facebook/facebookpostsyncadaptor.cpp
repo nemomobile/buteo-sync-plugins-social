@@ -17,7 +17,6 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/QUrlQuery>
 
-//QtMobility
 #include <QtContacts/QContactManager>
 #include <QtContacts/QContactFetchHint>
 #include <QtContacts/QContactFetchRequest>
@@ -29,7 +28,6 @@
 
 #define SOCIALD_FACEBOOK_POSTS_ID_PREFIX QLatin1String("facebook-posts-")
 #define SOCIALD_FACEBOOK_POSTS_GROUPNAME QLatin1String("facebook")
-#define QTCONTACTS_SQLITE_AVATAR_METADATA QLatin1String("AvatarMetadata")
 #define FACEBOOK_AVATAR QLatin1String("https://graph.facebook.com/%1/picture?width=200&height=200")
 
 
@@ -481,10 +479,25 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 QString icon;
                 // Search the portrait in the contacts
                 if (contactHash.contains(name)) {
+                    QString pictureUrl;
+                    QString fallbackUrl;
                     QContact contact = contactHash.value(name);
-                    QContactAvatar avatar = contact.detail<QContactAvatar>();
-                    if (!avatar.imageUrl().isEmpty()) {
-                        icon = avatar.imageUrl().toString();
+                    foreach (const QContactAvatar &avatar, contact.details<QContactAvatar>()) {
+                        if (!avatar.imageUrl().isEmpty()) {
+                            if (avatar.value(QContactAvatar__FieldAvatarMetadata).toString() == QLatin1String("picture")) {
+                                pictureUrl = avatar.imageUrl().toString();
+                            } else if (avatar.value(QContactAvatar__FieldAvatarMetadata).toString() != QLatin1String("cover")) {
+                                // we don't want to use the cover image, as we don't cache it (yet)
+                                // and it's a large size, heavy download.
+                                fallbackUrl = avatar.imageUrl().toString();
+                            }
+                        }
+                    }
+
+                    if (!pictureUrl.isEmpty()) {
+                        icon = pictureUrl;
+                    } else if (!fallbackUrl.isEmpty()) {
+                        icon = fallbackUrl;
                     }
                 }
 
