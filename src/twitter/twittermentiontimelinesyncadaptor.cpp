@@ -124,7 +124,7 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
             QJsonObject user = tweet.value(QLatin1String("user")).toObject();
             QString userName = user.value(QLatin1String("name")).toString();
             QString userScreenName = user.value(QLatin1String("screen_name")).toString();
-            link = QLatin1String("https://twitter.com/") + userScreenName + QLatin1String("/status/") + mentionId;
+            link = QLatin1String("https://mobile.twitter.com/") + userScreenName + QLatin1String("/status/") + mentionId;
 
             // check to see if we need to post it to the notifications feed
             if (lastSync.isValid() && createdTime < lastSync) {
@@ -170,7 +170,7 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                 notification->setBody(qtTrId("qtn_social_notifications_twitter"));
                 //% "You received %n mentions"
                 notification->setSummary(qtTrId("qtn_social_notifications_n_mentions", notification->itemCount()));
-                openUrlArgs << QLatin1String("https://twitter.com/i/connect");
+                openUrlArgs << QLatin1String("https://mobile.twitter.com/i/connect");
             }
             notification->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
             notification->publish();
