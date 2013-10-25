@@ -88,6 +88,20 @@ Translation source for sociald
 %qmake5
 make %{?jobs:-j%jobs}
 
+%pre
+rm -f /home/nemo/.cache/msyncd/sync/client/sociald.xml
+rm -f /home/nemo/.cache/msyncd/sync/facebook.Calendars.xml
+rm -f /home/nemo/.cache/msyncd/sync/facebook.Contacts.xml
+rm -f /home/nemo/.cache/msyncd/sync/facebook.Images.xml
+rm -f /home/nemo/.cache/msyncd/sync/facebook.Notifications.xml
+rm -f /home/nemo/.cache/msyncd/sync/facebook.Posts.xml
+rm -f /home/nemo/.cache/msyncd/sync/twitter.Notifications.xml
+rm -f /home/nemo/.cache/msyncd/sync/twitter.Posts.xml
+rm -f /home/nemo/.cache/msyncd/sync/google.Contacts.xml
+
 %install
 rm -rf %{buildroot}
 %qmake5_install
+
+%post
+su nemo -c "systemctl --user restart msyncd.service"
