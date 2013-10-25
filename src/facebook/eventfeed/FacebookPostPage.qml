@@ -3,6 +3,7 @@ import Sailfish.Silica 1.0
 import org.nemomobile.contacts 1.0
 import org.nemomobile.social 1.0
 import Sailfish.Accounts 1.0
+import Sailfish.TextLinking 1.0
 import "shared"
 
 Page {
@@ -278,7 +279,7 @@ Page {
                 source: container.model.title
                 timestamp: model.timestamp
                 body: model.body
-                socialButtons: Item {
+                fullRowSocialButtons: Item {
                     anchors {
                         left: parent.left
                         right: parent.right
@@ -323,7 +324,29 @@ Page {
                 imageList: container.model.images
                 mediaName: container.model.attachmentName
                 mediaCaption: container.model.attachmentCaption
-                mediaDescription: container.attachmentDescription
+                mediaDescription: container.model.attachmentDescription
+            }
+
+            Item {
+                width: 1
+                height: Theme.paddingLarge
+                visible: description.visible
+            }
+
+            LinkedText {
+                id: description
+                anchors {
+                    left: parent.left
+                    leftMargin: Theme.paddingSmall
+                    right: parent.right
+                    rightMargin: Theme.paddingSmall
+                }
+                visible: text.length > 0
+                elide: Text.ElideRight
+                color: Theme.highlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                plainText: container.model.attachmentDescription
+                shortenUrl: true
             }
 
             SocialInfoLabel { text: view.likers }

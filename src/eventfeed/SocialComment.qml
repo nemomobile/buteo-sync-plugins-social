@@ -20,7 +20,7 @@ Item {
         width: Theme.iconSizeMedium
         height: Theme.iconSizeMedium
         color: Theme.highlightColor
-        opacity: 0.5
+        opacity: 0.1
     }
 
     Image {
