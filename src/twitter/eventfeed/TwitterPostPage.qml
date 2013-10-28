@@ -396,7 +396,7 @@ Page {
                         bottom: parent.bottom
                     }
                     text: container.retweeter
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.pixelSize: Theme.fontSizeSmall
                     color: Theme.highlightColor
                 }
             }

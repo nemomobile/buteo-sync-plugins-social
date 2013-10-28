@@ -37,7 +37,7 @@ SocialMediaFeedItem {
             elide: Text.ElideRight
             wrapMode: Text.Wrap
             color: Theme.highlightColor
-            font.pixelSize: Theme.fontSizeExtraSmall
+            font.pixelSize: Theme.fontSizeSmall
             plainText: model.attachmentDescription
             shortenUrl: true
         }
@@ -48,7 +48,7 @@ SocialMediaFeedItem {
             maximumLineCount: 3
             elide: Text.ElideRight
             wrapMode: Text.Wrap
-            font.pixelSize: Theme.fontSizeExtraSmall
+            font.pixelSize: Theme.fontSizeSmall
             color: item.pressed ? Theme.highlightColor : Theme.primaryColor
             shortenUrl: true
             plainText: model.body

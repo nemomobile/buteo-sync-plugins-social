@@ -46,7 +46,7 @@ Item {
         y: Theme.paddingMedium
         visible: container.imageCount === 1
         text: container.mediaName
-        font.pixelSize: Theme.fontSizeExtraSmall
+        font.pixelSize: Theme.fontSizeSmall
         wrapMode: Text.WordWrap
         maximumLineCount: 2
         elide: Text.ElideRight
