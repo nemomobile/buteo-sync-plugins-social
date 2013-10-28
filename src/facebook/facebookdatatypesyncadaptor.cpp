@@ -90,11 +90,18 @@ void FacebookDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accoun
     }
 }
 
+void FacebookDataTypeSyncAdaptor::accountCredentialsChangeHandler()
+{
+    Account *account = qobject_cast<Account*>(sender());
+    if (account->status() == Account::Initialized) {
+        setCredentialsNeedUpdate(account);
+    }
+}
+
 void FacebookDataTypeSyncAdaptor::accountStatusChangeHandler()
 {
     Account *account = qobject_cast<Account*>(sender());
-    if (account->status() == Account::Initialized || account->status() == Account::Synced)
-    {
+    if (account->status() == Account::Initialized || account->status() == Account::Synced) {
         // Not anymore interested about status changes of this account instance
         account->disconnect(this);
         signIn(account);
@@ -107,17 +114,15 @@ void FacebookDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
             .arg(account->identifier()) << err);
-    account->disconnect(this);
     setStatus(SocialNetworkSyncAdaptor::Error);
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
     if (errorType == Account::SignInCredentialsExpiredError) {
-        account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
-        account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-facebook")));
-        account->sync();
+        setCredentialsNeedUpdate(account);
+        return;
     }
-
+    account->disconnect(this);
 }
 
 void FacebookDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -144,6 +149,29 @@ void FacebookDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
 
 void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QByteArray replyData = reply->readAll();
+    disconnect(reply);
+    reply->deleteLater();
+
+    bool ok = false;
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
+    if (ok && parsed.contains(QLatin1String("error"))) {
+        QJsonObject errorReply = parsed.value("error").toObject();
+        // Password Changed on server side
+        if (errorReply.value("code").toDouble() == 190 &&
+                errorReply.value("error_subcode").toDouble() == 460) {
+            int accountId = sender()->property("accountId").toInt();
+            Account *account = accountManager->account(accountId);
+            if (account->status() == Account::Initialized) {
+                setCredentialsNeedUpdate(account);
+                return;
+            } else {
+                connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
+                return;
+            }
+        }
+    }
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
             .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
@@ -189,6 +217,15 @@ void FacebookDataTypeSyncAdaptor::loadClientId()
     m_clientId = QLatin1String(cClientId);
     free(cClientId);
     return;
+}
+
+void FacebookDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
+{
+    // Not anymore interested about status changes of this account instance
+    account->disconnect(this);
+    account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+    account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-facebook")));
+    account->sync();
 }
 
 void FacebookDataTypeSyncAdaptor::signIn(Account *account)
