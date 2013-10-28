@@ -344,7 +344,7 @@ Page {
                 visible: text.length > 0
                 elide: Text.ElideRight
                 color: Theme.highlightColor
-                font.pixelSize: Theme.fontSizeExtraSmall
+                font.pixelSize: Theme.fontSizeSmall
                 plainText: container.model.attachmentDescription
                 shortenUrl: true
             }

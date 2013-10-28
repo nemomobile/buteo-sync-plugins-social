@@ -46,7 +46,7 @@ SocialMediaFeedItem {
                 elide: Text.ElideRight
                 opacity: .6
                 text: model.retweeter
-                font.pixelSize: Theme.fontSizeExtraSmall
+                font.pixelSize: Theme.fontSizeSmall
             }
         }
 
@@ -55,7 +55,7 @@ SocialMediaFeedItem {
             elide: Text.ElideRight
             opacity: .6
             text: "@" + model.screenName
-            font.pixelSize: Theme.fontSizeExtraSmall
+            font.pixelSize: Theme.fontSizeSmall
         }
 
         LinkedText {
@@ -63,7 +63,7 @@ SocialMediaFeedItem {
             maximumLineCount: 4
             elide: Text.ElideRight
             wrapMode: Text.Wrap
-            font.pixelSize: Theme.fontSizeExtraSmall
+            font.pixelSize: Theme.fontSizeSmall
             shortenUrl: true
             color: item.pressed ? Theme.highlightColor : Theme.primaryColor
             plainText: model.body
@@ -75,7 +75,7 @@ SocialMediaFeedItem {
             elide: Text.ElideRight
             wrapMode: Text.Wrap
             color: Theme.highlightColor
-            font.pixelSize: Theme.fontSizeExtraSmall
+            font.pixelSize: Theme.fontSizeSmall
             text: item.formattedTime
         }
     }

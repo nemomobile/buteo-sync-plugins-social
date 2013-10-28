@@ -67,7 +67,7 @@ Item {
                     bottomMargin: Theme.paddingSmall
                 }
                 plainText: container.mediaName
-                font.pixelSize: Theme.fontSizeExtraSmall
+                font.pixelSize: Theme.fontSizeSmall
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
                 shortenUrl: true
@@ -86,7 +86,7 @@ Item {
                 }
                 plainText: container.mediaCaption
                 color: Theme.highlightColor
-                font.pixelSize: Theme.fontSizeExtraSmall
+                font.pixelSize: Theme.fontSizeSmall
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
                 maximumLineCount: 1
