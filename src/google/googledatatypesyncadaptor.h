@@ -45,12 +45,14 @@ protected Q_SLOTS:
     virtual void sslErrorsHandler(const QList<QSslError> &errs);
 
 private Q_SLOTS:
+    void accountCredentialsChangeHandler();
     void accountStatusChangeHandler();
     void signOnError(const QString &message, int errorType);
     void signOnResponse(const QVariantMap &data);
 
 private:
     void loadClientIdAndSecret();
+    void setCredentialsNeedUpdate(Account *account);
     void signIn(Account *account);
     bool m_triedLoading; // Is true if we tried to load (even if we failed)
     QString m_clientId;
