@@ -197,11 +197,10 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
                 Account *account = accountManager->account(accountId);
                 if (account->status() == Account::Initialized) {
                     setCredentialsNeedUpdate(account);
-                    return;
                 } else {
                     connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
-                    return;
                 }
+                return;
             }
         }
     }

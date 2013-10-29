@@ -93,6 +93,14 @@ void GoogleDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountI
     }
 }
 
+void GoogleDataTypeSyncAdaptor::accountCredentialsChangeHandler()
+{
+    Account *account = qobject_cast<Account*>(sender());
+    if (account->status() == Account::Initialized) {
+        setCredentialsNeedUpdate(account);
+    }
+}
+
 void GoogleDataTypeSyncAdaptor::accountStatusChangeHandler()
 {
     Account *account = qobject_cast<Account*>(sender());
@@ -109,17 +117,15 @@ void GoogleDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
             .arg(account->identifier()) << err);
-    account->disconnect(this);
     setStatus(SocialNetworkSyncAdaptor::Error);
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
     if (errorType == Account::SignInCredentialsExpiredError) {
-        account->setConfigurationValue("google-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
-        account->setConfigurationValue("google-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-google")));
-        account->sync();
+        setCredentialsNeedUpdate(account);
+        return;
     }
-
+    account->disconnect(this);
 }
 
 void GoogleDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -146,6 +152,17 @@ void GoogleDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
 
 void GoogleDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
+    // Google sends error code 204
+    if (err == QNetworkReply::AuthenticationRequiredError) {
+        int accountId = sender()->property("accountId").toInt();
+        Account *account = accountManager->account(accountId);
+        if (account->status() == Account::Initialized) {
+            setCredentialsNeedUpdate(account);
+        } else {
+            connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
+        }
+        return;
+    }
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
             .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
@@ -214,6 +231,15 @@ void GoogleDataTypeSyncAdaptor::loadClientIdAndSecret()
 
     m_clientSecret = QLatin1String(cClientSecret);
     free(cClientSecret);
+}
+
+void GoogleDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
+{
+    // Not anymore interested about status changes of this account instance
+    account->disconnect(this);
+    account->setConfigurationValue("google-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+    account->setConfigurationValue("google-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-google")));
+    account->sync();
 }
 
 void GoogleDataTypeSyncAdaptor::signIn(Account *account)
