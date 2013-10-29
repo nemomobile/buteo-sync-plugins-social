@@ -96,6 +96,14 @@ void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &account
     }
 }
 
+void TwitterDataTypeSyncAdaptor::accountCredentialsChangeHandler()
+{
+    Account *account = qobject_cast<Account*>(sender());
+    if (account->status() == Account::Initialized) {
+        setCredentialsNeedUpdate(account);
+    }
+}
+
 void TwitterDataTypeSyncAdaptor::accountStatusChangeHandler()
 {
     Account *account = qobject_cast<Account*>(sender());
@@ -113,16 +121,15 @@ void TwitterDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
           .arg(account->identifier()) << err);
-    account->disconnect(this);
     setStatus(SocialNetworkSyncAdaptor::Error);
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
     if (errorType == Account::SignInCredentialsExpiredError) {
-        account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
-        account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
-        account->sync();
+        setCredentialsNeedUpdate(account);
+        return;
     }
+    account->disconnect(this);
 }
 
 void TwitterDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -172,6 +179,32 @@ QString TwitterDataTypeSyncAdaptor::consumerSecret()
 
 void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QByteArray replyData = reply->readAll();
+    disconnect(reply);
+    reply->deleteLater();
+
+    bool ok = false;
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
+    if (ok && parsed.contains(QLatin1String("errors"))) {
+        QJsonArray dataList = parsed.value(QLatin1String("errors")).toArray();
+        // API v1.1 returns only one element in the array, but looks like these
+        // are constantly updated: https://dev.twitter.com/docs/error-codes-responses
+        foreach (QJsonValue data, dataList) {
+            QJsonObject dataMap = data.toObject();
+            if (dataMap.value("code").toDouble() == 32) {
+                int accountId = sender()->property("accountId").toInt();
+                Account *account = accountManager->account(accountId);
+                if (account->status() == Account::Initialized) {
+                    setCredentialsNeedUpdate(account);
+                    return;
+                } else {
+                    connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
+                    return;
+                }
+            }
+        }
+    }
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
             .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
@@ -327,6 +360,15 @@ void TwitterDataTypeSyncAdaptor::loadConsumerKeyAndSecret()
     m_consumerSecret = QLatin1String(cConsumerSecret);
     free(cConsumerKey);
     free(cConsumerSecret);
+}
+
+void TwitterDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
+{
+    // Not anymore interested about status changes of this account instance
+    account->disconnect(this);
+    account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+    account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
+    account->sync();
 }
 
 void TwitterDataTypeSyncAdaptor::signIn(Account *account)
