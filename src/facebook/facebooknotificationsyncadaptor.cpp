@@ -117,8 +117,8 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                 notification->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
 
                 //: The summary text of the Facebook Notifications device notification
-                //% "You have %1 new notification(s)!"
-                QString summary = qtTrId("sociald_facebook_notifications-notification_body").arg(notificationCount);
+                //% "You have %n new notification(s)!"
+                QString summary = qtTrId("sociald_facebook_notifications-notification_body", notificationCount);
                 //: The body text of the Facebook Notifications device notification, describing that it came from Facebook.
                 //% "Facebook"
                 QString body = qtTrId("sociald_facebook_notifications-notification_summary");
