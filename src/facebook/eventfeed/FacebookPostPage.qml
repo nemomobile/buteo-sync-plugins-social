@@ -408,8 +408,8 @@ Page {
             allowComment: view.state === "idle"
             onEnterKeyClicked: {
                 if (replyField.text.length > 0) {
-                    facebookLikes.node.uploadComment(replyField.text)
                     view.state = "commenting"
+                    facebookLikes.node.uploadComment(replyField.text)
                 }
                 replyField.close()
             }
