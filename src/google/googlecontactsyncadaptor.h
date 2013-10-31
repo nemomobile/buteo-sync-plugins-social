@@ -25,6 +25,7 @@
 
 USE_CONTACTS_NAMESPACE
 
+class GoogleContactImageDownloader;
 class GoogleContactSyncAdaptor : public GoogleDataTypeSyncAdaptor
 {
     Q_OBJECT
@@ -49,12 +50,16 @@ private:
 
 private Q_SLOTS:
     void contactsFinishedHandler();
+    void imageDownloaded(const QString &url, const QString &path, const QVariantMap &metadata);
 
 private:
-    bool storeToLocal(int accountId, int *addedCount, int *modifiedCount, int *removedCount);
+    QList<QContact> transformContactAvatars(const QList<QContact> &remoteContacts, int accountId, const QString &accessToken);
+    void downloadContactAvatarImage(int accountId, const QString &accessToken, const QUrl &imageUrl, const QString &filename);
+    bool storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount);
 
 private:
     QContactManager *m_contactManager;
+    GoogleContactImageDownloader *m_workerObject;
     QMap<int, QList<QContact> > m_remoteContacts; // accountId to contacts to save.
 };
 

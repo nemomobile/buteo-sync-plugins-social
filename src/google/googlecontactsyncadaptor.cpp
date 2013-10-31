@@ -13,6 +13,8 @@
 
 #include <QtCore/QUrl>
 #include <QtCore/QUrlQuery>
+#include <QtCore/QFile>
+#include <QtCore/QByteArray>
 
 #include <QtContacts/QContactManager>
 #include <QtContacts/QContactDetailFilter>
@@ -33,8 +35,14 @@
 #include <qcontactoriginmetadata_impl.h>
 #include <QContactOriginMetadata>
 
+#include <socialcache/abstractimagedownloader.h>
+#include <socialcache/abstractimagedownloader_p.h>
+
 #define SOCIALD_GOOGLE_CONTACTS_SYNCTARGET QLatin1String("google")
 #define SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS 500
+
+static const char *TOKEN_KEY = "url";
+static const char *ACCOUNT_ID_KEY = "account_id";
 
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
@@ -51,9 +59,62 @@ static QContactManager *aggregatingContactManager(QObject *parent)
     return retn;
 }
 
+class GoogleContactImageDownloader: public AbstractImageDownloader
+{
+    Q_OBJECT
+
+public:
+    explicit GoogleContactImageDownloader();
+    static QString staticOutputFile(const QString &url);
+protected:
+    QNetworkReply * createReply(const QString &url, const QVariantMap &metadata);
+    // This is a reimplemented method, used by AbstractImageDownloader
+    QString outputFile(const QString &url, const QVariantMap &data) const;
+private:
+    Q_DECLARE_PRIVATE(AbstractImageDownloader)
+};
+
+GoogleContactImageDownloader::GoogleContactImageDownloader()
+    : AbstractImageDownloader()
+{
+}
+
+QString GoogleContactImageDownloader::staticOutputFile(const QString &url)
+{
+    // We create the identifier by appending the type to the real identifier
+    if (url.isEmpty()) {
+        return QString();
+    }
+
+    // XXX TODO: change to Google once we modify the SocialSyncInterface to include it.
+    return makeOutputFile(SocialSyncInterface::Facebook, SocialSyncInterface::Contacts, url);
+}
+
+QNetworkReply * GoogleContactImageDownloader::createReply(const QString &url,
+                                                          const QVariantMap &metadata)
+{
+    Q_D(AbstractImageDownloader);
+
+    QString accessToken = metadata.value(TOKEN_KEY).toString();
+    QNetworkRequest request(url);
+    request.setRawHeader("GData-Version", "3.0");
+    request.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
+                         QString(QLatin1String("Bearer ") + accessToken).toUtf8());
+    return d->networkAccessManager->get(request);
+}
+
+QString GoogleContactImageDownloader::outputFile(const QString &url, const QVariantMap &data) const
+{
+    Q_UNUSED(data)
+    return staticOutputFile(url);
+}
+
+//------------------
+
 GoogleContactSyncAdaptor::GoogleContactSyncAdaptor(SyncService *syncService, QObject *parent)
     : GoogleDataTypeSyncAdaptor(syncService, SyncService::Contacts, parent)
     , m_contactManager(aggregatingContactManager(this))
+    , m_workerObject(new GoogleContactImageDownloader())
 {
     setInitialActive(false);
     if (!m_contactManager) {
@@ -62,12 +123,16 @@ GoogleContactSyncAdaptor::GoogleContactSyncAdaptor(SyncService *syncService, QOb
         return;
     }
 
+    connect(m_workerObject, &AbstractImageDownloader::imageDownloaded,
+            this, &GoogleContactSyncAdaptor::imageDownloaded);
+
     // can sync, enabled
     setInitialActive(true);
 }
 
 GoogleContactSyncAdaptor::~GoogleContactSyncAdaptor()
 {
+    m_workerObject->deleteLater();
 }
 
 void GoogleContactSyncAdaptor::sync(const QString &dataType)
@@ -187,7 +252,7 @@ void GoogleContactSyncAdaptor::contactsFinishedHandler()
     } else {
         // we're finished - we should attempt to update our local cache.
         int addedCount = 0, modifiedCount = 0, removedCount = 0;
-        bool success = storeToLocal(accountId, &addedCount, &modifiedCount, &removedCount);
+        bool success = storeToLocal(accessToken, accountId, &addedCount, &modifiedCount, &removedCount);
         TRACE(SOCIALD_INFORMATION,
               QString(QLatin1String("Google contact sync with account %1 finished with result: %2: a: %3 m: %4 r: %5"))
               .arg(accountId).arg(success ? "SUCCESS" : "ERROR").arg(addedCount).arg(modifiedCount).arg(removedCount));
@@ -197,7 +262,7 @@ void GoogleContactSyncAdaptor::contactsFinishedHandler()
     decrementSemaphore(accountId);
 }
 
-bool GoogleContactSyncAdaptor::storeToLocal(int accountId, int *addedCount, int *modifiedCount, int *removedCount)
+bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount)
 {
     // steps:
     // 1) load current data from backend
@@ -210,7 +275,7 @@ bool GoogleContactSyncAdaptor::storeToLocal(int accountId, int *addedCount, int 
     QContactFetchHint noRelationships;
     noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
 
-    QList<QContact> remoteContacts = m_remoteContacts[accountId];
+    QList<QContact> remoteContacts = transformContactAvatars(m_remoteContacts[accountId], accountId, accessToken);
     QList<QContact> localContacts = m_contactManager->contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
     QList<QContact> remoteToSave;
     QList<QContactId> localToRemove;
@@ -317,6 +382,67 @@ bool GoogleContactSyncAdaptor::storeToLocal(int accountId, int *addedCount, int 
     return success;
 }
 
+QList<QContact> GoogleContactSyncAdaptor::transformContactAvatars(const QList<QContact> &remoteContacts, int accountId, const QString &accessToken)
+{
+    // The avatar detail from the remote contact will be of the form:
+    // https://www.google.com/m8/feeds/photos/media/user@gmail.com/userId
+    // We need to:
+    // 1) transform this to a local filename.
+    // 2) determine if the local file exists.
+    // 3) if not, trigger downloading the avatar.
+
+    QList<QContact> retn;
+    for (int i = 0; i < remoteContacts.size(); ++i) {
+        QContact curr = remoteContacts.at(i);
+
+        // We only deal with the first avatar from the contact.  If it has multiple,
+        // then later avatars will not be transformed.  TODO: fix this.
+        // We also only bother to do this for contacts with a GUID, as we don't
+        // store locally any contact without one.
+        if (curr.details<QContactAvatar>().size() && !curr.detail<QContactGuid>().guid().isEmpty()) {
+            // we have a remote avatar which we need to transform.
+            QContactAvatar avatar = curr.detail<QContactAvatar>();
+            QString remoteImageUrl = avatar.imageUrl().toString();
+            if (!remoteImageUrl.isEmpty()) {
+                QVariantMap metadata;
+                metadata.insert(ACCOUNT_ID_KEY, accountId);
+                metadata.insert(TOKEN_KEY, accessToken);
+
+                // transform to a local file name.
+                QString localFileName = GoogleContactImageDownloader::staticOutputFile(remoteImageUrl);
+                avatar.setImageUrl(localFileName);
+
+                // update the value in the current contact.
+                curr.saveDetail(&avatar);
+
+                // and trigger downloading the image, if it doesn't already exist.
+                // this means that we shouldn't download images needlessly after
+                // first sync, but it also means that if it updates/changes on the
+                // server side, we also won't retrieve any updated image.
+                if (!QFile::exists(localFileName)) {
+                    incrementSemaphore(accountId);
+                    m_workerObject->queue(remoteImageUrl, metadata);
+                }
+            }
+        }
+
+        retn.append(curr);
+    }
+
+    return retn;
+}
+
+void GoogleContactSyncAdaptor::imageDownloaded(const QString &url, const QString &path,
+                                               const QVariantMap &metadata)
+{
+    Q_UNUSED(url)
+    Q_UNUSED(path)
+
+    // Load finished, decrement semaphore
+    int accountId = metadata.value(ACCOUNT_ID_KEY).toInt();
+    decrementSemaphore(accountId);
+}
+
 void GoogleContactSyncAdaptor::purgeAccount(int pid)
 {
     int purgeCount = 0;
@@ -380,3 +506,5 @@ void GoogleContactSyncAdaptor::purgeAccount(int pid)
                 .arg(pid).arg(purgeCount).arg(modifiedCount));
     }
 }
+
+#include "googlecontactsyncadaptor.moc"
