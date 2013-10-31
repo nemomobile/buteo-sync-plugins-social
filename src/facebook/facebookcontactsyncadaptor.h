@@ -72,7 +72,7 @@ private:
     QMap<QString, QContact> m_contactsToSave;
     QList<QContact> m_newContactsToSave;
     FacebookContactImageDownloader *m_workerObject;
-    int m_populatingAvatarsAccountId;
+    QSet<int> m_populatingAvatarsAccountsId;
 };
 
 #endif // FACEBOOKCONTACTSYNCADAPTOR_H
