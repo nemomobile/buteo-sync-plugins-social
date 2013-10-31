@@ -23,74 +23,56 @@
 #include <QtContacts/QContactManager>
 #include <QtContacts/QContact>
 
+#include <socialcache/facebookcontactsdatabase.h>
+
 USE_CONTACTS_NAMESPACE
 
+class FacebookContactImageDownloader;
 class FacebookContactSyncAdaptor : public FacebookDataTypeSyncAdaptor
 {
     Q_OBJECT
 
 public:
     FacebookContactSyncAdaptor(SyncService *syncService, QObject *parent);
-    ~FacebookContactSyncAdaptor();
 
     void sync(const QString &dataType);
 
 protected: // implementing FacebookDataTypeSyncAdaptor interface
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
+    void finalize(int accountId);
 
 private:
     void requestData(int accountId, const QString &accessToken,
-                     const QString &fbFriendId = QString(),
-                     const QString &avatarUrl = QString(),
-                     const QString &avatarType = QString(),
                      const QString &continuationRequest = QString(),
                      const QDateTime &syncTimestamp = QDateTime());
-    void purgeAccount(int pid);
+    void purgeAccount(int accountId);
+
+Q_SIGNALS:
+    // Used internally
+    void requestQueue(const QString &url, const QVariantMap &data);
 
 private Q_SLOTS:
     void friendsFinishedHandler();
-    void avatarFinishedHandler();
+    void slotImageDownloaded(const QString &url, const QString &path, const QVariantMap &data);
 
 private:
-    QSqlDatabase m_contactSyncDb;
+    FacebookContactsDatabase m_db;
     QContactManager *m_contactManager;
 
     // for server-side removal detection.
-    QMultiMap<int, QString> m_cachedFriendIds; // local friends per account
-    QMultiMap<int, QString> m_serverFriendIds; // server-side friends per account
-    void initRemovalDetectionLists();
+    QMap<int, QSet<QString> > m_cachedFriendIds; // local friends per account
+    void initRemovalDetection(int accountId);
     void clearRemovalDetectionLists(); // to avoid spurious removal of cached data if error occurs.
     void purgeDetectedRemovals();
-    bool purgeFriend(const QString &friendId, int accountId, bool purgeContact);
+    bool purgeContacts(const QStringList &friendIds, int accountId);
     QList<QContactId> contactIdsForGuid(const QString &fbuid);
     QContact newOrExistingContact(const QString &fbuid, bool *isNewContact);
-    bool avatarUrlIsDifferent(const QString &avatarType, const QString &fbFriendId, int accountId, const QString &avatarUrl);
-    bool removeAvatarFromDisk(const QString &fbFriendId, int accountId, const QString &avatarType);
-    QString saveImageToDisk(int accountId, const QString &avatarType, const QString &fbFriendId, const QByteArray &data);
-    void updateDatabaseWithImageInfo(const QStringList &avatarTypes, const QStringList &fileNames, const QStringList &avatarUrls, const QStringList &fbFriendIds, const QList<int> &accountIds);
     void parseContactDetails(const QJsonObject &blobDetails, int accountId);
-    void requestAvatars(const QString &accessToken);
-    void saveAvatars();
-    void saveParsedContacts(int accountId);
     QMap<QString, QContact> m_contactsToSave;
-    QStringList m_newContactsToSave;
-    struct AvatarRequestData {
-        int accountId; // we have to store accountId as the cache is processed asynchronously, unlike the m_contactsToSave cache.
-        QString fbuid;
-        QString url;
-        QString type;
-    };
-    struct AvatarReplyData {
-        int accountId;
-        QString fbuid;
-        QString url;
-        QString type;
-        QByteArray data;
-    };
-    QList<AvatarRequestData> m_avatarsToRequest;
-    QList<AvatarReplyData> m_avatarsToSave;
-    int m_avatarsSemaphore;
+    QList<QContact> m_newContactsToSave;
+    FacebookContactImageDownloader *m_workerObject;
+    QSet<int> m_populatingAvatarsAccountsId;
 };
 
 #endif // FACEBOOKCONTACTSYNCADAPTOR_H

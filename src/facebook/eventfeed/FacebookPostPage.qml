@@ -276,7 +276,7 @@ Page {
 
             SocialContent {
                 avatar: container.model.icon
-                source: container.model.title
+                source: container.model.name
                 timestamp: model.timestamp
                 body: model.body
                 fullRowSocialButtons: Item {
@@ -344,7 +344,7 @@ Page {
                 visible: text.length > 0
                 elide: Text.ElideRight
                 color: Theme.highlightColor
-                font.pixelSize: Theme.fontSizeExtraSmall
+                font.pixelSize: Theme.fontSizeSmall
                 plainText: container.model.attachmentDescription
                 shortenUrl: true
             }
@@ -408,8 +408,8 @@ Page {
             allowComment: view.state === "idle"
             onEnterKeyClicked: {
                 if (replyField.text.length > 0) {
-                    facebookLikes.node.uploadComment(replyField.text)
                     view.state = "commenting"
+                    facebookLikes.node.uploadComment(replyField.text)
                 }
                 replyField.close()
             }
