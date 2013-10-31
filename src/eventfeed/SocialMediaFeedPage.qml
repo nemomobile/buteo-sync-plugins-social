@@ -15,6 +15,7 @@ Page {
     property string headerTitle
     property SilicaListView listView: _listView
     property alias updating: syncHelper.loading
+    property bool syncNotifications
 
     signal refreshTime
 
@@ -54,6 +55,12 @@ Page {
         }
     }
 
+    SyncHelper {
+        id: syncNotificationsHelper
+        socialNetwork: syncHelper.socialNetwork
+        dataType: SocialSync.Notifications
+    }
+
     ConfigurationValue {
         id: _lastSeenTime
         key: page.configKey + "_last_seen_time"
@@ -72,6 +79,9 @@ Page {
 
     function sync() {
         syncHelper.sync()
+        if (syncNotifications) {
+            syncNotificationsHelper.sync()
+        }
     }
 
     function positionViewAtBeginning() {

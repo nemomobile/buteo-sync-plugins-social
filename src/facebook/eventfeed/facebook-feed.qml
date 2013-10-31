@@ -29,6 +29,7 @@ SocialMediaFeedPage {
         Component.onCompleted: page.refreshTime.connect(formatTime)
     }
     socialNetwork: SocialSync.Facebook
+    syncNotifications: true
 
     PullDownMenu {
         flickable: page.listView
