@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.57
+Version:    0.0.58
 Release:    1
 Group:      System/Applications
 License:    TBD
@@ -29,7 +29,7 @@ BuildRequires:  qt5-qttools-linguist
 Requires: sailfish-components-accounts-qt5 >= 0.0.43
 Requires: sailfish-components-textlinking
 Requires: nemo-qml-plugin-notifications-qt5
-Requires: nemo-qml-plugin-social-qt5 >= 0.0.11
+Requires: nemo-qml-plugin-social-qt5 >= 0.0.12
 Requires: buteo-syncfw-qt5-msyncd
 Requires: mkcal-qt5
 Obsoletes: buteo-sync-plugins-google-simple <= 0.0.2
