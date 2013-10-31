@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.55
+Version:    0.0.56
 Release:    1
 Group:      System/Applications
 License:    TBD
@@ -23,7 +23,7 @@ BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
-BuildRequires:  pkgconfig(socialcache) >= 0.0.7
+BuildRequires:  pkgconfig(socialcache) >= 0.0.11
 # for lupdate
 BuildRequires:  qt5-qttools-linguist
 Requires: sailfish-components-accounts-qt5 >= 0.0.43
