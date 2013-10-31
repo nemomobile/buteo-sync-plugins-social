@@ -48,6 +48,7 @@ static const char *WHICH_FIELDS = "name,first_name,middle_name,last_name,link,we
         "picture.type(large),cover,location,username,birthday,bio,gender,significant_other"\
         ",updated_time";
 static const char *IDENTIFIER_KEY = "identifier";
+static const char *ACCOUNT_ID_KEY = "account_id";
 static const char *TYPE_KEY = "type";
 
 static QContactManager *aggregatingContactManager(QObject *parent)
@@ -162,7 +163,6 @@ bool FacebookContactImageDownloader::dbClose()
 FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Contacts, parent)
     , m_contactManager(aggregatingContactManager(this))
-    , m_populatingAvatarsAccountId(-1)
 {
     setInitialActive(false);
     if (!m_contactManager) {
@@ -205,7 +205,7 @@ void FacebookContactSyncAdaptor::beginSync(int accountId, const QString &accessT
 
 void FacebookContactSyncAdaptor::finalize(int accountId)
 {
-    if (m_populatingAvatarsAccountId == accountId) {
+    if (m_populatingAvatarsAccountsId.contains(accountId)) {
         TRACE(SOCIALD_DEBUG, QString(QLatin1String("Finished contacts sync")));
         return;
     }
@@ -224,24 +224,25 @@ void FacebookContactSyncAdaptor::finalize(int accountId)
     m_db.write();
 
     // We retrieve avatars
+    m_populatingAvatarsAccountsId.insert(accountId);
     QList<FacebookContact::ConstPtr> contacts = m_db.contacts(accountId);
     foreach (const FacebookContact::ConstPtr &contact, contacts) {
         QString identifier = contact->fbFriendId();
         if (contact->pictureFile().isEmpty() && !contact->pictureUrl().isEmpty()) {
             QVariantMap data;
             data.insert(IDENTIFIER_KEY, identifier);
+            data.insert(ACCOUNT_ID_KEY, accountId);
             data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactPicture);
             emit requestQueue(contact->pictureUrl(), data);
-            m_populatingAvatarsAccountId = accountId;
             incrementSemaphore(accountId);
         }
 
         if (contact->coverFile().isEmpty() && !contact->coverUrl().isEmpty()) {
             QVariantMap data;
             data.insert(IDENTIFIER_KEY, identifier);
+            data.insert(ACCOUNT_ID_KEY, accountId);
             data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactCover);
             emit requestQueue(contact->coverUrl(), data);
-            m_populatingAvatarsAccountId = accountId;
             incrementSemaphore(accountId);
         }
     }
@@ -377,10 +378,9 @@ void FacebookContactSyncAdaptor::slotImageDownloaded(const QString &url, const Q
 {
     Q_UNUSED(url)
     Q_UNUSED(path)
-    Q_UNUSED(data)
 
     // Load finished, we just decrement semaphore
-    decrementSemaphore(m_populatingAvatarsAccountId);
+    decrementSemaphore(data.value(ACCOUNT_ID_KEY).toInt());
 }
 
 #define SAVE_DETAIL(detail)                 \
