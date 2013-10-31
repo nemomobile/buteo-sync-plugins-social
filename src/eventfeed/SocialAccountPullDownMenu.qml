@@ -20,6 +20,7 @@ PullDownMenu {
     // are indexed, then container.currentAccountIndex contains
     // the good index, even if accounts got removed
     function refreshAccountList() {
+        // We fetch the correct accounts using "model" (coming from Facebook/TwitterPostPage)
         var subviewAccounts = subviewModel.accountList(serviceName)
         internal.accounts = []
         for (var i = 0; i < subviewAccounts.length; ++i) {
@@ -28,7 +29,9 @@ PullDownMenu {
             accountData["id"] = account.identifier
             accountData["name"] = account.displayName
             accountData["index"] = internal.accounts.length
-            internal.accounts.push(accountData)
+            if (model.accounts.indexOf(account.identifier) > -1) {
+                internal.accounts.push(accountData)
+            }
         }
         internal.accountCount = internal.accounts.length
         container.currentAccount = internal.accounts[0]["id"]
