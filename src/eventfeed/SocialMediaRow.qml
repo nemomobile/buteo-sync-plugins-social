@@ -8,6 +8,7 @@ Item {
     property string mediaName
     property string mediaCaption
     property string mediaDescription
+    property string mediaUrl
 
     anchors {
         left: parent.left
@@ -47,6 +48,20 @@ Item {
                 asynchronous: true
                 fillMode: Image.PreserveAspectCrop
                 source: model.modelData.url
+
+                MouseArea {
+                    id: imageMouseArea
+                    anchors.fill: parent
+                    enabled: mediaUrl != ""
+                    onClicked: Qt.openUrlExternally(mediaUrl)
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    visible: imageMouseArea.pressed
+                    color: Theme.highlightColor
+                    opacity: 0.3
+                }
             }
         }
 
@@ -55,7 +70,8 @@ Item {
             height: repeater.imageSize
             visible: container.imageList.length === 1
 
-            LinkedText {
+            Text {
+                id: mediaName
                 anchors {
                     top: parent.top
                     topMargin: Theme.paddingMedium
@@ -66,13 +82,22 @@ Item {
                     bottom: caption.top
                     bottomMargin: Theme.paddingSmall
                 }
-                plainText: container.mediaName
+                text: container.mediaName
                 font.pixelSize: Theme.fontSizeSmall
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
-                shortenUrl: true
                 opacity: .6
+                color: mediaNameMouseArea.pressed ? Theme.highlightColor : Theme.primaryColor
+
+                MouseArea {
+                    id: mediaNameMouseArea
+                    width: mediaName.paintedWidth
+                    height: mediaName.paintedHeight
+                    enabled: mediaUrl != ""
+                    onClicked: Qt.openUrlExternally(mediaUrl)
+                }
             }
+
 
             LinkedText {
                 id: caption
