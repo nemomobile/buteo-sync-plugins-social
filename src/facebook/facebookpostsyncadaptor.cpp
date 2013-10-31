@@ -414,6 +414,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             QString attachmentName = attachment.value(QLatin1String("name")).toString();
             QString attachmentCaption = attachment.value(QLatin1String("caption")).toString();
             QString attachmentDescription = attachment.value(QLatin1String("description")).toString();
+            QString attachmentUrl = attachment.value(QLatin1String("href")).toString();
 
             // If media was provided, we need to ensure that it's valid, else discard the post.
             if (attachment.keys().contains("media") && !attachment.value("media").isNull()) {
@@ -519,7 +520,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 
                 m_db.addFacebookPost(postId, name, body, createdTime, icon, imageList,
                                      attachmentName, attachmentCaption, attachmentDescription,
-                                     allowLike, allowComment, clientId(), accountId);
+                                     attachmentUrl, allowLike, allowComment, clientId(), accountId);
             }
         }
     } else {

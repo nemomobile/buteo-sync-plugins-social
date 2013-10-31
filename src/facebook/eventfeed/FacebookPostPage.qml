@@ -325,6 +325,7 @@ Page {
                 mediaName: container.model.attachmentName
                 mediaCaption: container.model.attachmentCaption
                 mediaDescription: container.model.attachmentDescription
+                mediaUrl: container.model.attachmentUrl
             }
 
             Item {
