@@ -11,6 +11,7 @@ SocialMediaFeedPage {
         id: twitterPostsModel
     }
     socialNetwork: SocialSync.Twitter
+    syncNotifications: true
     //: Twitter service name
     //% "Twitter"
     headerTitle: qsTrId("lipstick-jolla-home-la-twitter")
