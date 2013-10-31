@@ -27,7 +27,7 @@ Page {
 
     Connections {
         target: page.listModel
-        onCountChanged: page.listUpdated()
+        onModelUpdated: page.listUpdated()
     }
 
     Timer {
