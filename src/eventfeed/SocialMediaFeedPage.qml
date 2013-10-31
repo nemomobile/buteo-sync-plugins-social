@@ -54,6 +54,12 @@ Page {
         }
     }
 
+    SyncHelper {
+        id: syncNotifications
+        socialNetwork: syncHelper.socialNetwork
+        dataType: SocialSync.Notifications
+    }
+
     ConfigurationValue {
         id: _lastSeenTime
         key: page.configKey + "_last_seen_time"
@@ -72,6 +78,9 @@ Page {
 
     function sync() {
         syncHelper.sync()
+        if (socialNetwork === SocialSync.Twitter || socialNetwork === SocialSync.Facebook) {
+            syncNotifications.sync()
+        }
     }
 
     function positionViewAtBeginning() {
