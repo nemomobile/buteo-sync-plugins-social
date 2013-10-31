@@ -41,7 +41,6 @@ DEFINES += 'SOCIALD_SYNC_DATABASE_NAME=\'\"sociald.db\"\''
 HEADERS += \
     $$PWD/constants_p.h \
     $$PWD/buteosocialsync.h \
-    $$PWD/eventfeedhelper_p.h \
     $$PWD/socialnetworksyncadaptor.h \
     $$PWD/syncservice.h \
     $$PWD/syncservice_p.h \
