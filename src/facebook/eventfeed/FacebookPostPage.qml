@@ -276,7 +276,7 @@ Page {
 
             SocialContent {
                 avatar: container.model.icon
-                source: container.model.title
+                source: container.model.name
                 timestamp: model.timestamp
                 body: model.body
                 fullRowSocialButtons: Item {
