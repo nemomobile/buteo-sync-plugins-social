@@ -5,6 +5,8 @@ MouseArea {
     id: container
     property alias icon: icon.source
     property alias text: label.text
+    property bool down: pressed && containsMouse
+
     height: label.height + 2 * Theme.paddingLarge
     width: icon.width + Theme.paddingSmall + label.width
 
@@ -23,7 +25,7 @@ MouseArea {
             leftMargin: Theme.paddingSmall
             verticalCenter: parent.verticalCenter
         }
-        color: container.pressed ? Theme.highlightColor : Theme.primaryColor
+        color: container.down ? Theme.highlightColor : Theme.primaryColor
         opacity: container.enabled ? 1 : 0.5
         font.pixelSize: Theme.fontSizeSmall
     }
