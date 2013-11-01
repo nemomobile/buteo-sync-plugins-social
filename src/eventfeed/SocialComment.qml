@@ -9,7 +9,8 @@ Item {
     property alias extra: extra.text
     property alias extraVisible: extra.visible
 
-    height: commentColumn.height
+    height: Math.max(message.height + footer.height + extra.height,
+                     avatarPlaceholder.height)
 
     opacity: 0
     Component.onCompleted: opacity = 1
@@ -31,8 +32,8 @@ Item {
         smooth: true
     }
 
-    Column {
-        id: commentColumn
+    Label {
+        id: message
         anchors {
             left: avatar.right
             leftMargin: Theme.paddingMedium
@@ -40,31 +41,41 @@ Item {
             right: parent.right
             rightMargin: Theme.paddingLarge
         }
+        text: model.contentItem.message
+        width: parent.width
+        font.pixelSize: Theme.fontSizeSmall
+        horizontalAlignment: Text.AlignLeft
+        wrapMode: Text.Wrap
+        color: Theme.highlightColor
+    }
 
-        Label {
-            id: message
-            text: model.contentItem.message
-            width: parent.width
-            font.pixelSize: Theme.fontSizeSmall
-            horizontalAlignment: Text.AlignLeft
-            wrapMode: Text.Wrap
-            color: Theme.highlightColor
+    Label {
+        id: footer
+        anchors {
+            left: avatar.right
+            leftMargin: Theme.paddingMedium
+            top: message.bottom
+            right: parent.right
+            rightMargin: Theme.paddingLarge
         }
+        opacity: 0.6
+        color: Theme.highlightColor
+        width: parent.width
+        font.pixelSize: Theme.fontSizeExtraSmall
+    }
 
-        Label {
-            id: footer
-            opacity: 0.6
-            color: Theme.highlightColor
-            width: parent.width
-            font.pixelSize: Theme.fontSizeExtraSmall
+    Label {
+        id: extra
+        anchors {
+            left: avatar.right
+            leftMargin: Theme.paddingMedium
+            top: footer.bottom
+            right: parent.right
+            rightMargin: Theme.paddingLarge
         }
-
-        Label {
-            id: extra
-            opacity: 0.6
-            color: Theme.highlightColor
-            width: parent.width
-            font.pixelSize: Theme.fontSizeExtraSmall
-        }
+        opacity: 0.6
+        color: Theme.highlightColor
+        width: parent.width
+        font.pixelSize: Theme.fontSizeExtraSmall
     }
 }
