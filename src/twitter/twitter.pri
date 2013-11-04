@@ -30,7 +30,8 @@ twitter_eventfeed.files = $$PWD/eventfeed/TwitterPostPage.qml \
 twitter_eventfeed.path = /usr/share/lipstick/eventfeed/
 
 # lipstick notification category
-twitter_notification_category.files = twitter/x-nemo.social.twitter.mention.conf
+twitter_notification_category.files = twitter/x-nemo.social.twitter.mention.conf \
+                                      twitter/x-nemo.social.twitter.tweet.conf
 twitter_notification_category.path = /usr/share/lipstick/notificationcategories/
 
 # translations

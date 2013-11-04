@@ -1,6 +1,7 @@
 import QtQuick 2.0
 import Sailfish.Accounts 1.0
 import com.jolla.settings.accounts 1.0
+import org.nemomobile.notifications 1.0 as SystemNotifications
 
 Item {
     id: updater
@@ -19,12 +20,16 @@ Item {
         id: _keyProvider
     }
 
+    SystemNotifications.Notification {
+        id: systemNotification
+    }
+
     Account {
         id: _account
         function performSignIn() {
             if (updater.signInParams === null) {
                 console.log("SocialStatusUpdater: No sign-in params provided.")
-                updater.postRequestError(updater)
+                updater.notifyFailure()
             } else if (status === Account.Initialized && identifier !== -1) {
                 updater.signInParams.setParameter("UiPolicy", SignInParameters.NoUserInteractionPolicy)
                 signIn("Jolla", "Jolla", updater.signInParams)
@@ -35,7 +40,16 @@ Item {
         onSignInResponse: updater.signInData = data
         onSignInError: {
             console.log("SocialStatusUpdater: sign-in error: " + message + "\n")
-            updater.postRequestDone(updater)
+            updater.notifyFailure()
         }
+    }
+
+    function publishNotification(category, previewBody, previewSummary) {
+        systemNotification.category = category
+        systemNotification.previewBody = previewBody
+        systemNotification.previewSummary = previewSummary
+        systemNotification.body = previewBody
+        systemNotification.summary = previewSummary
+        systemNotification.publish()
     }
 }

@@ -10,10 +10,10 @@ SocialStatusUpdater {
         var doc = new XMLHttpRequest()
         doc.onreadystatechange = function() {
             if (doc.readyState === XMLHttpRequest.DONE) {
-                if (status === 200) {
+                if (doc.status === 200) {
                     updater.postRequestDone(updater)
                 } else {
-                    updater.postRequestError(updater)
+                    updater.notifyFailure()
                 }
             }
         }
@@ -27,6 +27,15 @@ SocialStatusUpdater {
         doc.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded')
         doc.setRequestHeader('Content-Length', postData.length)
         doc.send(postData)
+    }
+
+    function notifyFailure() {
+        publishNotification("x-nemo.social.facebook.statuspost",
+                            "\"" + updater.statusUpdate + "\"",
+                            //: Notification text for failure when posting facebook status.
+                            //% "Failed to post Facebook status"
+                            qsTrId("lipstick-jolla-home-la-failed_to_post_facebook_status"))
+        postRequestDone(updater)
     }
 
     Component.onCompleted: {
