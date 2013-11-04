@@ -297,20 +297,23 @@ Page {
                                 facebookLikes.node.unlike()
                             }
                         }
-                        icon: "image://theme/icon-m-like"
+                        icon: "image://theme/icon-m-like?"
+                              + (down ? Theme.highlightColor : Theme.primaryColor)
+
                         //: Press button to unlike
                         //% "Unlike"
                         text: view.liked ? qsTrId("lipstick-jolla-home-facebook-la-unlike")
                                            //% "Like"
                                          : qsTrId("lipstick-jolla-home-facebook-la-like")
-
                     }
 
                     SocialButton {
                         id: commentButton
                         anchors.right: parent.right
                         enabled: view.state === "idle" && container.allowComment
-                        icon: "image://theme/icon-m-chat"
+                        icon: "image://theme/icon-m-chat?"
+                              + (down ? Theme.highlightColor : Theme.primaryColor)
+
                         //: Press button to write facebook comment
                         //% "Comment"
                         text: qsTrId("lipstick-jolla-home-facebook-la-comment")

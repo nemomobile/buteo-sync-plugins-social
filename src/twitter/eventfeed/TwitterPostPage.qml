@@ -327,7 +327,9 @@ Page {
                                     twitterReplies.node.removeRetweet()
                                 }
                             }
-                            icon: "image://theme/icon-m-sync"
+                            icon: "image://theme/icon-m-sync?"
+                                  + (down ? Theme.highlightColor : Theme.primaryColor)
+
                             //% "Retweet"
                             text: !view.retweeted ? qsTrId("lipstick-jolla-home-twitter-la-retweet")
                                                     //% "Remove retweet"
@@ -341,7 +343,9 @@ Page {
                                 verticalCenter: parent.verticalCenter
                             }
                             enabled: view.state === "idle"
-                            icon: "image://theme/icon-m-chat"
+                            icon: "image://theme/icon-m-chat?"
+                                  + (down ? Theme.highlightColor : Theme.primaryColor)
+
                             //% "Reply"
                             text: qsTrId("lipstick-jolla-home-twitter-la-reply")
                             onClicked: view.forceReplyFieldActiveFocus()
@@ -350,6 +354,9 @@ Page {
 
                     MouseArea {
                         id: favorite
+
+                        property bool down: pressed && containsMouse
+
                         enabled: view.state === "idle"
                         anchors {
                             right: parent.right
@@ -369,8 +376,9 @@ Page {
                             id: icon
                             anchors.centerIn: parent
                             opacity: favorite.enabled ? 1 : 0.5
-                            source: !view.favorited ? "image://theme/icon-m-favorite"
-                                                    : "image://theme/icon-m-favorite-selected"
+                            source: (!view.favorited ? "image://theme/icon-m-favorite?"
+                                                     : "image://theme/icon-m-favorite-selected?")
+                                    + (favorite.down ? Theme.highlightColor : Theme.primaryColor)
                         }
                     }
                 }
