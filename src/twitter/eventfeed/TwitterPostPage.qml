@@ -14,6 +14,20 @@ Page {
     property string retweeter
     property QtObject twitterUser
 
+    property bool connectedToNetwork
+
+    // ------------------
+
+    property bool _needToPerformSignIn
+
+    onConnectedToNetworkChanged: {
+        if (_needToPerformSignIn) {
+            performSignIn()
+        } else {
+            twitter.populateIfInitialized()
+        }
+    }
+
     onModelChanged: {
         nodeIdentifier = model.twitterId
         twitter.consumerKey = model.consumerKey
@@ -24,6 +38,12 @@ Page {
     Account {
         id: account
         function performSignIn() {
+            if (!container.connectedToNetwork) {
+                container._needToPerformSignIn = true
+                return
+            }
+
+            container._needToPerformSignIn = false
             if (status == Account.Initialized && identifier != -1) {
                 // Reset token
                 twitter.oauthToken = ""
@@ -89,7 +109,7 @@ Page {
 
         function populateIfInitialized() {
             checkCredentialsReady()
-            if (credentialsReady) {
+            if (container.connectedToNetwork && credentialsReady) {
                 twitterReplies.repopulate()
                 // Currently TwitterUser will fail if identifier is changed.
                 // Work around by creating new user for each account.
@@ -293,6 +313,7 @@ Page {
             width: view.width
 
             SocialContent {
+                connectedToNetwork: container.connectedToNetwork
                 avatar: container.model.icon
                 source: container.model.name
                 subSource: "@" + container.model.screenName
@@ -316,6 +337,7 @@ Page {
 
                         SocialButton {
                             id: retweetButton
+                            connectedToNetwork: container.connectedToNetwork
                             anchors.verticalCenter: parent.verticalCenter
                             enabled: view.state === "idle"
                             onClicked: {
@@ -337,6 +359,7 @@ Page {
                         }
 
                         SocialButton {
+                            connectedToNetwork: container.connectedToNetwork
                             anchors {
                                 left: retweetButton.right
                                 leftMargin: Theme.paddingMedium
@@ -387,6 +410,7 @@ Page {
             SocialMediaRow {
                 id: mediaRow
                 imageList: container.model.images
+                connectedToNetwork: container.connectedToNetwork
             }
 
             // Label for retweet
@@ -431,6 +455,8 @@ Page {
         }
         footer: SocialReplyField {
             id: replyField
+            connectedToNetwork: container.connectedToNetwork
+            visible: connectedToNetwork
             enabled: view.state === "idle"
             avatar: twitterUser ? twitterUser.profileImageUrlHttps : ""
             //: Label indicating text field is used for entering a reply to Twitter post
@@ -462,8 +488,9 @@ Page {
             avatar: model.contentItem.user.profileImageUrlHttps
             message: model.contentItem.text
             footer: model.contentItem.user.name + " \u2022 "
-                    + Format.formatDate(model.contentItem.createdAt, Formatter.DurationElapsed)
+                    + Format.formatDate(model.contentItem.createdAt, Format.DurationElapsed)
             extraVisible: false
+            connectedToNetwork: container.connectedToNetwork
         }
 
         VerticalScrollDecorator {}

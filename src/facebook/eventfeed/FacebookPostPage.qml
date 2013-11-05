@@ -18,6 +18,20 @@ Page {
     property bool allowLike
     property bool allowComment
 
+    property bool connectedToNetwork
+
+    // -----------------
+
+    property bool _needToPerformSignIn
+
+    onConnectedToNetworkChanged: {
+        if (_needToPerformSignIn) {
+            performSignIn()
+        } else {
+            facebook.populateIfInitialized()
+        }
+    }
+
     onModelChanged: {
         nodeIdentifier = container.model.facebookId
         allowLike = container.model.allowLike
@@ -27,6 +41,12 @@ Page {
     Account {
         id: account
         function performSign() {
+            if (!container.connectedToNetwork) {
+                container._needToPerformSignIn = true
+                return
+            }
+
+            container._needToPerformSignIn = false
             if (status == Account.Initialized && identifier != -1) {
                 container.accessToken = ""
                 // Sign in, and get access token.
@@ -48,7 +68,7 @@ Page {
         onInitializedChanged: populateIfInitialized()
         onAccessTokenChanged: populateIfInitialized()
         function populateIfInitialized() {
-            if (initialized && accessToken.length > 0) {
+            if (container.connectedToNetwork && initialized && accessToken.length > 0) {
                 facebookMe.repopulate()
                 facebookLikes.repopulate()
             }
@@ -229,8 +249,10 @@ Page {
                 to: "loadingComments"
                 ScriptAction {
                     script: {
-                        view.updateLikers()
-                        facebookComments.repopulate()
+                        if (container.connectedToNetwork) {
+                            view.updateLikers()
+                            facebookComments.repopulate()
+                        }
                     }
                 }
             },
@@ -265,7 +287,7 @@ Page {
             Transition {
                 to: "reloadingComments"
                 ScriptAction {
-                    script: facebookComments.loadNext()
+                    script: if (container.connectedToNetwork) facebookComments.loadNext()
                 }
             }
 
@@ -275,6 +297,7 @@ Page {
             width: view.width
 
             SocialContent {
+                connectedToNetwork: container.connectedToNetwork
                 avatar: container.model.icon
                 source: container.model.name
                 timestamp: model.timestamp
@@ -287,6 +310,7 @@ Page {
                     height: childrenRect.height
 
                     SocialButton {
+                        connectedToNetwork: container.connectedToNetwork
                         anchors.left: parent.left
                         enabled: view.state === "idle" && container.allowLike
                         onClicked: {
@@ -309,6 +333,7 @@ Page {
 
                     SocialButton {
                         id: commentButton
+                        connectedToNetwork: container.connectedToNetwork
                         anchors.right: parent.right
                         enabled: view.state === "idle" && container.allowComment
                         icon: "image://theme/icon-m-chat?"
@@ -329,6 +354,7 @@ Page {
                 mediaCaption: container.model.attachmentCaption
                 mediaDescription: container.model.attachmentDescription
                 mediaUrl: container.model.attachmentUrl
+                connectedToNetwork: container.connectedToNetwork
             }
 
             Item {
@@ -396,10 +422,13 @@ Page {
             //: Number of Facebook likes for a comment
             //% "%n like(s)"
             extra: qsTrId("lipstick-jolla-home-facebook-la-number_of_likes_for_comment", model.contentItem.likeCount)
+            connectedToNetwork: container.connectedToNetwork
         }
 
         footer: SocialReplyField {
             id: replyField
+            connectedToNetwork: container.connectedToNetwork
+            visible: connectedToNetwork
             enabled: view.state === "idle" && container.allowComment
             displayMargins: facebookComments.count > 0
             //: Label indicating text field is used for entering a comment to Facebook post

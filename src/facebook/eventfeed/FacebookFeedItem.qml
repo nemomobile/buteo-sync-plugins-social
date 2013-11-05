@@ -27,6 +27,7 @@ SocialMediaFeedItem {
             mediaName: model.attachmentName
             mediaCaption: model.attachmentCaption
             mediaDescription: model.attachmentDescription
+            connectedToNetwork: item.connectedToNetwork
         }
 
         LinkedText {

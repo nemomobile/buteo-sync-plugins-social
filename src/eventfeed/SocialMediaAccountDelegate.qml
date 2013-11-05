@@ -12,6 +12,8 @@ BackgroundItem {
     property alias iconSource: icon.source
     property int unseenPostCount: feedPage ? feedPage.unseenPostCount : 0
 
+    // -------------------------
+
     onClicked: {
         pageStack.push(feedPage)
         feedPage.positionViewAtBeginning()
@@ -28,11 +30,12 @@ BackgroundItem {
         visible: item.unseenPostCount > 0
     }
 
-    Image {
+    SocialImage {
         id: icon
         x: item.height
         width: height
         height: item.height
+        connectedToNetwork: feedPage ? feedPage.connectedToNetwork : false
     }
 
     Label {

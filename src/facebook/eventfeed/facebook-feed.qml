@@ -15,13 +15,16 @@ SocialMediaFeedPage {
     //% "Facebook"
     headerTitle: qsTrId("lipstick-jolla-home-la-facebook")
     listDelegate: FacebookFeedItem {
+        connectedToNetwork: page.connectedToNetwork
         width: page.width
         imageList: model.images
         onClicked: {
             var rv = null
             try {
                 rv = pageStack.push(Qt.resolvedUrl("FacebookPostPage.qml"), {
-                                    "model": model, "subviewModel": subviewModel }, false)
+                                        "model": model, "subviewModel": subviewModel,
+                                        "connectedToNetwork": Qt.binding(function() { return page.connectedToNetwork })
+                                    }, false)
             } catch (error) {
                 console.log(error)
             }

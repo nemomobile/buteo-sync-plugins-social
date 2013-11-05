@@ -9,6 +9,7 @@ Item {
     property string mediaCaption
     property string mediaDescription
     property string mediaUrl
+    property bool connectedToNetwork
 
     anchors {
         left: parent.left
@@ -38,16 +39,16 @@ Item {
                                                                      : container.width / 4
             model: container.imageList
 
-            delegate: Image {
+            delegate: SocialImage {
                 width: repeater.imageSize
                 height: repeater.imageSize
                 sourceSize {
                     width: repeater.imageSize
                     height: repeater.imageSize
                 }
-                asynchronous: true
                 fillMode: Image.PreserveAspectCrop
                 source: model.modelData.url
+                connectedToNetwork: container.connectedToNetwork
 
                 MouseArea {
                     id: imageMouseArea

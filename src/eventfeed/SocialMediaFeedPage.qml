@@ -2,6 +2,7 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import org.nemomobile.socialcache 1.0
 import org.nemomobile.configuration 1.0
+import org.nemomobile.connectivity 1.0
 
 Page {
     id: page
@@ -16,8 +17,38 @@ Page {
     property SilicaListView listView: _listView
     property alias updating: syncHelper.loading
     property bool syncNotifications
+    property bool connectedToNetwork // ALL other connectedToNetwork properties in other pages
+                                     // are bound to this property, directly or indirectly.
 
     signal refreshTime
+
+    // -------------------------
+
+    property bool _needToSync
+    onConnectedToNetworkChanged: {
+        if (page.connectedToNetwork && page._needToSync) {
+            page._needToSync = false
+            page.sync()
+        }
+    }
+    ConnectionHelper {
+        id: connectionHelper
+        onNetworkConnectivityEstablished: page.connectedToNetwork = true
+        onNetworkConnectivityUnavailable: page.connectedToNetwork = false
+    }
+
+    Component.onCompleted: {
+        // prefill view with initial content
+        if (page.listModel) {
+            page.listModel.refresh()
+        }
+
+        // set up the connection helper.
+        // if we have an available connection, attempt to connect to it.
+        if (connectionHelper.haveNetworkConnectivity()) {
+            connectionHelper.attemptToConnectNetwork()
+        }
+    }
 
     onVisibleChanged: {
         if (visible && status === PageStatus.Active) {
@@ -49,8 +80,14 @@ Page {
         id: syncHelper
         dataType: SocialSync.Posts
         onLoadingChanged: {
-            if (!loading && page.listModel) {
-                page.listModel.refresh()
+            if (!loading) {
+                if (page.listModel) {
+                    page.listModel.refresh()
+                }
+
+                if (page.connectedToNetwork) {
+                    connectionHelper.closeNetworkSession()
+                }
             }
         }
     }
@@ -78,9 +115,22 @@ Page {
     }
 
     function sync() {
-        syncHelper.sync()
-        if (syncNotifications) {
-            syncNotificationsHelper.sync()
+        if (page.connectedToNetwork) {
+            syncHelper.sync()
+            if (syncNotifications) {
+                syncNotificationsHelper.sync()
+            }
+        } else {
+            if (page.listModel) {
+                // we may have old data in the database anyway.
+                // attempt to refresh the list model with that data.
+                page.listModel.refresh()
+            }
+
+            // also attempt to connect to the network,
+            // and queue a sync for when (if) it succeeds.
+            page._needToSync = true
+            connectionHelper.attemptToConnectNetwork()
         }
     }
 
@@ -112,6 +162,4 @@ Page {
             _lastSeenTime.value = date.getTime()
         }
     }
-
-    Component.onCompleted: sync()
 }
