@@ -12,7 +12,8 @@ SocialImage {
     }
 
     Rectangle {
-        anchors.fill: parent
+        width: parent.width
+        height: parent.height
         color: Theme.highlightColor
         opacity: 0.1
         visible: image.status !== Image.Ready

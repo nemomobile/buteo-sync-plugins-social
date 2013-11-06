@@ -15,12 +15,8 @@ SocialMediaFeedItem {
 
     Column {
         id: content
-        anchors {
-            left: item.avatar.right
-            leftMargin: Theme.paddingMedium
-            right: parent.right
-            rightMargin: Theme.paddingMedium
-        }
+        x: item.avatar.width + Theme.paddingMedium
+        width: parent.width - (item.avatar.width + Theme.paddingMedium*2)
 
         SocialMediaPreviewRow {
             imageList: item.imageList
@@ -35,29 +31,26 @@ SocialMediaFeedItem {
             Image {
                 id: retweeterIcon
                 source: "image://theme/icon-s-retweet"
-                anchors.verticalCenter: parent.verticalCenter
-                asynchronous: true
             }
-            Label {
+            Text {
                 id: retweeterField
-                anchors {
-                    left: retweeterIcon.right
-                    leftMargin: Theme.paddingSmall
-                    right: parent.right
-                }
+                x: retweeterIcon.width + Theme.paddingSmall
+                width: parent.width - (retweeterIcon.width + Theme.paddingSmall)
                 elide: Text.ElideRight
                 opacity: .6
                 text: model.retweeter
                 font.pixelSize: Theme.fontSizeSmall
+                color: Theme.primaryColor
             }
         }
 
-        Label {
+        Text {
             width: parent.width
             elide: Text.ElideRight
             opacity: .6
             text: "@" + model.screenName
             font.pixelSize: Theme.fontSizeSmall
+            color: Theme.primaryColor
         }
 
         LinkedText {
@@ -71,7 +64,7 @@ SocialMediaFeedItem {
             plainText: model.body
         }
 
-        Label {
+        Text {
             width: parent.width
             maximumLineCount: 1
             elide: Text.ElideRight
