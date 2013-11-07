@@ -11,6 +11,7 @@ Item {
     property alias body: body.text
     property alias socialButtons: socialButtonsContainer.children
     property alias fullRowSocialButtons: fullRowSocialButtonsContainer.children
+    property bool connectedToNetwork
 
     height: childrenRect.height
     anchors {
@@ -86,6 +87,7 @@ Item {
     SocialAvatar {
         id: socialAvatar
         anchors.top: header.bottom
+        connectedToNetwork: container.connectedToNetwork
     }
 
     SocialBody {

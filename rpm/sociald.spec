@@ -30,6 +30,7 @@ Requires: sailfish-components-accounts-qt5 >= 0.0.43
 Requires: sailfish-components-textlinking
 Requires: nemo-qml-plugin-notifications-qt5
 Requires: nemo-qml-plugin-social-qt5 >= 0.0.12
+Requires: nemo-qml-plugin-connectivity
 Requires: buteo-syncfw-qt5-msyncd
 Requires: mkcal-qt5
 Obsoletes: buteo-sync-plugins-google-simple <= 0.0.2

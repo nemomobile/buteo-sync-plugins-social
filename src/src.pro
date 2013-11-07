@@ -65,6 +65,7 @@ shared_eventfeed.files = \
     $$PWD/eventfeed/SocialButton.qml \
     $$PWD/eventfeed/SocialContent.qml \
     $$PWD/eventfeed/SocialMediaRow.qml \
+    $$PWD/eventfeed/SocialImage.qml \
     $$PWD/eventfeed/SocialInfoLabel.qml \
     $$PWD/eventfeed/SocialComment.qml \
     $$PWD/eventfeed/SocialReplyField.qml \

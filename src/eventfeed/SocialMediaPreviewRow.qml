@@ -11,6 +11,7 @@ Item {
     property string mediaDescription
     property real imageSize: width / 3
     property int imageCount: imageList ? imageList.length : 0
+    property bool connectedToNetwork
 
     width: parent.width
     height: childrenRect.height
@@ -25,17 +26,17 @@ Item {
         Repeater {
             id: repeater
             model: container.imageList
-            delegate: Image {
+            delegate: SocialImage {
                 width: container.imageSize
                 height: container.imageSize
                 sourceSize {
                     width: container.imageSize
                     height: container.imageSize
                 }
-                asynchronous: true
                 fillMode: Image.PreserveAspectCrop
                 visible: index < container.imageCount
                 source: visible ? modelData.url : ""
+                connectedToNetwork: container.connectedToNetwork
             }
         }
     }

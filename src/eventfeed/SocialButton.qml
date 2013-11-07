@@ -6,16 +6,18 @@ MouseArea {
     property alias icon: icon.source
     property alias text: label.text
     property bool down: pressed && containsMouse
+    property bool connectedToNetwork
 
     height: label.height + 2 * Theme.paddingLarge
     width: icon.width + Theme.paddingSmall + label.width
 
-    Image {
+    SocialImage {
         id: icon
         anchors.verticalCenter: parent.verticalCenter
         height: 32
         width: 32
         opacity: container.enabled ? 1 : 0.5
+        connectedToNetwork: container.connectedToNetwork
     }
 
     Label {

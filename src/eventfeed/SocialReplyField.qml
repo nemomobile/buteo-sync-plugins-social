@@ -3,6 +3,7 @@ import Sailfish.Silica 1.0
 
 Item {
     id: container
+    property bool connectedToNetwork
     property bool displayMargins
     property alias avatar: avatar.source
     property alias placeholderText: textField.placeholderText
@@ -40,7 +41,7 @@ Item {
         opacity: 0.1
     }
 
-    Image {
+    SocialImage {
         id: avatar
         anchors {
             left: parent.left
@@ -49,6 +50,7 @@ Item {
         }
         width: Theme.iconSizeMedium
         height: Theme.iconSizeMedium
+        connectedToNetwork: container.connectedToNetwork
     }
 
     TextField {

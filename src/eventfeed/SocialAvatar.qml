@@ -1,11 +1,10 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
 
-Image {
+SocialImage {
     id: image
     width: Theme.itemSizeExtraLarge
     height: Theme.itemSizeExtraLarge
-    asynchronous: true
     fillMode: Image.PreserveAspectCrop
     sourceSize {
         width: image.width

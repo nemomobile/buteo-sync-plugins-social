@@ -8,6 +8,7 @@ Item {
     property alias footer: footer.text
     property alias extra: extra.text
     property alias extraVisible: extra.visible
+    property bool connectedToNetwork
 
     height: Math.max(message.height + footer.height + extra.height,
                      avatarPlaceholder.height)
@@ -24,12 +25,13 @@ Item {
         opacity: 0.1
     }
 
-    Image {
+    SocialImage {
         id: avatar
         clip: true
         anchors.fill: avatarPlaceholder
         fillMode: Image.PreserveAspectCrop
         smooth: true
+        connectedToNetwork: container.connectedToNetwork
     }
 
     Label {

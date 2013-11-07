@@ -24,6 +24,7 @@ SocialMediaFeedItem {
 
         SocialMediaPreviewRow {
             imageList: item.imageList
+            connectedToNetwork: item.connectedToNetwork
         }
 
         Item {
