@@ -129,13 +129,14 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
     QByteArray replyData = reply->readAll();
+    bool isError = reply->property("isError").toBool();
 
     disconnect(reply);
     reply->deleteLater();
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
-    if (ok) {
+    if (!isError && ok) {
         QList<FacebookEvent::ConstPtr> dbEvents = m_db.events(accountId);
 
         TRACE(SOCIALD_DEBUG,

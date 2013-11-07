@@ -34,6 +34,7 @@ class FacebookContactSyncAdaptor : public FacebookDataTypeSyncAdaptor
 
 public:
     FacebookContactSyncAdaptor(SyncService *syncService, QObject *parent);
+    ~FacebookContactSyncAdaptor();
 
     void sync(const QString &dataType);
 

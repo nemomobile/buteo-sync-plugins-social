@@ -183,6 +183,12 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
     setInitialActive(m_db.isValid());
 }
 
+FacebookContactSyncAdaptor::~FacebookContactSyncAdaptor()
+{
+    delete m_workerObject;
+    delete m_contactManager;
+}
+
 void FacebookContactSyncAdaptor::sync(const QString &dataType)
 {
     // call superclass impl.
@@ -780,15 +786,15 @@ bool FacebookContactSyncAdaptor::purgeContacts(const QStringList &friendIds, int
         doomedContacts.append(doomedContact);
     }
 
-    if (!m_contactManager->removeContacts(doomedContacts)) {
+    if (doomedContacts.size() && !m_contactManager->removeContacts(doomedContacts)) {
         TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to remove friends from QtContacts db")));
+                QString(QLatin1String("error: unable to remove friends from QtContacts db for account %1")).arg(accountId));
         errorOccurred = true;
     }
 
     if (!errorOccurred) {
         TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("successfully deleted removed friends from local databases")));
+                QString(QLatin1String("successfully deleted removed friends from local databases for account %1")).arg(accountId));
         return true;
     }
 

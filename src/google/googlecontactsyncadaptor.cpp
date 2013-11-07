@@ -132,7 +132,8 @@ GoogleContactSyncAdaptor::GoogleContactSyncAdaptor(SyncService *syncService, QOb
 
 GoogleContactSyncAdaptor::~GoogleContactSyncAdaptor()
 {
-    m_workerObject->deleteLater();
+    delete m_workerObject;
+    delete m_contactManager;
 }
 
 void GoogleContactSyncAdaptor::sync(const QString &dataType)

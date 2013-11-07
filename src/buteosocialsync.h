@@ -11,6 +11,7 @@
 #include <ClientPlugin.h>
 #include <SyncResults.h>
 
+class SyncService;
 class SocialNetworkSyncAdaptor;
 
 class ButeoSocial : public Buteo::ClientPlugin
@@ -36,6 +37,7 @@ private slots:
 private:
     void updateResults(const Buteo::SyncResults &results);
     Buteo::SyncResults m_syncResults;
+    SyncService *m_syncService;
     SocialNetworkSyncAdaptor *m_socialNetworkSyncAdaptor;
     QString m_dataType;
     QString m_serviceName;
