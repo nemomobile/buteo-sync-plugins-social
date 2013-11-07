@@ -49,15 +49,11 @@ private:
 private Q_SLOTS:
     void finishedMeHandler();
     void finishedPostsHandler();
-    void contactFetchStateChangedHandler(QContactAbstractRequest::State newState);
 
 private:
     FacebookPostsDatabase m_db;
     QContactManager *m_contactManager;
-    QList<QContact> m_contacts;
     QContact m_selfContact;
-    QContactFetchRequest *m_contactFetchRequest;
-
     QMap<int, QString> m_selfFacebookUserIds;
 };
 

@@ -140,6 +140,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
 void FacebookImageSyncAdaptor::albumsFinishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    bool isError = reply->property("isError").toBool();
     int accountId = reply->property("accountId").toInt();
     QString accessToken = reply->property("accessToken").toString();
     QString fbUserId = reply->property("fbUserId").toString();
@@ -151,7 +152,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
-    if (!ok || !parsed.contains(QLatin1String("data"))) {
+    if (isError || !ok || !parsed.contains(QLatin1String("data"))) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read albums response for Facebook account with id %1"))
                 .arg(accountId));
@@ -244,6 +245,7 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
 {
 
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    bool isError = reply->property("isError").toBool();
     int accountId = reply->property("accountId").toInt();
     QString accessToken = reply->property("accessToken").toString();
     QString fbUserId = reply->property("fbUserId").toString();
@@ -255,7 +257,7 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
-    if (!ok || !parsed.contains(QLatin1String("data"))) {
+    if (isError || !ok || !parsed.contains(QLatin1String("data"))) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to read photos response for Facebook account with id %1"))
                 .arg(accountId));

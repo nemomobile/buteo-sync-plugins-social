@@ -81,11 +81,20 @@ void TwitterDataTypeSyncAdaptor::sync(const QString &dataTypeString)
 void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
+        // will be decremented by either signOnError or signOnResponse.
+        // we increment them prior to the loop below to avoid spurious
+        // "all are zero" causing setFinishedInactive() too early,
+        // if one of the accounts could not be loaded.
+        incrementSemaphore(accountId);
+    }
+
+    foreach (int accountId, accountIds) {
         Account *account = accountManager->account(accountId);
         if (!account) {
             TRACE(SOCIALD_ERROR,
                     QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
                     .arg(accountId));
+            decrementSemaphore(accountId);
             continue;
         }
         if (account->status() == Account::Initialized || account->status() == Account::Synced) {
@@ -118,18 +127,22 @@ void TwitterDataTypeSyncAdaptor::accountStatusChangeHandler()
 void TwitterDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
 {
     Account *account = qobject_cast<Account*>(sender());
+    int accountId = account->identifier();
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
-          .arg(account->identifier()) << err);
+          .arg(accountId) << err);
     setStatus(SocialNetworkSyncAdaptor::Error);
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
     if (errorType == Account::SignInCredentialsExpiredError) {
         setCredentialsNeedUpdate(account);
-        return;
-    }
-    account->disconnect(this);
+    } else {
+        account->disconnect(this);
+   }
+
+    // if we couldn't sign in, we can't sync with this account.
+    decrementSemaphore(accountId);
 }
 
 void TwitterDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -159,6 +172,8 @@ void TwitterDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
     if (!oauthToken.isEmpty() && !oauthTokenSecret.isEmpty()) {
         beginSync(accountId, oauthToken, oauthTokenSecret); // call the derived-class sync entrypoint.
     }
+
+    decrementSemaphore(accountId);
 }
 
 QString TwitterDataTypeSyncAdaptor::consumerKey()

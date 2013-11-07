@@ -56,7 +56,6 @@ SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName,
     , m_serviceName(serviceName)
     , m_syncService(syncService)
 {
-    qWarning() << "Initializing database";
     m_syncDb->initDatabase();
 }
 

@@ -78,13 +78,23 @@ void GoogleDataTypeSyncAdaptor::sync(const QString &dataTypeString)
 void GoogleDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
+        // will be decremented by either signOnError or signOnResponse.
+        // we increment them prior to the loop below to avoid spurious
+        // "all are zero" causing setFinishedInactive() too early,
+        // if one of the accounts could not be loaded.
+        incrementSemaphore(accountId);
+    }
+
+    foreach (int accountId, accountIds) {
         Account *account = accountManager->account(accountId);
         if (!account) {
             TRACE(SOCIALD_ERROR,
                   QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
                   .arg(accountId));
+            decrementSemaphore(accountId);
             continue;
         }
+
         if (account->status() == Account::Initialized || account->status() == Account::Synced) {
             signIn(account);
         } else {
@@ -114,18 +124,22 @@ void GoogleDataTypeSyncAdaptor::accountStatusChangeHandler()
 void GoogleDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
 {
     Account *account = qobject_cast<Account*>(sender());
+    int accountId = account->identifier();
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
-            .arg(account->identifier()) << err);
+            .arg(accountId) << err);
     setStatus(SocialNetworkSyncAdaptor::Error);
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
     if (errorType == Account::SignInCredentialsExpiredError) {
         setCredentialsNeedUpdate(account);
-        return;
+    } else {
+        account->disconnect(this);
     }
-    account->disconnect(this);
+
+    // if we couldn't sign in, we can't sync with this account.
+    decrementSemaphore(accountId);
 }
 
 void GoogleDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -148,6 +162,8 @@ void GoogleDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
     if (!accessToken.isEmpty()) {
         beginSync(accountId, accessToken); // call the derived-class sync entrypoint.
     }
+
+    decrementSemaphore(accountId);
 }
 
 void GoogleDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)

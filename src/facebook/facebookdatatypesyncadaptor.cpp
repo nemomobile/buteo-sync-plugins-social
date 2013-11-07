@@ -75,13 +75,23 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataTypeString)
 void FacebookDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
     foreach (int accountId, accountIds) {
+        // will be decremented by either signOnError or signOnResponse.
+        // we increment them prior to the loop below to avoid spurious
+        // "all are zero" causing setFinishedInactive() too early,
+        // if one of the accounts could not be loaded.
+        incrementSemaphore(accountId);
+    }
+
+    foreach (int accountId, accountIds) {
         Account *account = accountManager->account(accountId);
         if (!account) {
             TRACE(SOCIALD_ERROR,
                   QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
                   .arg(accountId));
+            decrementSemaphore(accountId);
             continue;
         }
+
         if (account->status() == Account::Initialized || account->status() == Account::Synced) {
             signIn(account);
         } else {
@@ -111,18 +121,22 @@ void FacebookDataTypeSyncAdaptor::accountStatusChangeHandler()
 void FacebookDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
 {
     Account *account = qobject_cast<Account*>(sender());
+    int accountId = account->identifier();
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
-            .arg(account->identifier()) << err);
+            .arg(accountId) << err);
     setStatus(SocialNetworkSyncAdaptor::Error);
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
     if (errorType == Account::SignInCredentialsExpiredError) {
         setCredentialsNeedUpdate(account);
-        return;
+    } else {
+        account->disconnect(this);
     }
-    account->disconnect(this);
+
+    // if we couldn't sign in, we can't sync with this account.
+    decrementSemaphore(accountId);
 }
 
 void FacebookDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
@@ -145,14 +159,22 @@ void FacebookDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
     if (!accessToken.isEmpty()) {
         beginSync(accountId, accessToken); // call the derived-class sync entrypoint.
     }
+
+    decrementSemaphore(accountId);
 }
 
 void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     QByteArray replyData = reply->readAll();
-    disconnect(reply);
-    reply->deleteLater();
+    int accountId = reply->property("accountId").toInt();
+
+    TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
+            .arg(SyncService::dataType(dataType)).arg(accountId).arg(err));
+    // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
+    reply->setProperty("isError", QVariant::fromValue<bool>(true));
+    // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
@@ -161,22 +183,18 @@ void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         // Password Changed on server side
         if (errorReply.value("code").toDouble() == 190 &&
                 errorReply.value("error_subcode").toDouble() == 460) {
-            int accountId = sender()->property("accountId").toInt();
+            int accountId = reply->property("accountId").toInt();
             Account *account = accountManager->account(accountId);
             if (account->status() == Account::Initialized) {
                 setCredentialsNeedUpdate(account);
             } else {
                 connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
             }
-            return;
         }
     }
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
-            .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
-    // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
-    sender()->setProperty("isError", QVariant::fromValue<bool>(true));
-    // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
+
+    disconnect(reply);
+    reply->deleteLater();
 }
 
 void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)

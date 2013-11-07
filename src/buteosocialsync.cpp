@@ -29,6 +29,8 @@ extern "C" void destroyPlugin(ButeoSocial* plugin)
 
 ButeoSocial::ButeoSocial(const QString& pluginName, const Buteo::SyncProfile& profile, Buteo::PluginCbInterface *callbackInterface)
     : ClientPlugin(pluginName, profile, callbackInterface)
+    , m_syncService(0)
+    , m_socialNetworkSyncAdaptor(0)
 {
     QString translationPath("/usr/share/translations/");
     // QTranslator life-cycles owner by ButeoSocial and removed by its own destructor
@@ -54,8 +56,8 @@ bool ButeoSocial::init()
         m_serviceName = servicePlusDataType.at(0);
         m_dataType = servicePlusDataType.at(1);
         // Database connections are created per profile
-        SyncService *syncService = new SyncService(profile, this);
-        m_socialNetworkSyncAdaptor = syncService->createAdaptor(m_serviceName, m_dataType, this);
+        m_syncService = new SyncService(profile, this);
+        m_socialNetworkSyncAdaptor = m_syncService->createAdaptor(m_serviceName, m_dataType, this);
         if (m_socialNetworkSyncAdaptor) {
             if (!m_socialNetworkSyncAdaptor->enabled()) {
                 TRACE(SOCIALD_DEBUG,
@@ -75,7 +77,11 @@ bool ButeoSocial::init()
 
 bool ButeoSocial::uninit()
 {
-    disconnect(m_socialNetworkSyncAdaptor, SIGNAL(statusChanged()), this, SLOT(syncStatusChanged()));
+    delete m_socialNetworkSyncAdaptor;
+    m_socialNetworkSyncAdaptor = 0;
+    delete m_syncService;
+    m_syncService = 0;
+
     return true;
 }
 

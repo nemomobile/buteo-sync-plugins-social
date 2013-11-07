@@ -18,8 +18,6 @@
 #include <QtCore/QUrlQuery>
 
 #include <QtContacts/QContactManager>
-#include <QtContacts/QContactFetchHint>
-#include <QtContacts/QContactFetchRequest>
 #include <QtContacts/QContact>
 #include <QtContacts/QContactName>
 #include <QtContacts/QContactNickname>
@@ -74,47 +72,26 @@ static QContactManager *aggregatingContactManager(QObject *parent)
 FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
     , m_contactManager(aggregatingContactManager(this))
-    , m_contactFetchRequest(new QContactFetchRequest(this))
 {
-
-    // fetch all contacts.  We detect which contact a event came from.
-    // XXX TODO: we really shouldn't do this, we should do it on demand instead
-    // of holding the contacts in memory.
-    if (m_contactFetchRequest) {
-        QContactFetchHint cfh;
-        cfh.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-        cfh.setDetailTypesHint(QList<QContactDetail::DetailType>()
-                               << QContactDetail::TypeAvatar
-                               << QContactDetail::TypeName
-                               << QContactDetail::TypeNickname
-                               << QContactDetail::TypePresence);
-        m_contactFetchRequest->setFetchHint(cfh);
-        m_contactFetchRequest->setManager(m_contactManager);
-        connect(m_contactFetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)), this, SLOT(contactFetchStateChangedHandler(QContactAbstractRequest::State)));
+    setInitialActive(false);
+    if (!m_contactManager) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: no aggregating contact manager exists - Facebook posts sync will be inactive")));
+        return;
     }
 
+    m_selfContact = m_contactManager->contact(m_contactManager->selfContactId());
     m_db.initDatabase();
     setInitialActive(m_db.isValid());
 }
 
 FacebookPostSyncAdaptor::~FacebookPostSyncAdaptor()
 {
+    delete m_contactManager;
 }
 
 void FacebookPostSyncAdaptor::sync(const QString &dataType)
 {
-    // refresh local cache of contacts.
-    // we do this asynchronous request in parallel to the sync code below
-    // since the network request round-trip times should far exceed the
-    // local database fetch.  If not, then the current sync run will
-    // still work, but the "post is from which contact" detection
-    // will be using slightly stale data.
-    if (m_contactFetchRequest &&
-            (m_contactFetchRequest->state() == QContactAbstractRequest::InactiveState ||
-             m_contactFetchRequest->state() == QContactAbstractRequest::FinishedState)) {
-        m_contactFetchRequest->start();
-    }
-
     // call superclass impl.
     FacebookDataTypeSyncAdaptor::sync(dataType);
 }
@@ -205,6 +182,7 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
 void FacebookPostSyncAdaptor::finishedMeHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    bool isError = reply->property("isError").toBool();
     int accountId = reply->property("accountId").toInt();
     QString accessToken = reply->property("accessToken").toString();
     QByteArray replyData = reply->readAll();
@@ -213,7 +191,7 @@ void FacebookPostSyncAdaptor::finishedMeHandler()
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
-    if (ok && parsed.contains(QLatin1String("id"))) {
+    if (!isError && ok && parsed.contains(QLatin1String("id"))) {
         QString selfUserId = parsed.value(QLatin1String("id")).toString();
         if (!m_selfFacebookUserIds.contains(accountId)) {
             m_selfFacebookUserIds.insert(accountId, selfUserId);
@@ -232,6 +210,7 @@ void FacebookPostSyncAdaptor::finishedMeHandler()
 void FacebookPostSyncAdaptor::finishedPostsHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    bool isError = reply->property("isError").toBool();
     int accountId = reply->property("accountId").toInt();
     QByteArray replyData = reply->readAll();
     disconnect(reply);
@@ -239,7 +218,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
-    if (ok && parsed.contains(QLatin1String("data"))) {
+    if (!isError && ok && parsed.contains(QLatin1String("data"))) {
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         if (!data.size()) {
@@ -292,8 +271,9 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
         }
 
         // Create a hash map for contacts
+        QList<QContact> qContacts = m_contactManager->contacts();
         QHash<QString, QContact> contactHash;
-        foreach (QContact contact, m_contacts) {
+        foreach (QContact contact, qContacts) {
              QContactName contactName = contact.detail<QContactName>();
              QStringList nameList;
              nameList.append(contactName.firstName());
@@ -532,18 +512,6 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
-}
-
-void FacebookPostSyncAdaptor::contactFetchStateChangedHandler(QContactAbstractRequest::State newState)
-{
-    // update our local cache of contacts.
-    if (m_contactFetchRequest && newState == QContactAbstractRequest::FinishedState) {
-        m_contacts = m_contactFetchRequest->contacts();
-        m_selfContact = m_contactManager->contact(m_contactManager->selfContactId());
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("finished refreshing local cache of contacts, have %1"))
-                .arg(m_contacts.size()));
-    }
 }
 
 bool FacebookPostSyncAdaptor::fromIsSelfContact(const QString &fromName, const QString &fromFbUid) const

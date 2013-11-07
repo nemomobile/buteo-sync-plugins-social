@@ -87,6 +87,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
 void FacebookNotificationSyncAdaptor::finishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    bool isError = reply->property("isError").toBool();
     int accountId = reply->property("accountId").toInt();
     QByteArray replyData = reply->readAll();
     disconnect(reply);
@@ -94,7 +95,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
-    if (ok && parsed.contains(QLatin1String("summary"))) {
+    if (!isError && ok && parsed.contains(QLatin1String("summary"))) {
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         int notificationCount = data.size();
