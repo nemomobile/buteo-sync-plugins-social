@@ -19,8 +19,7 @@ Page {
     property bool syncNotifications
     property bool connectedToNetwork // ALL other connectedToNetwork properties in other pages
                                      // are bound to this property, directly or indirectly.
-
-    signal refreshTime
+    property int refreshTimeCount: 1 // Increment this to trigger feed items to refresh times.
 
     // -------------------------
 
@@ -52,7 +51,7 @@ Page {
 
     onVisibleChanged: {
         if (visible && status === PageStatus.Active) {
-            page.refreshTime()
+            page.refreshTimeCount = page.refreshTimeCount + 1
         }
     }
 
@@ -65,13 +64,13 @@ Page {
         interval: 60000
         running: page.visible && page.status === PageStatus.Active
         repeat: true
-        onTriggered: page.refreshTime()
+        onTriggered: page.refreshTimeCount = page.refreshTimeCount + 1
     }
 
     onStatusChanged: {
         if (status === PageStatus.Active) {
             page.unseenPostCount = 0
-            page.refreshTime()
+            page.refreshTimeCount = page.refreshTimeCount + 1
             page.setLastSeenTime()
         }
     }

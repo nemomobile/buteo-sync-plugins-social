@@ -15,6 +15,7 @@ SocialMediaFeedPage {
     //% "Facebook"
     headerTitle: qsTrId("lipstick-jolla-home-la-facebook")
     listDelegate: FacebookFeedItem {
+        id: feedItem
         connectedToNetwork: page.connectedToNetwork
         width: page.width
         imageList: model.images
@@ -29,7 +30,7 @@ SocialMediaFeedPage {
                 console.log(error)
             }
         }
-        Component.onCompleted: page.refreshTime.connect(formatTime)
+        Component.onCompleted: feedItem.refreshTimeCount = Qt.binding(function() { return page.refreshTimeCount })
     }
     socialNetwork: SocialSync.Facebook
     syncNotifications: true
