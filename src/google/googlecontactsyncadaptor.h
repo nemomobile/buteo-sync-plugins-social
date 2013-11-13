@@ -39,6 +39,7 @@ public:
 protected: // implementing GoogleDataTypeSyncAdaptor interface
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
+    void finalCleanup();
 
 private:
     void requestData(int accountId,
