@@ -103,6 +103,10 @@ void GoogleDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountI
     }
 }
 
+void GoogleDataTypeSyncAdaptor::finalCleanup()
+{
+}
+
 void GoogleDataTypeSyncAdaptor::accountCredentialsChangeHandler()
 {
     Account *account = qobject_cast<Account*>(sender());

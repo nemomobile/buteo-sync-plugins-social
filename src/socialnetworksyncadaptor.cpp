@@ -122,6 +122,17 @@ void SocialNetworkSyncAdaptor::checkAccounts(SyncService::DataType dataType, QLi
 
 /*!
     \internal
+    Called when the semaphores for all accounts have been decreased
+    to zero.  This is the final function which is called prior to
+    telling buteo that the sync plugin can be destroyed.
+    The implementation MUST be synchronous.
+*/
+void SocialNetworkSyncAdaptor::finalCleanup()
+{
+}
+
+/*!
+    \internal
     Called when the semaphores decreased to 0, this method is used
     to finalize something, like saving all data to a database.
     
@@ -219,6 +230,7 @@ void SocialNetworkSyncAdaptor::setInitialActive(bool enabled)
  */
 void SocialNetworkSyncAdaptor::setFinishedInactive()
 {
+    finalCleanup();
     TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished %1 %2 sync at: %3"))
                                .arg(m_serviceName, SyncService::dataType(dataType),
                                     QDateTime::currentDateTime().toString(Qt::ISODate)));

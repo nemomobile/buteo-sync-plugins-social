@@ -39,6 +39,7 @@ protected:
     virtual void updateDataForAccounts(const QList<int> &accountIds);
     virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0;    // must at least implement these two
     virtual void beginSync(int accountId, const QString &accessToken) = 0; // must at least implement these two
+    virtual void finalCleanup();
 
 protected Q_SLOTS:
     virtual void errorHandler(QNetworkReply::NetworkError err);

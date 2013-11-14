@@ -38,8 +38,12 @@
 #include <socialcache/abstractimagedownloader.h>
 #include <socialcache/abstractimagedownloader_p.h>
 
+// sailfish-components-accounts-qt5
+#include <accountmanager.h>
+#include <account.h>
+
 #define SOCIALD_GOOGLE_CONTACTS_SYNCTARGET QLatin1String("google")
-#define SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS 500
+#define SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS 50
 
 static const char *TOKEN_KEY = "url";
 static const char *ACCOUNT_ID_KEY = "account_id";
@@ -505,6 +509,60 @@ void GoogleContactSyncAdaptor::purgeAccount(int pid)
         TRACE(SOCIALD_INFORMATION,
                 QString(QLatin1String("purged account %1 and successfully removed %2 friends (kept %3 modified friends)"))
                 .arg(pid).arg(purgeCount).arg(modifiedCount));
+    }
+}
+
+void GoogleContactSyncAdaptor::finalCleanup()
+{
+    // Synchronously find any contacts which need to be removed,
+    // which were somehow "left behind" by the sync process.
+
+    // first, get a list of all existing, enabled google account ids
+    QList<int> googleAccountIds;
+    QList<int> purgeAccountIds;
+    QList<int> currentAccountIds = accountManager->accountIdentifiers();
+    foreach (int currId, currentAccountIds) {
+        Account *act = accountManager->account(currId);
+        if (act) {
+            if (act->providerName() == QString(QLatin1String("google")) && act->enabled()
+                    && act->isEnabledWithService(QString(QLatin1String("google-sync")))) {
+                googleAccountIds.append(currId);
+            }
+            act->deleteLater();
+        }
+    }
+
+    // second, get all contacts which have been synced from Google.
+    QContactDetailFilter syncTargetFilter;
+    syncTargetFilter.setDetailType(QContactDetail::TypeSyncTarget, QContactSyncTarget::FieldSyncTarget);
+    syncTargetFilter.setValue(SOCIALD_GOOGLE_CONTACTS_SYNCTARGET);
+    QContactFetchHint noRelationships;
+    noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
+    noRelationships.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactOriginMetadata::Type);
+    QList<QContact> googleContacts = m_contactManager->contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
+
+    // third, find all account ids from which contacts have been synced
+    foreach (const QContact &contact, googleContacts) {
+        QContactOriginMetadata metadata = contact.detail<QContactOriginMetadata>();
+        QStringList accountIds = metadata.groupId().split(',');
+        foreach (const QString &accountIdStr, accountIds) {
+            int purgeId = accountIdStr.toInt();
+            if (purgeId && !googleAccountIds.contains(purgeId)
+                    && !purgeAccountIds.contains(purgeId)) {
+                // this account no longer exists, and needs to be purged.
+                purgeAccountIds.append(purgeId);
+            }
+        }
+    }
+
+    // fourth, purge all data for those account ids which no longer exist.
+    if (purgeAccountIds.size()) {
+        TRACE(SOCIALD_INFORMATION,
+            QString(QLatin1String("finalCleanup() purging contacts from %1 non-existent Google accounts"))
+            .arg(purgeAccountIds.size()));
+        foreach (int purgeId, purgeAccountIds) {
+            purgeAccount(purgeId);
+        }
     }
 }
 

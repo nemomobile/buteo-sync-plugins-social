@@ -53,6 +53,7 @@ Q_SIGNALS:
     void enabledChanged();
 
 protected:
+    virtual void finalCleanup();
     virtual void finalize(int accountId);
     QDateTime lastSyncTimestamp(const QString &serviceName, const QString &dataType,
                                 int accountId) const;
