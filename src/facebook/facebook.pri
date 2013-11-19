@@ -27,8 +27,10 @@ facebook_sync_profiles.files = \
     $$PWD/../xml/sync/facebook.Calendars.xml \
     $$PWD/../xml/sync/facebook.Contacts.xml \
     $$PWD/../xml/sync/facebook.Images.xml \
-    $$PWD/../xml/sync/facebook.Notifications.xml \
-    $$PWD/../xml/sync/facebook.Posts.xml
+    $$PWD/../xml/sync/facebook.Notifications.xml
+
+#Removed for now, see JB#13153
+#$$PWD/../xml/sync/facebook.Posts.xml
 
 # lipstick event feed subview
 facebook_eventfeed.files = $$PWD/eventfeed/FacebookPostPage.qml \
