@@ -61,7 +61,6 @@ SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName,
     , m_serviceName(serviceName)
     , m_syncService(syncService)
 {
-    m_syncDb->initDatabase();
 }
 
 SocialNetworkSyncAdaptor::~SocialNetworkSyncAdaptor()
@@ -184,7 +183,9 @@ bool SocialNetworkSyncAdaptor::updateLastSyncTimestamp(const QString &serviceNam
     // Workaround
     // TODO: do better, with a queue
     m_syncDb->addSyncTimestamp(serviceName, dataType, accountId, timestamp);
-    return m_syncDb->write();
+    m_syncDb->commit();
+    m_syncDb->wait();
+    return m_syncDb->writeStatus() == AbstractSocialCacheDatabase::Finished;
 }
 
 /*!

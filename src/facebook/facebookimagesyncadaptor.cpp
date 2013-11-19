@@ -35,7 +35,6 @@
 FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Images, parent)
 {
-    m_db.initDatabase();
     setInitialActive(m_db.isValid());
 }
 
@@ -59,6 +58,8 @@ void FacebookImageSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeId
         // first, purge the data from our database + our cache directory
         m_db.purgeAccount(pid);
     }
+    m_db.commit();
+    m_db.wait();
 }
 
 void FacebookImageSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -79,7 +80,8 @@ void FacebookImageSyncAdaptor::finalize(int accountId)
     // Remove images
     m_db.removeImages(m_removedImages);
 
-    m_db.write();
+    m_db.commit();
+    m_db.wait();
 }
 
 void FacebookImageSyncAdaptor::requestData(int accountId,
@@ -317,18 +319,18 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
             m_serverImageIds[fbAlbumId].insert(photoId);
         }
 
-        // we need to sync.  Write to the database.
+        // check if we need to sync, and write to the database.
         if (haveAlreadyCachedImage(photoId, imageSrcUrl)) {
             TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("updating previously cached photo %1: %2"))
+                    QString(QLatin1String("have previously cached photo %1: %2"))
                     .arg(photoId).arg(imageSrcUrl));
         } else {
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("caching new photo %1: %2"))
                     .arg(photoId).arg(imageSrcUrl));
+            m_db.addImage(photoId, fbAlbumId, fbUserId, createdTime, updatedTime,
+                          photoName, width, height, thumbnailUrl, imageSrcUrl);
         }
-        m_db.addImage(photoId, fbAlbumId, fbUserId, createdTime, updatedTime, photoName,
-                      width, height, thumbnailUrl, imageSrcUrl);
     }
     // perform a continuation request if required.
     QJsonObject paging = parsed.value(QLatin1String("paging")).toObject();

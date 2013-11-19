@@ -17,7 +17,6 @@
 TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *syncService, QObject *parent)
     : TwitterDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
 {
-    m_db.initDatabase();
     setInitialActive(m_db.isValid());
 }
 
@@ -31,7 +30,8 @@ void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &p
         foreach (int accountIdentifier, purgeIds) {
             m_db.removePosts(accountIdentifier);
         }
-        m_db.write();
+        m_db.commit();
+        m_db.wait();
     }
 }
 
@@ -44,7 +44,8 @@ void TwitterHomeTimelineSyncAdaptor::beginSync(int accountId, const QString &oau
 void TwitterHomeTimelineSyncAdaptor::finalize(int accountId)
 {
     Q_UNUSED(accountId)
-    m_db.write();
+    m_db.commit();
+    m_db.wait();
 }
 
 void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oauthToken, const QString &oauthTokenSecret)
