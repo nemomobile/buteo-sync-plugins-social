@@ -47,7 +47,6 @@ A daemon process which provides data synchronization with various social service
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Contacts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Images.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Notifications.xml
-%config %{_sysconfdir}/buteo/profiles/sync/facebook.Posts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Posts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/google.Contacts.xml
@@ -95,7 +94,6 @@ rm -f /home/nemo/.cache/msyncd/sync/facebook.Calendars.xml
 rm -f /home/nemo/.cache/msyncd/sync/facebook.Contacts.xml
 rm -f /home/nemo/.cache/msyncd/sync/facebook.Images.xml
 rm -f /home/nemo/.cache/msyncd/sync/facebook.Notifications.xml
-rm -f /home/nemo/.cache/msyncd/sync/facebook.Posts.xml
 rm -f /home/nemo/.cache/msyncd/sync/twitter.Notifications.xml
 rm -f /home/nemo/.cache/msyncd/sync/twitter.Posts.xml
 rm -f /home/nemo/.cache/msyncd/sync/google.Contacts.xml
