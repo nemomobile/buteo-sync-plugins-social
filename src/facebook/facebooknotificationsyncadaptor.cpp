@@ -94,11 +94,26 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
     reply->deleteLater();
 
     bool ok = false;
+
+    QDateTime lastSync = lastSyncTimestamp(serviceName(), SyncService::dataType(dataType),
+                                           accountId).toUTC();
+
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!isError && ok && parsed.contains(QLatin1String("summary"))) {
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
-        int notificationCount = data.size();
+        int notificationCount = 0;
+        foreach (const QJsonValue &entry, data) {
+            QString updatedTimeStr
+                    = entry.toObject().value(QLatin1String("updated_time")).toString();
+            QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
+            updatedTime.setTimeSpec(Qt::UTC);
+
+            if (updatedTime > lastSync) {
+                notificationCount ++;
+            }
+        }
+
         Notification *notification = existingNemoNotification(accountId);
         if (notificationCount > 0) {
             // Only publish a notification if one doesn't exist or the published notification count is different
