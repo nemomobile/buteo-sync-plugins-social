@@ -5,10 +5,9 @@ BackgroundItem {
     id: item
     property bool connectedToNetwork
     property string timestamp: model.timestamp
-    property string formattedTime
+    property string formattedTime: refreshTimeCount ? Format.formatDate(timestamp, Format.DurationElapsed) : formattedTime
     property SocialAvatar avatar: _avatar
-
-    onTimestampChanged: formatTime()
+    property int refreshTimeCount: 1
 
     SocialAvatar {
         id: _avatar
@@ -16,9 +15,5 @@ BackgroundItem {
         width: Theme.itemSizeMedium
         height: Theme.itemSizeMedium
         connectedToNetwork: item.connectedToNetwork
-    }
-
-    function formatTime() {
-        formattedTime = Format.formatDate(timestamp, Format.DurationElapsed)
     }
 }

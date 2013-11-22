@@ -402,6 +402,7 @@ Page {
                             source: (!view.favorited ? "image://theme/icon-m-favorite?"
                                                      : "image://theme/icon-m-favorite-selected?")
                                     + (favorite.down ? Theme.highlightColor : Theme.primaryColor)
+                            asynchronous: true
                         }
                     }
                 }
@@ -431,6 +432,7 @@ Page {
                         verticalCenter: retweetLabel.verticalCenter
                     }
                     source: "image://theme/icon-s-retweet"
+                    asynchronous: true
                 }
 
                 Label {

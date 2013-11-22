@@ -36,6 +36,7 @@ SocialMediaFeedItem {
                 id: retweeterIcon
                 source: "image://theme/icon-s-retweet"
                 anchors.verticalCenter: parent.verticalCenter
+                asynchronous: true
             }
             Label {
                 id: retweeterField

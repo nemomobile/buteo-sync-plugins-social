@@ -16,6 +16,7 @@ SocialMediaFeedPage {
     //% "Twitter"
     headerTitle: qsTrId("lipstick-jolla-home-la-twitter")
     listDelegate: TwitterFeedItem {
+        id: feedItem
         connectedToNetwork: page.connectedToNetwork
         width: ListView.view.width
         imageList: model.images
@@ -30,7 +31,7 @@ SocialMediaFeedPage {
                 console.log(error)
             }
         }
-        Component.onCompleted: page.refreshTime.connect(formatTime)
+        Component.onCompleted: feedItem.refreshTimeCount = Qt.binding(function() { return page.refreshTimeCount })
     }
 
     PullDownMenu {
