@@ -41,7 +41,8 @@ facebook_eventfeed.files = $$PWD/eventfeed/FacebookPostPage.qml \
 facebook_eventfeed.path = /usr/share/lipstick/eventfeed/
 
 # lipstick notification category
-facebook_notification_category.files = facebook/x-nemo.social.facebook.notification.conf
+facebook_notification_category.files = facebook/x-nemo.social.facebook.notification.conf \
+                                       facebook/x-nemo.social.facebook.statuspost.conf  
 facebook_notification_category.path = /usr/share/lipstick/notificationcategories/
 
 # translations

@@ -17,7 +17,7 @@ SocialStatusUpdater {
             twitter.oauthTokenSecret = tokenSec
         }
         if (twitter.oauthToken === "" || twitter.oauthTokenSecret === "") {
-            updater.postRequestError(posted)
+            nofityFailure()
         }
     }
 
@@ -45,15 +45,23 @@ SocialStatusUpdater {
 
         onErrorChanged: {
             console.log("TwitterUser error: " + error + "\n")
-            updater.postRequestError(updater)
+            notifyFailure()
         }
 
         onStatusChanged: {
             if (status === Twitter.Idle && updater._posted) {
-                // success
                 updater.postRequestDone(updater)
             }
         }
+    }
+
+    function notifyFailure() {
+        publishNotification("x-nemo.social.twitter.tweet",
+                            "\"" + updater.statusUpdate + "\"",
+                            //: Notification text for failure when posting a Twitter tweet.
+                            //% "Failed to post a tweet"
+                            qsTrId("lipstick-jolla-home-la-failed_to_post_tweet"))
+        postRequestError(updater)
     }
 
     Component.onCompleted: {

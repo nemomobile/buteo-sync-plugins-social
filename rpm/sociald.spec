@@ -51,7 +51,9 @@ A daemon process which provides data synchronization with various social service
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Posts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/google.Contacts.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.statuspost.conf
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.mention.conf
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.tweet.conf
 %{_datadir}/translations/sociald_eng_en.qm
 %{_datadir}/translations/lipstick-jolla-home-facebook_eng_en.qm
 %{_datadir}/translations/lipstick-jolla-home-twitter_eng_en.qm
