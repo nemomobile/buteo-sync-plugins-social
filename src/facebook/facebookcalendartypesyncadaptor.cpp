@@ -225,10 +225,12 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
             QJsonObject dataMap = data.toObject();
             QString eventId = dataMap.value(QLatin1String("eid")).toVariant().toString();
             QString startTimeString = dataMap.value(QLatin1String("start_time")).toString();
+            QString endTimeString = dataMap.value(QLatin1String("end_time")).toString();
             bool isDateOnly = dataMap.value(QLatin1String("is_date_only")).toBool();
-            KDateTime startTime;
+            KDateTime startTime, endTime;
             if (!isDateOnly) {
                 KDateTime parsedStartTime = KDateTime::fromString(startTimeString);
+                KDateTime parsedEndTime = KDateTime::fromString(endTimeString);
 
                 // Sometimes KDateTime cannot parse the timezone
                 // even if it should support it
@@ -237,10 +239,17 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
                     parsedStartTime = KDateTime::fromString(startTimeString,
                                                             QLatin1String("%Y-%m-%dT%H:%M:%S%z"));
                 }
+                if (parsedEndTime.isNull()) {
+                    parsedEndTime = KDateTime::fromString(endTimeString,
+                                                          QLatin1String("%Y-%m-%dT%H:%M:%S%z"));
+                }
                 startTime = parsedStartTime.toLocalZone();
+                endTime = parsedEndTime.toLocalZone();
             } else {
                 startTime = KDateTime::fromString(startTimeString, QLatin1String("%Y-%m-%d"));
                 startTime.setTime(QTime(0, 0));
+                endTime = KDateTime::fromString(endTimeString, QLatin1String("%Y-%m-%d"));
+                endTime.setTime(QTime(0, 0));
             }
             QString summary = dataMap.value(QLatin1String("name")).toString();
             QString description = dataMap.value(QLatin1String("description")).toString();
@@ -266,7 +275,11 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
             event->setSummary(summary);
             event->setDescription(description);
             event->setDtStart(startTime);
-            event->setAllDay(isDateOnly);
+            if (isDateOnly) {
+                event->setAllDay(true);
+            } else {
+                event->setDtEnd(endTime);
+            }
             event->setReadOnly(true);
 
             if (update) {
