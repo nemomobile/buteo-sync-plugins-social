@@ -14,12 +14,8 @@ SocialMediaFeedItem {
 
     Column {
         id: content
-        anchors {
-            left: item.avatar.right
-            leftMargin: Theme.paddingMedium
-            right: parent.right
-            rightMargin: Theme.paddingMedium
-        }
+        x: item.avatar.width + Theme.paddingMedium
+        width: parent.width - (item.avatar.width + Theme.paddingMedium*2)
 
         SocialMediaPreviewRow {
             id: mediaRow
@@ -31,7 +27,6 @@ SocialMediaFeedItem {
         }
 
         LinkedText {
-            anchors.right: parent.right
             width: parent.width
             visible: text.length > 0
             maximumLineCount: 3
@@ -55,7 +50,7 @@ SocialMediaFeedItem {
             plainText: model.body
         }
 
-        Label {
+        Text {
             id: nameField
             width: parent.width
             maximumLineCount: 3

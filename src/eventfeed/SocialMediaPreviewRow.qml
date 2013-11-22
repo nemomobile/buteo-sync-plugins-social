@@ -18,10 +18,7 @@ Item {
     visible: imageCount > 0
 
     Row {
-        anchors {
-            left: parent.left
-            right: parent.right
-        }
+        width: parent.width
 
         Repeater {
             id: repeater
@@ -35,7 +32,7 @@ Item {
                 }
                 fillMode: Image.PreserveAspectCrop
                 visible: index < container.imageCount
-                source: visible ? modelData.url : ""
+                source: modelData.url
                 connectedToNetwork: container.connectedToNetwork
             }
         }
@@ -44,7 +41,6 @@ Item {
     Label {
         width: container.imageSize * 2 - Theme.paddingSmall
         x: container.imageSize + Theme.paddingMedium
-        y: Theme.paddingMedium
         visible: container.imageCount === 1
         text: container.mediaName
         font.pixelSize: Theme.fontSizeSmall

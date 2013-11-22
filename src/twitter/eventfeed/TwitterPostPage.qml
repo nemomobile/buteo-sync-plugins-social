@@ -325,54 +325,46 @@ Page {
                         left: parent.left
                         right: parent.right
                     }
-                    height: childrenRect.height
+                    height: favorite.height
 
-                    Item {
+                    SocialButton {
+                        id: retweetButton
+                        connectedToNetwork: container.connectedToNetwork
+                        anchors.verticalCenter: parent.verticalCenter
+                        enabled: view.state === "idle"
+                        onClicked: {
+                            if (!view.retweeted) {
+                                view.state = "retweeting"
+                                twitterReplies.node.uploadRetweet()
+                            } else {
+                                view.state = "unretweeting"
+                                twitterReplies.node.removeRetweet()
+                            }
+                        }
+                        icon: "image://theme/icon-m-sync?"
+                              + (down ? Theme.highlightColor : Theme.primaryColor)
+
+                        //% "Retweet"
+                        text: !view.retweeted ? qsTrId("lipstick-jolla-home-twitter-la-retweet")
+                                                //% "Remove retweet"
+                                              : qsTrId("lipstick-jolla-home-twitter-la-unretweet")
+                    }
+
+                    SocialButton {
+                        connectedToNetwork: container.connectedToNetwork
                         anchors {
-                            left: parent.left
-                            right: favorite.left
+                            left: retweetButton.right
+                            leftMargin: Theme.paddingMedium
                             verticalCenter: parent.verticalCenter
                         }
-                        height: childrenRect.height
+                        enabled: view.state === "idle"
+                        icon: "image://theme/icon-m-chat?"
+                              + (down ? Theme.highlightColor : Theme.primaryColor)
 
-                        SocialButton {
-                            id: retweetButton
-                            connectedToNetwork: container.connectedToNetwork
-                            anchors.verticalCenter: parent.verticalCenter
-                            enabled: view.state === "idle"
-                            onClicked: {
-                                if (!view.retweeted) {
-                                    view.state = "retweeting"
-                                    twitterReplies.node.uploadRetweet()
-                                } else {
-                                    view.state = "unretweeting"
-                                    twitterReplies.node.removeRetweet()
-                                }
-                            }
-                            icon: "image://theme/icon-m-sync?"
-                                  + (down ? Theme.highlightColor : Theme.primaryColor)
-
-                            //% "Retweet"
-                            text: !view.retweeted ? qsTrId("lipstick-jolla-home-twitter-la-retweet")
-                                                    //% "Remove retweet"
-                                                  : qsTrId("lipstick-jolla-home-twitter-la-unretweet")
-                        }
-
-                        SocialButton {
-                            connectedToNetwork: container.connectedToNetwork
-                            anchors {
-                                left: retweetButton.right
-                                leftMargin: Theme.paddingMedium
-                                verticalCenter: parent.verticalCenter
-                            }
-                            enabled: view.state === "idle"
-                            icon: "image://theme/icon-m-chat?"
-                                  + (down ? Theme.highlightColor : Theme.primaryColor)
-
-                            //% "Reply"
-                            text: qsTrId("lipstick-jolla-home-twitter-la-reply")
-                            onClicked: view.forceReplyFieldActiveFocus()
-                        }
+                        //: A button for activating twitter reply field
+                        //% "Reply"
+                        text: qsTrId("lipstick-jolla-home-twitter-la-reply")
+                        onClicked: view.forceReplyFieldActiveFocus()
                     }
 
                     MouseArea {
@@ -463,7 +455,7 @@ Page {
             avatar: twitterUser ? twitterUser.profileImageUrlHttps : ""
             //: Label indicating text field is used for entering a reply to Twitter post
             //% "Reply (%0)"
-            label: qsTrId("lipstick-jolla-home-twitter-la-reply").arg(text.length)
+            label: qsTrId("lipstick-jolla-home-twitter-la-reply-field").arg(text.length)
             displayMargins: twitterReplies.count > 0
             //: Write twitter reply
             //% "Write a reply"
