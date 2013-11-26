@@ -70,8 +70,9 @@ Page {
     onStatusChanged: {
         if (status === PageStatus.Active) {
             page.unseenPostCount = 0
-            page.refreshTimeCount = page.refreshTimeCount + 1
             page.setLastSeenTime()
+        } else if (status === PageStatus.Activating) {
+            page.refreshTimeCount = page.refreshTimeCount + 1
         }
     }
 
