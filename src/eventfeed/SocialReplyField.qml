@@ -53,7 +53,7 @@ Item {
         connectedToNetwork: container.connectedToNetwork
     }
 
-    TextField {
+    TextArea {
         id: textField
         anchors {
             top: parent.top
