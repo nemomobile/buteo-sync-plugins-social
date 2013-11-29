@@ -9,6 +9,7 @@
 #include "googlecontactstream.h"
 #include "googlecontactatom.h"
 #include "syncservice.h"
+#include "constants_p.h"
 #include "trace.h"
 
 #include <QtCore/QUrl>
@@ -29,11 +30,6 @@
 #include <QtContacts/QContactGender>
 #include <QtContacts/QContactNote>
 #include <QtContacts/QContactBirthday>
-
-#include <qtcontacts-extensions.h>
-#include <qtcontacts-extensions_impl.h>
-#include <qcontactoriginmetadata_impl.h>
-#include <QContactOriginMetadata>
 
 #include <socialcache/abstractimagedownloader.h>
 #include <socialcache/abstractimagedownloader_p.h>

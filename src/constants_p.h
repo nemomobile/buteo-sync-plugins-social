@@ -8,13 +8,11 @@
 #ifndef SOCIALD_CONSTANTS_P_H
 #define SOCIALD_CONSTANTS_P_H
 
-#include <QContactName>
-#include <QContactAvatar>
-
-BEGIN_CONTACTS_NAMESPACE
-// some custom fields supported by qtcontacts-sqlite.
-static const int QContactName__FieldCustomLabel = (QContactName::FieldSuffix+1);
-static const int QContactAvatar__FieldAvatarMetadata = (QContactAvatar::FieldVideoUrl+1);
-END_CONTACTS_NAMESPACE
+// ensure we include the extensions from qtcontacts-sqlite
+// to allow access to QContactAvatar__FieldAvatarMetadata etc
+// Note that the _impl.h files need to be included once in
+// the project to ensure that the symbols exist.
+#include <qtcontacts-extensions.h>
+#include <QContactOriginMetadata>
 
 #endif

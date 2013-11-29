@@ -7,6 +7,7 @@
 
 #include "socialnetworksyncadaptor.h"
 #include "syncservice.h"
+#include "constants_p.h"
 #include "trace.h"
 
 #include <QtCore/QJsonDocument>
@@ -22,6 +23,10 @@
 #include <account.h>
 
 #include <socialnetworksyncdatabase.h>
+
+// include the implementations of the headers included in constants_p.h
+#include <qtcontacts-extensions_impl.h>
+#include <qcontactoriginmetadata_impl.h>
 
 /*
     Remarks on timestamps
