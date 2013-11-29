@@ -63,7 +63,8 @@ private:
     QList<QContactId> contactIdsForGuid(const QString &fbuid);
     QContact newOrExistingContact(const QString &fbuid, bool *isNewContact);
     QContact parseContactDetails(const QJsonObject &blobDetails, int accountId, bool *needsSaving);
-    bool storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount);
+    bool storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount, int *unchangedCount);
+    bool remoteContactDiffersFromLocal(const QContact &remoteContact, const QContact &localContact) const;
 };
 
 #endif // FACEBOOKCONTACTSYNCADAPTOR_H
