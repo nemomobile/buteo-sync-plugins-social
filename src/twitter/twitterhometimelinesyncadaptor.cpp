@@ -214,6 +214,12 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             QString screenName = user.value("screen_name").toString();
             QString icon = user.value(QLatin1String("profile_image_url")).toString();
 
+            // Twitter does some HTML substitutions in their content
+            // in JSON feeds, to prevent issues with JSONP formatting.
+            body.replace(QStringLiteral("&lt;"), QStringLiteral("<"));
+            body.replace(QStringLiteral("&gt;"), QStringLiteral(">"));
+            body.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
+
             QJsonObject entities = tweet.value(QLatin1String("entities")).toObject();
             QJsonArray mediaList = entities.value(QLatin1String("media")).toArray();
             if (!mediaList.isEmpty()) {
