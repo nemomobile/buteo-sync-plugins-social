@@ -9,6 +9,7 @@
 #include "googlecontactstream.h"
 #include "googlecontactatom.h"
 #include "syncservice.h"
+#include "constants_p.h"
 #include "trace.h"
 
 #include <QtCore/QUrl>
@@ -29,11 +30,6 @@
 #include <QtContacts/QContactGender>
 #include <QtContacts/QContactNote>
 #include <QtContacts/QContactBirthday>
-
-#include <qtcontacts-extensions.h>
-#include <qtcontacts-extensions_impl.h>
-#include <qcontactoriginmetadata_impl.h>
-#include <QContactOriginMetadata>
 
 #include <socialcache/abstractimagedownloader.h>
 #include <socialcache/abstractimagedownloader_p.h>
@@ -256,18 +252,90 @@ void GoogleContactSyncAdaptor::contactsFinishedHandler()
         requestData(accountId, accessToken, startIndex, atom->nextEntriesUrl(), lastSyncTimestamp);
     } else {
         // we're finished - we should attempt to update our local cache.
-        int addedCount = 0, modifiedCount = 0, removedCount = 0;
-        bool success = storeToLocal(accessToken, accountId, &addedCount, &modifiedCount, &removedCount);
+        int addedCount = 0, modifiedCount = 0, removedCount = 0, unchangedCount = 0;
+        bool success = storeToLocal(accessToken, accountId, &addedCount, &modifiedCount, &removedCount, &unchangedCount);
         TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("Google contact sync with account %1 finished with result: %2: a: %3 m: %4 r: %5"))
-              .arg(accountId).arg(success ? "SUCCESS" : "ERROR").arg(addedCount).arg(modifiedCount).arg(removedCount));
+              QString(QLatin1String("Google contact sync with account %1 finished with result: %2: a: %3 m: %4 r: %5 u: %6. Continuing to load avatars..."))
+              .arg(accountId).arg(success ? "SUCCESS" : "ERROR").arg(addedCount).arg(modifiedCount).arg(removedCount).arg(unchangedCount));
     }
 
     delete atom;
     decrementSemaphore(accountId);
 }
 
-bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount)
+bool GoogleContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &remoteContact, const QContact &localContact) const
+{
+    // check to see if there are any differences between the remote and the local.
+    QList<QContactDetail> remoteDetails = remoteContact.details();
+    QList<QContactDetail> localDetails = localContact.details();
+
+    // remove any problematic details from the lists (timestamps, etc)
+    for (int i = remoteDetails.size() - 1; i >= 0; --i) {
+        if (remoteDetails.at(i).type() == QContactDetail::TypeTimestamp
+                || remoteDetails.at(i).type() == QContactDetail::TypeDisplayLabel
+                || remoteDetails.at(i).type() == QContactDetail::TypePresence
+                || remoteDetails.at(i).type() == QContactDetail::TypeGlobalPresence) {
+            remoteDetails.removeAt(i);
+        }
+    }
+    for (int i = localDetails.size() - 1; i >= 0; --i) {
+        if (localDetails.at(i).type() == QContactDetail::TypeTimestamp
+                || localDetails.at(i).type() == QContactDetail::TypeDisplayLabel
+                || localDetails.at(i).type() == QContactDetail::TypePresence
+                || localDetails.at(i).type() == QContactDetail::TypeGlobalPresence) {
+            localDetails.removeAt(i);
+        }
+    }
+
+    // compare the two lists to determine if any differences exist.
+    // Note: we don't just check if the count is different, because
+    // sometimes we can have discardable duplicates which are detected in the backend.
+    foreach (const QContactDetail &rdet, remoteDetails) {
+        // find all local details of the same type
+        QList<QContactDetail> localOfSameType;
+        foreach (const QContactDetail &ldet, localDetails) {
+            if (ldet.type() == rdet.type()) {
+                localOfSameType.append(ldet);
+            }
+        }
+
+        // if none exist, then the remote differs
+        if (localOfSameType.isEmpty()) {
+            return true;
+        }
+
+        // if none of the local are the same, the remote differs
+        // note that we only ensure that the remote values have matching local values,
+        // and not vice versa, as the local backend can add extra data (eg,
+        // synthesised minimal/normalised phone number forms).
+        bool found = false;
+        foreach (const QContactDetail &ldet, localOfSameType) {
+            // we only check the "default" field values, and not LinkedDetailUris.
+            QMap<int, QVariant> lvalues = ldet.values();
+            QMap<int, QVariant> rvalues = rdet.values();
+            bool noFieldValueDifferences = true;
+            foreach (int valueKey, rvalues.keys()) {
+                if (valueKey <= QContactDetail::FieldContext) {
+                    if (rvalues.value(valueKey) != lvalues.value(valueKey)) {
+                        noFieldValueDifferences = false;
+                        break;
+                    }
+                }
+            }
+            if (noFieldValueDifferences) {
+                found = true; // this detail matches.
+            }
+        }
+        if (!found) {
+            return true;
+        }
+    }
+
+    // there were no differences between this remote and the local counterpart.
+    return false;
+}
+
+bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount, int *unchangedCount)
 {
     // steps:
     // 1) load current data from backend
@@ -298,15 +366,11 @@ bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int acco
         }
 
         bool foundLocalToModify = false;
+        bool localUnchanged = false;
         for (int j = 0; j < localContacts.size(); ++j) {
             const QContact &lc = localContacts[j];
             if (lc.detail<QContactGuid>().guid() == guid) {
-                // we clobber local data with remote data.
-                foundLocalToModify = true;
-                rc.setId(lc.id());
-                foundLocal.append(lc.id());
-
-                // however, we do need to see if more than one account provides this contact.
+                // We need to see if more than one account provides this contact.
                 QContactOriginMetadata metaData = lc.detail<QContactOriginMetadata>();
                 QStringList accountIds = metaData.groupId().split(',');
                 if (accountIds.contains(accountIdStr)) {
@@ -317,12 +381,28 @@ bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int acco
                     rc.saveDetail(&metaData);
                 }
 
+                // determine whether we need to update the locally stored contact at all
+                if (remoteContactDiffersFromLocal(rc, lc)) {
+                    // we clobber local data with remote data.
+                    foundLocalToModify = true;
+                    rc.setId(lc.id());
+                    foundLocal.append(lc.id());
+                } else {
+                    // we shouldn't need to save this contact, it already exists locally.
+                    localUnchanged = true;
+                    rc.setId(lc.id());
+                    foundLocal.append(lc.id());
+                }
+
                 break;
             }
         }
 
-        if (foundLocalToModify) {
+        if (localUnchanged) {
+            *unchangedCount += 1;
+        } else if (foundLocalToModify) {
             *modifiedCount += 1;
+            remoteToSave.append(rc);
         } else {
             // adding a new contact
             *addedCount += 1;
@@ -330,9 +410,8 @@ bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int acco
             QContactOriginMetadata metadata = rc.detail<QContactOriginMetadata>();
             metadata.setGroupId(accountIdStr);
             rc.saveDetail(&metadata);
+            remoteToSave.append(rc);
         }
-
-        remoteToSave.append(rc);
     }
 
     // any local contacts which exist without a remote counterpart

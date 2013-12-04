@@ -7,8 +7,8 @@
 
 #include "facebookcontactsyncadaptor.h"
 #include "syncservice.h"
-#include "trace.h"
 #include "constants_p.h"
+#include "trace.h"
 
 #include <QtCore/QPair>
 #include <QtCore/QFile>
@@ -37,6 +37,10 @@
 #include <QtContacts/QContactBirthday>
 
 #include <socialcache/abstractimagedownloader.h>
+
+// sailfish-components-accounts-qt5
+#include <accountmanager.h>
+#include <account.h>
 
 #define SOCIALD_FACEBOOK_CONTACTS_ID_PREFIX QLatin1String("facebook-contacts-")
 #define SOCIALD_FACEBOOK_CONTACTS_GROUPNAME QLatin1String("sociald-sync-facebook-contacts")
@@ -79,25 +83,19 @@ public:
     explicit FacebookContactImageDownloader();
     static QString staticOutputFile(const QVariantMap &data);
 protected:
-    // This is a reimplemented method, used by AbstractImageDownloader
     QString outputFile(const QString &url, const QVariantMap &data) const;
-    bool dbInit();
-    void dbQueueImage(const QString &url, const QVariantMap &data, const QString &file);
-    void dbWrite();
-    bool dbClose();
 private:
-    bool m_initialized;
-    FacebookContactsDatabase m_db;
+    Q_DECLARE_PRIVATE(AbstractImageDownloader)
 };
 
 FacebookContactImageDownloader::FacebookContactImageDownloader()
-    : AbstractImageDownloader(), m_initialized(false)
+    : AbstractImageDownloader()
 {
 }
 
 QString FacebookContactImageDownloader::staticOutputFile(const QVariantMap &data)
 {
-    // We create the identifier by appending the type to the real identifier
+    // We create the file identifier by appending the type to the real identifier
     QString identifier = data.value(QLatin1String(IDENTIFIER_KEY)).toString();
     if (identifier.isEmpty()) {
         return QString();
@@ -120,45 +118,7 @@ QString FacebookContactImageDownloader::outputFile(const QString &url,
     return staticOutputFile(data);
 }
 
-bool FacebookContactImageDownloader::dbInit()
-{
-    if (!m_initialized) {
-        m_db.initDatabase();
-        m_initialized = true;
-    }
-
-    return m_db.isValid();
-}
-
-void FacebookContactImageDownloader::dbQueueImage(const QString &url, const QVariantMap &data,
-                                                  const QString &file)
-{
-    Q_UNUSED(url)
-    QString identifier = data.value(QLatin1String(IDENTIFIER_KEY)).toString();
-    if (identifier.isEmpty()) {
-        return;
-    }
-    int type = data.value(QLatin1String(TYPE_KEY)).toInt();
-
-    switch (type) {
-    case ContactPicture:
-        m_db.updatePictureFile(identifier, file);
-        break;
-    case ContactCover:
-        m_db.updateCoverFile(identifier, file);
-        break;
-    }
-}
-
-void  FacebookContactImageDownloader::dbWrite()
-{
-    m_db.write();
-}
-
-bool FacebookContactImageDownloader::dbClose()
-{
-    return m_db.closeDatabase();
-}
+//------------------------------------------------
 
 FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService, QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Contacts, parent)
@@ -172,15 +132,10 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(SyncService *syncService,
     }
 
     m_workerObject = new FacebookContactImageDownloader();
-
-    // Establish some connections
-    connect(this, &FacebookContactSyncAdaptor::requestQueue,
-            m_workerObject, &AbstractImageDownloader::queue);
     connect(m_workerObject, &AbstractImageDownloader::imageDownloaded,
             this, &FacebookContactSyncAdaptor::slotImageDownloaded);
 
-    m_db.initDatabase();
-    setInitialActive(m_db.isValid());
+    setInitialActive(true);
 }
 
 FacebookContactSyncAdaptor::~FacebookContactSyncAdaptor()
@@ -205,57 +160,11 @@ void FacebookContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purge
 
 void FacebookContactSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
-    initRemovalDetection(accountId);
+    // clear our cache lists if necessary.
+    m_remoteContacts[accountId].clear();
+
+    // begin requesting data.
     requestData(accountId, accessToken);
-}
-
-void FacebookContactSyncAdaptor::finalize(int accountId)
-{
-    if (m_populatingAvatarsAccountsId.contains(accountId)) {
-        TRACE(SOCIALD_DEBUG, QString(QLatin1String("Finished contacts sync")));
-        return;
-    }
-
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("Finalized call: fetching avatars")));
-    purgeDetectedRemovals();
-
-    // We are finalizing: write into contacts db and avatar db
-    // If we fail, we quit.
-    if (!m_contactManager->saveContacts(&m_newContactsToSave)) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to save %1 friends for account %2"))
-                .arg(m_newContactsToSave.size()).arg(accountId));
-        return;
-    }
-    m_db.write();
-
-    // We retrieve avatars
-    m_populatingAvatarsAccountsId.insert(accountId);
-    QList<FacebookContact::ConstPtr> contacts = m_db.contacts(accountId);
-    foreach (const FacebookContact::ConstPtr &contact, contacts) {
-        QString identifier = contact->fbFriendId();
-        if (contact->pictureFile().isEmpty() && !contact->pictureUrl().isEmpty()) {
-            QVariantMap data;
-            data.insert(IDENTIFIER_KEY, identifier);
-            data.insert(ACCOUNT_ID_KEY, accountId);
-            data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactPicture);
-            emit requestQueue(contact->pictureUrl(), data);
-            incrementSemaphore(accountId);
-        }
-
-        if (contact->coverFile().isEmpty() && !contact->coverUrl().isEmpty()) {
-            QVariantMap data;
-            data.insert(IDENTIFIER_KEY, identifier);
-            data.insert(ACCOUNT_ID_KEY, accountId);
-            data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactCover);
-            emit requestQueue(contact->coverUrl(), data);
-            incrementSemaphore(accountId);
-        }
-    }
-
-    // When we arrive here, if we incremented semaphores we will continue loading
-    // and download the contact photos, but if we didn't, then the sync will
-    // be finished
 }
 
 void FacebookContactSyncAdaptor::requestData(int accountId, const QString &accessToken,
@@ -336,10 +245,6 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
                     QString(QLatin1String("no more friends received for account %1"))
                     .arg(accountId));
         } else {
-            // clear the previous batch of contacts
-            m_contactsToSave.clear();
-            m_newContactsToSave.clear();
-
             // for each friend, retrieve the detailed information.
             for (int i = 0; i < data.size(); ++i) {
                 QJsonObject currFriend = data.at(i).toObject();
@@ -354,7 +259,11 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
                 }
 
                 // parse detailed information.  Note that we batch up the saves.
-                parseContactDetails(currFriend, accountId);
+                bool needsSaving = false;
+                QContact parsedContact = parseContactDetails(currFriend, accountId, &needsSaving);
+                if (needsSaving) {
+                    m_remoteContacts[accountId].append(parsedContact);
+                }
             }
         }
 
@@ -364,6 +273,13 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
             if (!nextUrl.isEmpty() && nextUrl != continuationRequest) {
                 requestData(accountId, accessToken, nextUrl, lastSync);
             }
+        } else {
+            // we're finished - we should attempt to update our local database.
+            int addedCount = 0, modifiedCount = 0, removedCount = 0, unchangedCount = 0;
+            bool success = storeToLocal(accessToken, accountId, &addedCount, &modifiedCount, &removedCount, &unchangedCount);
+            TRACE(SOCIALD_INFORMATION,
+                  QString(QLatin1String("Facebook contact sync with account %1 finished with result: %2: a: %3 m: %4 r: %5 u: %6. Continuing to load avatars..."))
+                  .arg(accountId).arg(success ? "SUCCESS" : "ERROR").arg(addedCount).arg(modifiedCount).arg(removedCount).arg(unchangedCount));
         }
     } else {
         QString message = isError ?
@@ -372,36 +288,25 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
 
         TRACE(SOCIALD_ERROR,
               message.arg(accountId).arg(QString::fromLatin1(replyData.constData())));
-        clearRemovalDetectionLists(); // don't perform server-side removal detection.
     }
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
 }
 
-void FacebookContactSyncAdaptor::slotImageDownloaded(const QString &url, const QString &path,
-                                                     const QVariantMap &data)
-{
-    Q_UNUSED(url)
-    Q_UNUSED(path)
-
-    // Load finished, we just decrement semaphore
-    decrementSemaphore(data.value(ACCOUNT_ID_KEY).toInt());
-}
-
 #define SAVE_DETAIL(detail)                 \
     do {                                    \
-        needsSaving = true;                 \
+        *needsSaving = true;                \
         newOrExisting.saveDetail(&detail);  \
     } while (0)
 
 #define REMOVE_DETAIL(detail)               \
     do {                                    \
-        needsSaving = true;                 \
+        *needsSaving = true;                \
         newOrExisting.removeDetail(&detail);\
     } while (0)
 
-void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDetails, int accountId)
+QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDetails, int accountId, bool *needsSaving)
 {
     if (blobDetails.contains(QLatin1String("id"))) {
         // we expect friend user data.
@@ -426,37 +331,36 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
         QString gender = blobDetails.value(QLatin1String("gender")).toString();
 
         // now build the appropriate QtContacts details etc.
+        *needsSaving = false;
         bool isNewContact = false;
-        bool needsSaving = false;
-        bool needsSavingInDb = !m_cachedFriendIds.value(accountId).contains(fbuid);
         QContact newOrExisting = newOrExistingContact(fbuid, &isNewContact);
 
         // sync target is unique
         QContactSyncTarget contactSyncTarget = newOrExisting.detail<QContactSyncTarget>();
         if (contactSyncTarget.syncTarget().isEmpty()) {
             // must be a "new" contact - set the sync target.
-            needsSaving = true;
+            *needsSaving = true;
             contactSyncTarget.setSyncTarget(SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET);
             if (!newOrExisting.saveDetail(&contactSyncTarget)) {
                 TRACE(SOCIALD_ERROR,
                         QString(QLatin1String("error: unable to save updated sync target for friend %1 of account %2"))
                         .arg(name).arg(accountId));
-                clearRemovalDetectionLists(); // don't perform server-side removal detection.
-                return;
+                *needsSaving = false;
+                return QContact();
             }
         }
 
         // guid is unique
         QContactGuid contactGuid = newOrExisting.detail<QContactGuid>();
         if (contactGuid.guid() != fbuid) {
-            needsSaving = true;
+            *needsSaving = true;
             contactGuid.setGuid(fbuid);
             if (!newOrExisting.saveDetail(&contactGuid)) {
                 TRACE(SOCIALD_ERROR,
                         QString(QLatin1String("error: unable to save updated guid for friend %1 of account %2"))
                         .arg(name).arg(accountId));
-                clearRemovalDetectionLists(); // don't perform server-side removal detection.
-                return;
+                *needsSaving = false;
+                return QContact();
             }
         }
 
@@ -464,7 +368,7 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
         QContactName contactName = newOrExisting.detail<QContactName>();
         if (!firstName.isEmpty() || !middleName.isEmpty() || !lastName.isEmpty()) {
             if (contactName.firstName() != firstName || contactName.middleName() != middleName || contactName.lastName() != lastName) {
-                needsSaving = true;
+                *needsSaving = true;
                 contactName.setFirstName(firstName);
                 contactName.setMiddleName(middleName);
                 contactName.setLastName(lastName);
@@ -472,8 +376,8 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
                     TRACE(SOCIALD_ERROR,
                             QString(QLatin1String("error: unable to save updated name for friend %1 of account %2"))
                             .arg(name).arg(accountId));
-                    clearRemovalDetectionLists(); // don't perform server-side removal detection.
-                    return;
+                    *needsSaving = false;
+                    return QContact();
                 }
             }
         } else if (!name.isEmpty()) {
@@ -541,12 +445,6 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
         QList<QContactAvatar> contactAvatars = newOrExisting.details<QContactAvatar>();
         bool foundCover = false;
         bool foundPicture = false;
-
-        FacebookContact::ConstPtr contact;
-        if (m_cachedFriendIds.value(accountId).contains(fbuid)) {
-            contact = m_db.contact(fbuid, accountId);
-        }
-
         foreach (const QContactAvatar &avatar, contactAvatars) {
             if (avatar.value(QContactAvatar__FieldAvatarMetadata) == QLatin1String("cover")) {
                 foundCover = true;
@@ -558,18 +456,15 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
                     QVariantMap data;
                     data.insert(IDENTIFIER_KEY, fbuid);
                     data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactCover);
+                    data.insert(ACCOUNT_ID_KEY, accountId);
+                    QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(data);
+                    if (!QFile::exists(avatarFileName)) { // XXX TODO: staticOutputFile() should take URL_KEY as parameter, else server-side change will not be detected!
+                        m_queuedAvatarDownloads[accountId].append(qMakePair<QString, QVariantMap>(cover, data));
+                    }
 
                     QContactAvatar contactAvatar = avatar;
-                    contactAvatar.setImageUrl(FacebookContactImageDownloader::staticOutputFile(data));
+                    contactAvatar.setImageUrl(avatarFileName);
                     SAVE_DETAIL(contactAvatar);
-                }
-
-                // We reset the image file: we want it to be downloaded again
-                if (m_cachedFriendIds.value(accountId).contains(fbuid)) {
-                    if (contact->coverUrl() != cover) {
-                        m_db.updateCoverFile(fbuid, QString());
-                        needsSavingInDb = true;
-                    }
                 }
             } else if (avatar.value(QContactAvatar__FieldAvatarMetadata) == QLatin1String("picture")) {
                 foundPicture = true;
@@ -581,44 +476,47 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
                     QVariantMap data;
                     data.insert(IDENTIFIER_KEY, fbuid);
                     data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactPicture);
+                    data.insert(ACCOUNT_ID_KEY, accountId);
+                    QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(data);
+                    if (!QFile::exists(avatarFileName)) { // XXX TODO: staticOutputFile() should take URL_KEY as parameter, else server-side change will not be detected!
+                        m_queuedAvatarDownloads[accountId].append(qMakePair<QString, QVariantMap>(picture, data));
+                    }
 
                     QContactAvatar contactAvatar = avatar;
-                    contactAvatar.setImageUrl(FacebookContactImageDownloader::staticOutputFile(data));
+                    contactAvatar.setImageUrl(avatarFileName);
                     SAVE_DETAIL(contactAvatar);
-                }
-
-                // We reset the image file: we want it to be downloaded again
-                if (m_cachedFriendIds.value(accountId).contains(fbuid)) {
-                    if (contact->pictureUrl() != picture) {
-                        m_db.updatePictureFile(fbuid, QString());
-                        needsSavingInDb = true;
-                    }
                 }
             }
         }
         if (!foundCover && !cover.isEmpty()) {
-
             QVariantMap data;
             data.insert(IDENTIFIER_KEY, fbuid);
             data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactCover);
+            data.insert(ACCOUNT_ID_KEY, accountId);
+            QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(data);
+            if (!QFile::exists(avatarFileName)) { // XXX TODO: staticOutputFile() should take URL_KEY as parameter, else server-side change will not be detected!
+                m_queuedAvatarDownloads[accountId].append(qMakePair<QString, QVariantMap>(cover, data));
+            }
 
-            // needs to be updated.
-            // note: we don't download the cover image here; the contacts app should
-            // do so only for contacts which we need the cover of.
+            // needs to be updated.  we set the value to be the (future) image filename.
             QContactAvatar contactAvatar;
-            contactAvatar.setImageUrl(FacebookContactImageDownloader::staticOutputFile(data));
+            contactAvatar.setImageUrl(avatarFileName);
             contactAvatar.setValue(QContactAvatar__FieldAvatarMetadata, QLatin1String("cover"));
             SAVE_DETAIL(contactAvatar);
         }
         if (!foundPicture && !picture.isEmpty()) {
-
             QVariantMap data;
             data.insert(IDENTIFIER_KEY, fbuid);
             data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactPicture);
+            data.insert(ACCOUNT_ID_KEY, accountId);
+            QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(data);
+            if (!QFile::exists(avatarFileName)) { // XXX TODO: staticOutputFile() should take URL_KEY as parameter, else server-side change will not be detected!
+                m_queuedAvatarDownloads[accountId].append(qMakePair<QString, QVariantMap>(picture, data));
+            }
 
             // needs to be updated.  we set the value to be the (future) image filename.
             QContactAvatar contactAvatar;
-            contactAvatar.setImageUrl(FacebookContactImageDownloader::staticOutputFile(data));
+            contactAvatar.setImageUrl(avatarFileName);
             contactAvatar.setValue(QContactAvatar__FieldAvatarMetadata, QLatin1String("picture"));
             SAVE_DETAIL(contactAvatar);
         }
@@ -678,27 +576,16 @@ void FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blobDeta
         // XXX TODO: Location and Significant Other
 
         // Now that we've built up the contact, flag it for saving to the database if required.
-        if (needsSaving) {
-            m_contactsToSave.insert(fbuid, newOrExisting);
-            if (isNewContact) {
-                m_newContactsToSave.append(newOrExisting);
-            }
-        }
-
-        if (m_cachedFriendIds.value(accountId).contains(fbuid)) {
-            m_cachedFriendIds[accountId].remove(fbuid);
-        }
-
-        if (needsSavingInDb) {
-            m_db.addSyncedContact(fbuid, accountId, picture, cover);
-        }
+        return newOrExisting; // will only be saved if *needsSaving == true.
     } else {
         // error occurred during request.
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to parse friend details, got: %1"))
                 .arg(QStringList(blobDetails.keys()).join(QChar(','))));
-        clearRemovalDetectionLists(); // don't perform server-side removal detection.
     }
+
+    *needsSaving = false;
+    return QContact();
 }
 
 QList<QContactId> FacebookContactSyncAdaptor::contactIdsForGuid(const QString &fbuid)
@@ -738,81 +625,352 @@ QContact FacebookContactSyncAdaptor::newOrExistingContact(const QString &fbuid, 
     return m_contactManager->contact(cids.at(0));
 }
 
-void FacebookContactSyncAdaptor::initRemovalDetection(int accountId)
+void FacebookContactSyncAdaptor::slotImageDownloaded(const QString &url, const QString &path,
+                                                     const QVariantMap &data)
 {
-    clearRemovalDetectionLists();
-    QStringList contactIds = m_db.contactIds(accountId);
-    foreach (const QString contactId, contactIds) {
-        m_cachedFriendIds[accountId].insert(contactId);
-    }
+    Q_UNUSED(url)
+    Q_UNUSED(path)
+
+    // Load finished, we just decrement semaphore
+    decrementSemaphore(data.value(ACCOUNT_ID_KEY).toInt());
 }
 
-void FacebookContactSyncAdaptor::purgeDetectedRemovals()
+bool FacebookContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &remoteContact, const QContact &localContact) const
 {
-    foreach (int accountId, m_cachedFriendIds.keys()) {
-        QStringList fbContactIds = m_cachedFriendIds.value(accountId).toList();
-        purgeContacts(fbContactIds, accountId);
+    // check to see if there are any differences between the remote and the local.
+    QList<QContactDetail> remoteDetails = remoteContact.details();
+    QList<QContactDetail> localDetails = localContact.details();
 
-        m_db.removeContacts(fbContactIds);
+    // remove any problematic details from the lists (timestamps, etc)
+    for (int i = remoteDetails.size() - 1; i >= 0; --i) {
+        if (remoteDetails.at(i).type() == QContactDetail::TypeTimestamp
+                || remoteDetails.at(i).type() == QContactDetail::TypeDisplayLabel
+                || remoteDetails.at(i).type() == QContactDetail::TypePresence
+                || remoteDetails.at(i).type() == QContactDetail::TypeGlobalPresence) {
+            remoteDetails.removeAt(i);
+        }
     }
-}
+    for (int i = localDetails.size() - 1; i >= 0; --i) {
+        if (localDetails.at(i).type() == QContactDetail::TypeTimestamp
+                || localDetails.at(i).type() == QContactDetail::TypeDisplayLabel
+                || localDetails.at(i).type() == QContactDetail::TypePresence
+                || localDetails.at(i).type() == QContactDetail::TypeGlobalPresence) {
+            localDetails.removeAt(i);
+        }
+    }
 
-bool FacebookContactSyncAdaptor::purgeContacts(const QStringList &friendIds, int accountId)
-{
-
-    bool errorOccurred = false;
-    QList<QContactId> doomedContacts;
-    foreach (const QString friendId, friendIds) {
-        // We need to remove the contact from Qt Contacts
-        QList<QContactId> doomedContact = contactIdsForGuid(friendId);
-        if (doomedContact.length() < 1) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("error: friend %1 doesn't exist in QtContacts db"))
-                  .arg(friendId));
-            // flow on and purge the friend from the cache db nonetheless.
-            // this is not a fatal error, as we aren't leaving stale data anywhere.
-        } else {
-            if (doomedContact.length() > 1) {
-                TRACE(SOCIALD_ERROR,
-                      QString(QLatin1String("error: friend %1 represented multiple times in QtContacts db"))
-                      .arg(friendId));
-                // flow on and purge all of them nonetheless
-                // this is not a fatal error, as we aren't leaving stale data anywhere.
+    // compare the two lists to determine if any differences exist.
+    // Note: we don't just check if the count is different, because
+    // sometimes we can have discardable duplicates which are detected in the backend.
+    foreach (const QContactDetail &rdet, remoteDetails) {
+        // find all local details of the same type
+        QList<QContactDetail> localOfSameType;
+        foreach (const QContactDetail &ldet, localDetails) {
+            if (ldet.type() == rdet.type()) {
+                localOfSameType.append(ldet);
             }
-
-            // delete the contact (or contacts in the above case...)
         }
 
-        doomedContacts.append(doomedContact);
+        // if none exist, then the remote differs
+        if (localOfSameType.isEmpty()) {
+            return true;
+        }
+
+        // if none of the local are the same, the remote differs
+        // note that we only ensure that the remote values have matching local values,
+        // and not vice versa, as the local backend can add extra data (eg,
+        // synthesised minimal/normalised phone number forms).
+        bool found = false;
+        foreach (const QContactDetail &ldet, localOfSameType) {
+            // we only check the "default" field values, and not LinkedDetailUris.
+            QMap<int, QVariant> lvalues = ldet.values();
+            QMap<int, QVariant> rvalues = rdet.values();
+            bool noFieldValueDifferences = true;
+            foreach (int valueKey, rvalues.keys()) {
+                if (valueKey <= QContactDetail::FieldContext) {
+                    if (rvalues.value(valueKey) != lvalues.value(valueKey)) {
+                        noFieldValueDifferences = false;
+                        break;
+                    }
+                }
+            }
+            if (noFieldValueDifferences) {
+                found = true; // this detail matches.
+            }
+        }
+        if (!found) {
+            return true;
+        }
     }
 
-    if (doomedContacts.size() && !m_contactManager->removeContacts(doomedContacts)) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to remove friends from QtContacts db for account %1")).arg(accountId));
-        errorOccurred = true;
-    }
-
-    if (!errorOccurred) {
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("successfully deleted removed friends from local databases for account %1")).arg(accountId));
-        return true;
-    }
-
+    // there were no differences between this remote and the local counterpart.
     return false;
 }
 
-void FacebookContactSyncAdaptor::purgeAccount(int accountId)
+bool FacebookContactSyncAdaptor::storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount, int *unchangedCount)
 {
-    QStringList contactIds = m_db.contactIds(accountId);
-    purgeContacts(contactIds, accountId);
-    m_db.removeContacts(accountId);
+    Q_UNUSED(accessToken)
+
+    // steps:
+    // 1) load current data from backend
+    // 2) determine delta (add/mod/rem)
+    // 3) apply delta
+
+    QContactDetailFilter syncTargetFilter;
+    syncTargetFilter.setDetailType(QContactDetail::TypeSyncTarget, QContactSyncTarget::FieldSyncTarget);
+    syncTargetFilter.setValue(SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET);
+    QContactFetchHint noRelationships;
+    noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
+
+    QList<QContact> remoteContacts = m_remoteContacts[accountId];
+    QList<QContact> localContacts = m_contactManager->contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
+    QList<QContact> remoteToSave;
+    QList<QContactId> localToRemove;
+    QList<QContactId> foundLocal;
+    QString accountIdStr = QString::number(accountId);
+
+    // we always use the remote server's data in conflicts
+    for (int i = 0; i < remoteContacts.size(); ++i) {
+        QContact rc = remoteContacts[i];
+        QString guid = rc.detail<QContactGuid>().guid();
+        if (guid.isEmpty()) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("skipping: cannot store remote Facebook contact with no guid:")) << rc);
+            continue;
+        }
+
+        bool foundLocalToModify = false;
+        bool localUnchanged = false;
+        for (int j = 0; j < localContacts.size(); ++j) {
+            const QContact &lc = localContacts[j];
+            if (lc.detail<QContactGuid>().guid() == guid) {
+                // We need to see if more than one account provides this contact.
+                QContactOriginMetadata metaData = lc.detail<QContactOriginMetadata>();
+                QStringList accountIds = metaData.groupId().split(',');
+                if (accountIds.contains(accountIdStr)) {
+                    rc.saveDetail(&metaData);
+                } else {
+                    accountIds.append(accountIdStr);
+                    metaData.setGroupId(accountIds.join(QString::fromLatin1(",")));
+                    rc.saveDetail(&metaData);
+                }
+
+                // determine whether we need to update the locally stored contact at all
+                if (remoteContactDiffersFromLocal(rc, lc)) {
+                    // we clobber local data with remote data.
+                    foundLocalToModify = true;
+                    rc.setId(lc.id());
+                    foundLocal.append(lc.id());
+                } else {
+                    // we shouldn't need to save this contact, it already exists locally.
+                    localUnchanged = true;
+                    rc.setId(lc.id());
+                    foundLocal.append(lc.id());
+                }
+
+                break;
+            }
+        }
+
+        if (localUnchanged) {
+            *unchangedCount += 1;
+        } else if (foundLocalToModify) {
+            *modifiedCount += 1;
+            remoteToSave.append(rc);
+        } else {
+            // adding a new contact
+            *addedCount += 1;
+            // need new metadata.
+            QContactOriginMetadata metadata = rc.detail<QContactOriginMetadata>();
+            metadata.setGroupId(accountIdStr);
+            rc.saveDetail(&metadata);
+            remoteToSave.append(rc);
+        }
+    }
+
+    // any local contacts which exist without a remote counterpart
+    // are "stale" and should be removed.  Alternatively, if the
+    // contact is provided by a different account as well, we need
+    // to remove this account from the metadata.
+    for (int i = 0; i < localContacts.size(); ++i) {
+        QContact lc = localContacts.at(i);
+        if (!foundLocal.contains(lc.id())) {
+            QContactOriginMetadata metadata = lc.detail<QContactOriginMetadata>();
+            QStringList accountIds = metadata.groupId().split(',');
+            if (accountIds.contains(accountIdStr)) {
+                // this account used to provide this contact, but now does not.
+                accountIds.removeAll(accountIdStr);
+                if (accountIds.isEmpty()) {
+                    // no other account provides this contact, it can be removed.
+                    localToRemove.append(lc.id());
+                    *removedCount += 1;
+                } else {
+                    // at least one other account provides this contact also.
+                    metadata.setGroupId(accountIds.join(QString::fromLatin1(",")));
+                    lc.saveDetail(&metadata);
+                    remoteToSave.append(lc); // actually updating a local.
+                    *removedCount += 1;      // but we consider it a removal from the account's pov.
+                }
+            } else {
+                // it was always provided by some other account only.  Don't modify this one.
+            }
+        }
+    }
+
+    // now write the changes to the database.
+    bool success = true;
+    if (remoteToSave.size()) {
+        success = m_contactManager->saveContacts(&remoteToSave);
+        if (!success) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("Failed to save contacts: %1 - with account %2"))
+                  .arg(m_contactManager->error()).arg(accountId));
+        }
+    }
+    if (localToRemove.size()) {
+        success = m_contactManager->removeContacts(localToRemove);
+        if (!success) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("Failed to remove stale contacts: %1 - with account %2"))
+                  .arg(m_contactManager->error()).arg(accountId));
+        }
+    }
+
+    // and trigger downloading of avatars for friend contacts for this account.
+    const QList<QPair<QString, QVariantMap> > &queuedDownloads = m_queuedAvatarDownloads[accountId];
+    for (int i = 0; i < queuedDownloads.size(); ++i) {
+        incrementSemaphore(accountId);
+        const QPair<QString, QVariantMap> &queuedAvatarDownload = queuedDownloads[i];
+        m_workerObject->queue(queuedAvatarDownload.first, queuedAvatarDownload.second);
+    }
+
+    // done.
+    m_queuedAvatarDownloads[accountId].clear();
+    m_remoteContacts[accountId].clear();
+    return success;
 }
 
-void FacebookContactSyncAdaptor::clearRemovalDetectionLists()
+void FacebookContactSyncAdaptor::finalize(int accountId)
 {
-    // This function should be called if a request errors out.
-    // If the lists are empty, we won't purge anything.
-    m_cachedFriendIds.clear();
+    TRACE(SOCIALD_DEBUG, QString(QLatin1String("Finished Facebook contacts sync for account %1")).arg(accountId));
+}
+
+void FacebookContactSyncAdaptor::purgeAccount(int pid)
+{
+    int purgeCount = 0;
+    int modifiedCount = 0;
+
+    QContactDetailFilter syncTargetFilter;
+    syncTargetFilter.setDetailType(QContactDetail::TypeSyncTarget, QContactSyncTarget::FieldSyncTarget);
+    syncTargetFilter.setValue(SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET);
+    QContactFetchHint noRelationships;
+    noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
+
+    QString accountIdStr = QString::number(pid);
+    QList<QContact> localContacts = m_contactManager->contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
+    QList<QContact> contactsToUpdate;
+    QList<QContactId> contactsToRemove;
+    for (int i = 0; i < localContacts.size(); ++i) {
+        QContact c = localContacts.at(i);
+        QContactOriginMetadata metadata = c.detail<QContactOriginMetadata>();
+        QStringList accountIds = metadata.groupId().split(',');
+        if (accountIds.contains(accountIdStr)) {
+            // this account used to provide this contact, and we're purging this account.
+            accountIds.removeAll(accountIdStr);
+            if (accountIds.isEmpty()) {
+                // no other account provides this contact, it can be removed.
+                contactsToRemove.append(c.id());
+                purgeCount += 1;
+            } else {
+                // at least one other account provides this contact also.
+                metadata.setGroupId(accountIds.join(QString::fromLatin1(",")));
+                c.saveDetail(&metadata);
+                contactsToUpdate.append(c);
+                modifiedCount += 1;
+            }
+        } else {
+            // it was always provided by some other account only.  Don't modify this one.
+        }
+    }
+
+    // now write the changes to the database.
+    bool success = true;
+    if (contactsToUpdate.size()) {
+        success = m_contactManager->saveContacts(&contactsToUpdate);
+        if (!success) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("Failed to update contacts: %1 - during purge of account %2"))
+                  .arg(m_contactManager->error()).arg(pid));
+        }
+    }
+    if (contactsToRemove.size()) {
+        success = m_contactManager->removeContacts(contactsToRemove);
+        if (!success) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("Failed to remove stale contacts: %1 - during purge of account %2"))
+                  .arg(m_contactManager->error()).arg(pid));
+        }
+    }
+
+    if (success) {
+        TRACE(SOCIALD_INFORMATION,
+                QString(QLatin1String("purged account %1 and successfully removed %2 friends (kept %3 modified friends)"))
+                .arg(pid).arg(purgeCount).arg(modifiedCount));
+    }
+}
+
+void FacebookContactSyncAdaptor::finalCleanup()
+{
+    // Synchronously find any contacts which need to be removed,
+    // which were somehow "left behind" by the sync process.
+
+    // first, get a list of all existing, enabled Facebook account ids
+    QList<int> facebookAccountIds;
+    QList<int> purgeAccountIds;
+    QList<int> currentAccountIds = accountManager->accountIdentifiers();
+    foreach (int currId, currentAccountIds) {
+        Account *act = accountManager->account(currId);
+        if (act) {
+            if (act->providerName() == QString(QLatin1String("facebook")) && act->enabled()
+                    && act->isEnabledWithService(QString(QLatin1String("facebook-sync")))) {
+                facebookAccountIds.append(currId);
+            }
+            act->deleteLater();
+        }
+    }
+
+    // second, get all contacts which have been synced from Facebook.
+    QContactDetailFilter syncTargetFilter;
+    syncTargetFilter.setDetailType(QContactDetail::TypeSyncTarget, QContactSyncTarget::FieldSyncTarget);
+    syncTargetFilter.setValue(SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET);
+    QContactFetchHint noRelationships;
+    noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
+    noRelationships.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactOriginMetadata::Type);
+    QList<QContact> facebookContacts = m_contactManager->contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
+
+    // third, find all account ids from which contacts have been synced
+    foreach (const QContact &contact, facebookContacts) {
+        QContactOriginMetadata metadata = contact.detail<QContactOriginMetadata>();
+        QStringList accountIds = metadata.groupId().split(',');
+        foreach (const QString &accountIdStr, accountIds) {
+            int purgeId = accountIdStr.toInt();
+            if (purgeId && !facebookAccountIds.contains(purgeId)
+                    && !purgeAccountIds.contains(purgeId)) {
+                // this account no longer exists, and needs to be purged.
+                purgeAccountIds.append(purgeId);
+            }
+        }
+    }
+
+    // fourth, purge all data for those account ids which no longer exist.
+    if (purgeAccountIds.size()) {
+        TRACE(SOCIALD_INFORMATION,
+            QString(QLatin1String("finalCleanup() purging contacts from %1 non-existent Facebook accounts"))
+            .arg(purgeAccountIds.size()));
+        foreach (int purgeId, purgeAccountIds) {
+            purgeAccount(purgeId);
+        }
+    }
 }
 
 #include "facebookcontactsyncadaptor.moc"
