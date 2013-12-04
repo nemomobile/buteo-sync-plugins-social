@@ -49,6 +49,7 @@ A daemon process which provides data synchronization with various social service
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Posts.xml
+%config %{_sysconfdir}/buteo/profiles/sync/google.Calendars.xml
 %config %{_sysconfdir}/buteo/profiles/sync/google.Contacts.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.statuspost.conf
