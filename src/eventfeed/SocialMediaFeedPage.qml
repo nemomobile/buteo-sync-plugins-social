@@ -21,11 +21,9 @@ Page {
     property bool connectedToNetwork // ALL other connectedToNetwork properties in other pages
                                      // are bound to this property, directly or indirectly.
     property int refreshTimeCount: 1 // Increment this to trigger feed items to refresh times.
-
-    // -------------------------
-
     property bool _needToSync
     allowedOrientations: Lipstick.compositor.eventsWindowOrientation
+
     onConnectedToNetworkChanged: {
         if (page.connectedToNetwork && page._needToSync) {
             page._needToSync = false

@@ -88,6 +88,9 @@ Translation source for sociald
 Summary:    Automatable tests for sociald
 License:    TBD
 Group:      System/Applications
+BuildRequires:  pkgconfig(Qt5Test)
+Requires:   qt5-qtdeclarative-devel-tools
+Requires:   qt5-qtdeclarative-import-qttest
 
 %description tests
 Automatable tests for sociald

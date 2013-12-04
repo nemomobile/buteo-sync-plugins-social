@@ -8,8 +8,8 @@ Item {
         right: parent.right
     }
 
-    height: label.text != "" ? (label.height + 2 * Theme.paddingLarge) : Theme.paddingLarge
-    opacity: label.text != "" ? 1 : 0
+    height: label.text !== "" ? (label.height + 2 * Theme.paddingLarge) : Theme.paddingLarge
+    opacity: label.text !== "" ? 1 : 0
 
     Label {
         id: label

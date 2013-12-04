@@ -400,8 +400,8 @@ Page {
             accountString: qsTrId("lipstick-jolla-home-la-account-name")
 
             // We should not set the identifier of account when we are syncing or signin in
-            switchEnabled: account.status != Account.SigningIn
-                             && account.status != Account.SyncInProgress
+            switchEnabled: account.status !== Account.SigningIn
+                             && account.status !== Account.SyncInProgress
             serviceName: "twitter"
         }
     }
