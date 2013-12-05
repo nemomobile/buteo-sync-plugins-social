@@ -48,6 +48,15 @@ SocialMediaFeedItem {
             width: parent.width
             elide: Text.ElideRight
             opacity: .6
+            text: model.name
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.primaryColor
+        }
+
+        Text {
+            width: parent.width
+            elide: Text.ElideRight
+            opacity: .6
             text: "@" + model.screenName
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.primaryColor
