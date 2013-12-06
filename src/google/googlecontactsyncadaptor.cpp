@@ -274,7 +274,8 @@ bool GoogleContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &rem
         if (remoteDetails.at(i).type() == QContactDetail::TypeTimestamp
                 || remoteDetails.at(i).type() == QContactDetail::TypeDisplayLabel
                 || remoteDetails.at(i).type() == QContactDetail::TypePresence
-                || remoteDetails.at(i).type() == QContactDetail::TypeGlobalPresence) {
+                || remoteDetails.at(i).type() == QContactDetail::TypeGlobalPresence
+                || remoteDetails.at(i).type() == QContactOriginMetadata::Type) {
             remoteDetails.removeAt(i);
         }
     }
@@ -282,7 +283,8 @@ bool GoogleContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &rem
         if (localDetails.at(i).type() == QContactDetail::TypeTimestamp
                 || localDetails.at(i).type() == QContactDetail::TypeDisplayLabel
                 || localDetails.at(i).type() == QContactDetail::TypePresence
-                || localDetails.at(i).type() == QContactDetail::TypeGlobalPresence) {
+                || localDetails.at(i).type() == QContactDetail::TypeGlobalPresence
+                || localDetails.at(i).type() == QContactOriginMetadata::Type) {
             localDetails.removeAt(i);
         }
     }
@@ -324,6 +326,7 @@ bool GoogleContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &rem
             }
             if (noFieldValueDifferences) {
                 found = true; // this detail matches.
+                break;
             }
         }
         if (!found) {
@@ -373,12 +376,18 @@ bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int acco
                 // We need to see if more than one account provides this contact.
                 QContactOriginMetadata metaData = lc.detail<QContactOriginMetadata>();
                 QStringList accountIds = metaData.groupId().split(',');
+
+                QContactOriginMetadata modMetaData = rc.detail<QContactOriginMetadata>();
+                modMetaData.setId(metaData.id());
+                modMetaData.setGroupId(metaData.groupId());
+                modMetaData.setEnabled(metaData.enabled());
+
                 if (accountIds.contains(accountIdStr)) {
-                    rc.saveDetail(&metaData);
+                    rc.saveDetail(&modMetaData);
                 } else {
                     accountIds.append(accountIdStr);
-                    metaData.setGroupId(accountIds.join(QString::fromLatin1(",")));
-                    rc.saveDetail(&metaData);
+                    modMetaData.setGroupId(accountIds.join(QString::fromLatin1(",")));
+                    rc.saveDetail(&modMetaData);
                 }
 
                 // determine whether we need to update the locally stored contact at all

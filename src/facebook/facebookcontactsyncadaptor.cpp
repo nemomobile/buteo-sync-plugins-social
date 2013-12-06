@@ -323,10 +323,14 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
             picture = pictureData.value(QLatin1String("url")).toString();
         }
         QString cover = blobDetails.value(QLatin1String("cover")).toObject().value(QLatin1String("source")).toString();
-        // TODO: location.
         QString username = blobDetails.value(QLatin1String("username")).toString();
         QString birthdayStr = blobDetails.value(QLatin1String("birthday")).toString();
         QDateTime birthday = QDateTime::fromString(birthdayStr, Qt::ISODate);
+        if (!birthday.isValid()) {
+            // manually parse the birthday.  It's usually in MM/DD/YYYY format,
+            // but sometimes MM/DD format - which we ignore.
+            birthday = QDateTime::fromString(birthdayStr, "MM/dd/yyyy");
+        }
         QString bio = blobDetails.value(QLatin1String("bio")).toString();
         QString gender = blobDetails.value(QLatin1String("gender")).toString();
 
@@ -402,11 +406,13 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
                     // needs to be removed.
                     QContactUrl contactUrl = curl;
                     REMOVE_DETAIL(contactUrl);
-                } else if (curl.url() != linkUrl.toString()) {
-                    // needs to be updated.
-                    QContactUrl contactUrl = curl;
-                    contactUrl.setUrl(QUrl(link));
-                    SAVE_DETAIL(contactUrl);
+                } else {
+                    if (curl.url() != linkUrl.toString()) {
+                        // needs to be updated.
+                        QContactUrl contactUrl = curl;
+                        contactUrl.setUrl(QUrl(link));
+                        SAVE_DETAIL(contactUrl);
+                    }
                     haveSavedLink = true;
                 }
             } else if (curl.subType() == QContactUrl::SubTypeHomePage) {
@@ -415,11 +421,13 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
                     // needs to be removed.
                     QContactUrl contactUrl = curl;
                     REMOVE_DETAIL(contactUrl);
-                } else if (curl.url() != websiteUrl.toString()) {
-                    // needs to be updated.
-                    QContactUrl contactUrl = curl;
-                    contactUrl.setUrl(QUrl(website));
-                    SAVE_DETAIL(contactUrl);
+                } else {
+                    if (curl.url() != websiteUrl.toString()) {
+                        // needs to be updated.
+                        QContactUrl contactUrl = curl;
+                        contactUrl.setUrl(QUrl(website));
+                        SAVE_DETAIL(contactUrl);
+                    }
                     haveSavedWebsite = true;
                 }
             }
@@ -534,13 +542,20 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
 
         // birthday is unique.
         QContactBirthday contactBirthday = newOrExisting.detail<QContactBirthday>();
-        if (birthdayStr.isEmpty()) {
-            // must be removed
-            REMOVE_DETAIL(contactBirthday);
-        } else if (contactBirthday.dateTime() != birthday) {
-            // must be updated
-            contactBirthday.setDateTime(birthday);
-            SAVE_DETAIL(contactBirthday);
+        if (birthday.isValid()) {
+            // the remote friend has a birthday.
+            if (contactBirthday.dateTime() != birthday) {
+                // the local contact's birthday must be updated
+                contactBirthday.setDateTime(birthday);
+                SAVE_DETAIL(contactBirthday);
+            }
+        } else {
+            // the remote friend does not have a birthday.
+            if (contactBirthday.key() != 0) {
+                // the local contact does have a birthday.
+                // it must be removed
+                REMOVE_DETAIL(contactBirthday);
+            }
         }
 
         // bio (note) is unique
@@ -646,7 +661,8 @@ bool FacebookContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &r
         if (remoteDetails.at(i).type() == QContactDetail::TypeTimestamp
                 || remoteDetails.at(i).type() == QContactDetail::TypeDisplayLabel
                 || remoteDetails.at(i).type() == QContactDetail::TypePresence
-                || remoteDetails.at(i).type() == QContactDetail::TypeGlobalPresence) {
+                || remoteDetails.at(i).type() == QContactDetail::TypeGlobalPresence
+                || remoteDetails.at(i).type() == QContactOriginMetadata::Type) {
             remoteDetails.removeAt(i);
         }
     }
@@ -654,7 +670,8 @@ bool FacebookContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &r
         if (localDetails.at(i).type() == QContactDetail::TypeTimestamp
                 || localDetails.at(i).type() == QContactDetail::TypeDisplayLabel
                 || localDetails.at(i).type() == QContactDetail::TypePresence
-                || localDetails.at(i).type() == QContactDetail::TypeGlobalPresence) {
+                || localDetails.at(i).type() == QContactDetail::TypeGlobalPresence
+                || localDetails.at(i).type() == QContactOriginMetadata::Type) {
             localDetails.removeAt(i);
         }
     }
@@ -696,6 +713,7 @@ bool FacebookContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &r
             }
             if (noFieldValueDifferences) {
                 found = true; // this detail matches.
+                break;
             }
         }
         if (!found) {
@@ -747,12 +765,18 @@ bool FacebookContactSyncAdaptor::storeToLocal(const QString &accessToken, int ac
                 // We need to see if more than one account provides this contact.
                 QContactOriginMetadata metaData = lc.detail<QContactOriginMetadata>();
                 QStringList accountIds = metaData.groupId().split(',');
+
+                QContactOriginMetadata modMetaData = rc.detail<QContactOriginMetadata>();
+                modMetaData.setId(metaData.id());
+                modMetaData.setGroupId(metaData.groupId());
+                modMetaData.setEnabled(metaData.enabled());
+
                 if (accountIds.contains(accountIdStr)) {
-                    rc.saveDetail(&metaData);
+                    rc.saveDetail(&modMetaData);
                 } else {
                     accountIds.append(accountIdStr);
-                    metaData.setGroupId(accountIds.join(QString::fromLatin1(",")));
-                    rc.saveDetail(&metaData);
+                    modMetaData.setGroupId(accountIds.join(QString::fromLatin1(",")));
+                    rc.saveDetail(&modMetaData);
                 }
 
                 // determine whether we need to update the locally stored contact at all
