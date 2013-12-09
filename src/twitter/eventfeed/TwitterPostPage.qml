@@ -1,6 +1,5 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
-import org.nemomobile.contacts 1.0
 import org.nemomobile.social 1.0
 import Sailfish.Accounts 1.0
 import "shared"
@@ -10,168 +9,42 @@ Page {
 
     property Item subviewModel
     property variant model
-    property string nodeIdentifier
     property string retweeter
-    property QtObject twitterUser
-
     property bool connectedToNetwork
 
-    // ------------------
+    property Account account
+    property QtObject twitterUser
+    property SocialNetworkModel twitterReplies
 
-    property bool _needToPerformSignIn
+    onModelChanged: retweeter = model.retweeter
 
-    onConnectedToNetworkChanged: {
-        if (_needToPerformSignIn) {
-            performSignIn()
-        } else {
-            twitter.populateIfInitialized()
-        }
-    }
+    Component.onCompleted: view.checkContinueLoading()
 
-    onModelChanged: {
-        nodeIdentifier = model.twitterId
-        twitter.consumerKey = model.consumerKey
-        twitter.consumerSecret = model.consumerSecret
-        retweeter = model.retweeter
-    }
-
-    Account {
-        id: account
-        function performSignIn() {
-            if (!container.connectedToNetwork) {
-                container._needToPerformSignIn = true
-                return
-            }
-
-            container._needToPerformSignIn = false
-            if (status == Account.Initialized && identifier != -1) {
-                // Reset token
-                twitter.oauthToken = ""
-                twitter.oauthTokenSecret = ""
-                twitter.userId = ""
-
-                // Sign in, and get credentials.
-                var params = signInParameters("twitter-sync")
-                params.setParameter("ConsumerKey", twitter.consumerKey)
-                params.setParameter("ConsumerSecret", twitter.consumerSecret)
-                params.setParameter("UiPolicy", SignInParameters.NoUserInteractionPolicy)
-                signIn("Jolla", "Jolla", params)
-            }
-        }
-
-        onIdentifierChanged: performSignIn()
-        onStatusChanged: performSignIn()
-        onErrorChanged: console.log("Twitter account error: " + error + "\n")
-
-        onSignInResponse: {
-            var accessTok = data["AccessToken"]
-            if (accessTok !== "") {
-                twitter.oauthToken = accessTok
-            }
-            var tokenSec = data["TokenSecret"]
-            if (tokenSec !== "") {
-                twitter.oauthTokenSecret = tokenSec
-            }
-            var userId = data["UserId"]
-            if (userId !== "") {
-                twitter.userId = userId
-            }
-        }
-    }
-
-    Twitter {
-        id: twitter
-
-        property string userId
-        property bool credentialsReady
-
-        onInitializedChanged: populateIfInitialized()
-        onConsumerKeyChanged: populateIfInitialized()
-        onConsumerSecretChanged: populateIfInitialized()
-        onOauthTokenChanged: populateIfInitialized()
-        onOauthTokenSecretChanged: populateIfInitialized()
-        onUserIdChanged: populateIfInitialized()
-
-        // Seems that creating a property with 5 checks is buggy,
-        // so we do it as a function
-        function checkCredentialsReady() {
-            if (initialized
-                  && consumerKey.length > 0
-                  && consumerSecret.length > 0
-                  && oauthToken.length > 0
-                  && userId.length > 0
-                  && oauthTokenSecret.length > 0) {
-                credentialsReady = true
-            } else {
-                credentialsReady = false
-            }
-        }
-
-        function populateIfInitialized() {
-            checkCredentialsReady()
-            if (container.connectedToNetwork && credentialsReady) {
-                twitterReplies.repopulate()
-                // Currently TwitterUser will fail if identifier is changed.
-                // Work around by creating new user for each account.
-                if (container.twitterUser) {
-                    container.twitterUser.destroy()
-                }
-                container.twitterUser = twitterUserComponent.createObject()
-            }
-        }
-    }
-
-    Component {
-        id: twitterUserComponent
-
-        TwitterUser {
-            socialNetwork: twitter
-            identifier: twitter.userId
-            onErrorChanged: console.log("TwitterUser error: " + error + "\n")
-            onErrorMessageChanged: console.log("TwitterUser errorMessage: " + errorMessage + "\n")
-        }
-    }
-
-    SocialNetworkModel {
-        id: twitterReplies
-        filters: [ TwitterConversationFilter{} ]
-        socialNetwork: twitter
-        nodeIdentifier: container.nodeIdentifier
-        onNodeChanged: {
-            if (node == null) {
-                return
-            }
-
-            if (view.state === "") {
-                view.state = "loadingModel"
-            }
-        }
-
-        onStatusChanged: {
-            if (twitterReplies.status == SocialNetwork.Idle) {
-                if (view.state === "loadingModel"
-                    || view.state === "reloadingModel") {
-                    view.state = "idle"
-                }
-            }
-        }
-
-        onErrorChanged: console.log("Twitter network model error: " + error + "\n")
-        onErrorMessageChanged: console.log("Twitter network model error message: " + errorMessage + "\n")
+    Connections {
+        target: container.twitterUser
+        onStatusChanged: view.checkContinueLoading()
     }
 
     Connections {
-        target: twitterReplies.node
+        target: container.twitterReplies
+        onStatusChanged: view.checkContinueLoading()
+    }
+
+    onTwitterUserChanged: view.checkContinueLoading()
+    onTwitterRepliesChanged: view.checkContinueLoading()
+
+    Connections {
+        target: container.twitterReplies.node
         onStatusChanged: {
-            if (twitterReplies.node.status == SocialNetwork.Idle) {
-                if (view.state === "favoriting" || view.state === "retweeting" || view.state === "unretweeting") {
+            if (container.twitterReplies.node.status === SocialNetwork.Idle) {
+                if (view.state === "favoriting"
+                     || view.state === "retweeting"
+                     || view.state === "unretweeting") {
                     view.state = "idle"
                 } else if (view.state === "replying") {
-                    view.state = "reloadingModel"
-                } else if (view.state === "reloadingNode") {
                     view.state = "idle"
                 }
-            } else if (twitterReplies.node.status == SocialNetwork.Error) {
+            } else if (container.twitterReplies.node.status === SocialNetwork.Error) {
                 // We simply display an error in the status, but
                 // continue the flow to the "idle" state.
                 if (view.state === "favoriting") {
@@ -187,7 +60,7 @@ Page {
                     //% "Failed to remove the retweet"
                     view.error = qsTrId("lipstick-jolla-home-twitter-error-fail-to-unretweet")
                 } else if (view.state === "replying") {
-                    view.state = "reloadingModel"
+                    view.state = "idle"
                     //% "Failed to reply"
                     view.error = qsTrId("lipstick-jolla-home-twitter-error-fail-to-reply")
                 }
@@ -201,16 +74,44 @@ Page {
         property bool favorited
         property bool retweeted
         property string error
+
         onErrorChanged: updateInfoLabelAndProperties()
 
         // Signal relays
         signal forceReplyFieldActiveFocus()
         signal clearReplyField()
 
+        function checkContinueLoading() {
+            if (view.state !== "") {
+                if (view.state === "loadingModel"
+                      && container.twitterReplies.ready
+                      && container.twitterUser.status === SocialNetwork.Idle) {
+                    view.state = "idle"
+                    view.updateInfoLabelAndProperties()
+                }
+                return
+            }
+
+            if (container.twitterUser
+                  && container.twitterReplies
+                  && container.twitterUser.status === SocialNetwork.Idle) {
+                if (!container.twitterReplies.ready) {
+                    view.state = "loadingModel"
+                } else {
+                    view.state = "idle"
+                    view.updateInfoLabelAndProperties()
+                }
+            }
+        }
+
         function updateInfoLabelAndProperties() {
             info = ""
 
-            var tweet = twitterReplies.node
+            var tweet = container.twitterReplies.node
+
+            if (!tweet) {
+                return
+            }
 
             //% "%n retweets"
             var retweet = qsTrId("lipstick-jolla-home-twitter-retweets", tweet.retweetCount)
@@ -238,14 +139,13 @@ Page {
         }
 
         anchors.fill: parent
-        model: twitterReplies
+        model: container.twitterReplies
         spacing: Theme.paddingLarge
 
         // These states are used to manage the complex flow in NQPS
         states: [
             State { name: "loadingModel" },         // Step between not loaded and loaded, used to display info before replies.
             State { name: "idle" },                 // Default state
-            State { name: "reloadingModel" },       // After replying, the model is being reloaded
             State { name: "replying" },             // Start a reply operation
             State { name: "favoriting" },           // Start a favoriting operation
             State { name: "retweeting" },           // Start a retweeting operation
@@ -264,16 +164,12 @@ Page {
                 }
             },
             Transition {
-                from: "reloadingModel"
-                ScriptAction {
-                    script: view.clearReplyField()
-                }
-            },
-            Transition {
                 from: "replying"
-                to: "reloadingModel"
                 ScriptAction {
-                    script: twitterReplies.loadNext()
+                    script: {
+                        view.clearReplyField()
+                        container.twitterReplies.loadNext()
+                    }
                 }
             },
             Transition {
@@ -335,10 +231,10 @@ Page {
                         onClicked: {
                             if (!view.retweeted) {
                                 view.state = "retweeting"
-                                twitterReplies.node.uploadRetweet()
+                                container.twitterReplies.node.uploadRetweet()
                             } else {
                                 view.state = "unretweeting"
-                                twitterReplies.node.removeRetweet()
+                                container.twitterReplies.node.removeRetweet()
                             }
                         }
                         icon: "image://theme/icon-m-sync?"
@@ -382,9 +278,9 @@ Page {
                         onClicked: {
                             view.state = "favoriting"
                             if (view.favorited) {
-                                twitterReplies.node.unfavorite()
+                                container.twitterReplies.node.unfavorite()
                             } else {
-                                twitterReplies.node.favorite()
+                                container.twitterReplies.node.favorite()
                             }
                         }
                         Image {
@@ -452,11 +348,11 @@ Page {
             connectedToNetwork: container.connectedToNetwork
             visible: connectedToNetwork
             enabled: view.state === "idle"
-            avatar: twitterUser ? twitterUser.profileImageUrlHttps : ""
+            avatar: container.twitterUser ? container.twitterUser.profileImageUrlHttps : ""
             //: Label indicating text field is used for entering a reply to Twitter post
             //% "Reply (%0)"
             label: qsTrId("lipstick-jolla-home-twitter-la-reply-field").arg(text.length)
-            displayMargins: twitterReplies.count > 0
+            displayMargins: container.twitterReplies.count > 0
             //: Write twitter reply
             //% "Write a reply"
             placeholderText: qsTrId("lipstick-jolla-home-twitter-ph-write-reply")
@@ -465,7 +361,7 @@ Page {
             onEnterKeyClicked: {
                 if (text.length > 0) {
                     view.state = "replying"
-                    twitterReplies.node.uploadReply("@" + twitterReplies.node.user.screenName + " " + replyField.text)
+                    container.twitterReplies.node.uploadReply("@" + container.twitterReplies.node.user.screenName + " " + replyField.text)
                 }
                 replyField.close()
             }
@@ -492,10 +388,7 @@ Page {
         SocialAccountPullDownMenu {
             id: socialAccountPullDown
             pageContainer: container.pageContainer
-            onCurrentAccountChanged: {
-                view.state = ""
-                account.identifier = currentAccount
-            }
+            onCurrentAccountChanged: container.account.setIdentifiers(currentAccount)
             //% "Select account"
             selectAccountString: qsTrId("lipstick-jolla-home-la-select-account")
             //% "Change to %1"
@@ -505,7 +398,7 @@ Page {
 
             // We should not set the identifier of account when we are syncing or signin in
             switchEnabled: account.status != Account.SigningIn
-                           && account.status != Account.SyncInProgress
+                             && account.status != Account.SyncInProgress
             serviceName: "twitter"
         }
     }
