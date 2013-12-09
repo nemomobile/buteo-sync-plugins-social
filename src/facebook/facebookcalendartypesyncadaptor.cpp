@@ -15,6 +15,8 @@
 #include "trace.h"
 #include <extendedcalendar.h>
 #include <extendedstorage.h>
+#include <accountmanager.h>
+#include <account.h>
 
 static const char *FACEBOOK = "Facebook";
 static const char *FACEBOOK_COLOR = "#3B5998";
@@ -192,9 +194,13 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
             notebook->setPluginName(QLatin1String(FACEBOOK));
             notebook->setAccount(QString::number(accountId));
             notebook->setColor(QLatin1String(FACEBOOK_COLOR));
+            notebook->setDescription(accountManager->account(accountId)->displayName());
             storage->addNotebook(notebook);
         } else {
             notebook = facebookNotebooks.first();
+            if (notebook->description().isEmpty()) {
+                notebook->setDescription(accountManager->account(accountId)->displayName());
+            }
         }
 
         // Useful maps
