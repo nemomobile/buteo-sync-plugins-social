@@ -43,10 +43,12 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds
         foreach (mKCal::Notebook::Ptr notebook, storage->notebooks()) {
             if (notebook->pluginName().startsWith(QString(QLatin1String("google-")))
                     && notebook->account() == QString::number(accountId)) {
+                storage->loadNotebookIncidences(notebook->uid());
+                calendar->reload();
                 KCalCore::Incidence::List incidenceList;
                 storage->allIncidences(&incidenceList, notebook->uid());
                 foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-                    calendar->deleteIncidence(incidence);
+                    calendar->deleteIncidence(calendar->incidence(incidence->uid()));
                 }
                 storage->deleteNotebook(notebook);
             }
@@ -192,11 +194,15 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
             } else {
                 // the calendar has been removed from the server.
                 // we need to purge it from the device.
+                storage->loadNotebookIncidences(notebook->uid());
+                calendar->reload();
                 KCalCore::Incidence::List incidenceList;
                 storage->allIncidences(&incidenceList, notebook->uid());
                 foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-                    calendar->deleteIncidence(incidence);
+                    calendar->deleteIncidence(calendar->incidence(incidence->uid()));
                 }
+                calendar->save();
+                storage->save();
                 storage->deleteNotebook(notebook);
             }
         }
@@ -357,16 +363,24 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                 QString(QLatin1String("error: calendar %1 doesn't have a notebook"
                                       " for Google account with id %2"))
                 .arg(calendarId).arg(accountId));
+        storage->close();
         return;
     }
 
     // purge all incidences which exist in the notebook.
     // TODO: don't do purge+rewrite, instead do delta update.
+    storage->loadNotebookIncidences(googleNotebook->uid());
+    calendar->reload();
     KCalCore::Incidence::List incidenceList;
     storage->allIncidences(&incidenceList, googleNotebook->uid());
     foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-        calendar->deleteIncidence(incidence);
+        calendar->deleteIncidence(calendar->incidence(incidence->uid()));
     }
+
+    calendar->save();
+    storage->save();
+    storage->loadNotebookIncidences(googleNotebook->uid());
+    calendar->reload();
 
     // for each each of the events downloaded from the server, create a local event.
     foreach (const QJsonObject &eventData, m_calendarIdToEventObjects[accountId].values(calendarId)) {
@@ -431,6 +445,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
     }
 
     // Write changes to calendar
+    calendar->save();
     storage->save();
     storage->close();
 }
