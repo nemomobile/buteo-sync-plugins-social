@@ -257,6 +257,7 @@ void GoogleDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
 {
     // Not anymore interested about status changes of this account instance
     account->disconnect(this);
+    qWarning() << "sociald:Google: setting CredentialsNeedUpdate to true for account:" << account->identifier();
     account->setConfigurationValue("google-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
     account->setConfigurationValue("google-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-google")));
     account->sync();

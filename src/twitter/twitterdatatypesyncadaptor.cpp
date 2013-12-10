@@ -380,6 +380,7 @@ void TwitterDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
 {
     // Not anymore interested about status changes of this account instance
     account->disconnect(this);
+    qWarning() << "sociald:Twitter: setting CredentialsNeedUpdate to true for account:" << account->identifier();
     account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
     account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
     account->sync();
