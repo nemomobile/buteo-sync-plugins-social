@@ -84,8 +84,6 @@ public:
     static QString staticOutputFile(const QVariantMap &data);
 protected:
     QString outputFile(const QString &url, const QVariantMap &data) const;
-private:
-    Q_DECLARE_PRIVATE(AbstractImageDownloader)
 };
 
 FacebookContactImageDownloader::FacebookContactImageDownloader()

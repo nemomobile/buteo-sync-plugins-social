@@ -81,8 +81,7 @@ FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(SyncService *syncService, QObje
     }
 
     m_selfContact = m_contactManager->contact(m_contactManager->selfContactId());
-    m_db.initDatabase();
-    setInitialActive(m_db.isValid());
+    setInitialActive(true);
 }
 
 FacebookPostSyncAdaptor::~FacebookPostSyncAdaptor()
@@ -102,7 +101,8 @@ void FacebookPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds
         foreach (int accountIdentifier, purgeIds) {
             m_db.removePosts(accountIdentifier);
         }
-        m_db.write();
+        m_db.commit();
+        m_db.wait();
     }
 }
 
@@ -115,7 +115,8 @@ void FacebookPostSyncAdaptor::beginSync(int accountId, const QString &accessToke
 void FacebookPostSyncAdaptor::finalize(int accountId)
 {
     Q_UNUSED(accountId)
-    m_db.write();
+    m_db.commit();
+    m_db.wait();
 }
 
 void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToken)

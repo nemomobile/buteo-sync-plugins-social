@@ -23,7 +23,6 @@ FacebookCalendarTypeSyncAdaptor::FacebookCalendarTypeSyncAdaptor(SyncService *sy
                                                                  QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Calendars, parent)
 {
-    m_db.initDatabase();
     setInitialActive(m_db.isValid());
 }
 
@@ -62,6 +61,8 @@ void FacebookCalendarTypeSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
 
         // Clean the database
         m_db.removeEvents(accountId);
+        m_db.sync(accountId);
+        m_db.wait();
     }
 
     storage->save();
@@ -300,6 +301,7 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
 
         // Perform removal and insertions
         m_db.sync(accountId);
+        m_db.wait();
 
     } else {
         // error occurred during request.
