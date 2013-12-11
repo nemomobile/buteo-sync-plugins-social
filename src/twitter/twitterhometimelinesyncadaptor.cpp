@@ -37,7 +37,6 @@ void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &p
 
 void TwitterHomeTimelineSyncAdaptor::beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret)
 {
-    m_db.removePosts(accountId); // always purge all tweets for the account, prior to syncing most recent.
     requestMe(accountId, oauthToken, oauthTokenSecret);
 }
 
@@ -189,6 +188,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             decrementSemaphore(accountId);
             return;
         }
+
+        m_db.removePosts(accountId); // purge old tweets.
 
         foreach (const QJsonValue &tweetValue, tweets) {
             // these are the fields we eventually need to fill out:
