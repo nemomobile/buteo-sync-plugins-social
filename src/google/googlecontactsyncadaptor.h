@@ -56,7 +56,9 @@ private Q_SLOTS:
 private:
     QList<QContact> transformContactAvatars(const QList<QContact> &remoteContacts, int accountId, const QString &accessToken);
     void downloadContactAvatarImage(int accountId, const QString &accessToken, const QUrl &imageUrl, const QString &filename);
-    bool storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount);
+    bool storeToLocal(const QString &accessToken, int accountId, int *addedCount, int *modifiedCount, int *removedCount, int *unchangedCount);
+    bool remoteContactDiffersFromLocal(const QContact &remoteContact, const QContact &localContact) const;
+
 
 private:
     QContactManager *m_contactManager;

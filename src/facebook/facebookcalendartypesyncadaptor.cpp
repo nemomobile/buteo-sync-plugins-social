@@ -25,7 +25,6 @@ FacebookCalendarTypeSyncAdaptor::FacebookCalendarTypeSyncAdaptor(SyncService *sy
                                                                  QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Calendars, parent)
 {
-    m_db.initDatabase();
     setInitialActive(m_db.isValid());
 }
 
@@ -64,6 +63,8 @@ void FacebookCalendarTypeSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
 
         // Clean the database
         m_db.removeEvents(accountId);
+        m_db.sync(accountId);
+        m_db.wait();
     }
 
     storage->save();
@@ -172,13 +173,16 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
                   QString(QLatin1String("Resetting notebooks")));
 
             foreach (mKCal::Notebook::Ptr notebook, facebookNotebooks) {
+                storage->loadNotebookIncidences(notebook->uid());
+                calendar->reload();
                 KCalCore::Incidence::List incidenceList;
                 storage->allIncidences(&incidenceList, notebook->uid());
-
                 foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-                    calendar->deleteIncidence(incidence);
+                    calendar->deleteIncidence(calendar->incidence(incidence->uid()));
                 }
 
+                calendar->save();
+                storage->save();
                 storage->deleteNotebook(notebook);
             }
 
@@ -297,15 +301,20 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
 
         // Remove all other incidences
         foreach (const QString &incidence, incidencesSet) {
-            calendar->deleteIncidence(calendarEventsMap.value(incidence));
+            KCalCore::Incidence::Ptr incidencePtr = calendar->incidence(incidence);
+            if (incidencePtr) {
+                calendar->deleteIncidence(incidencePtr);
+            }
         }
 
         // Write to calendar
+        calendar->save();
         storage->save();
         storage->close();
 
         // Perform removal and insertions
         m_db.sync(accountId);
+        m_db.wait();
 
     } else {
         // error occurred during request.

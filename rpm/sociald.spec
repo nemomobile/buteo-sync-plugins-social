@@ -23,7 +23,7 @@ BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  buteo-syncfw-qt5-devel
-BuildRequires:  pkgconfig(socialcache) >= 0.0.11
+BuildRequires:  pkgconfig(socialcache) >= 0.0.15
 # for lupdate
 BuildRequires:  qt5-qttools-linguist
 Requires: sailfish-components-accounts-qt5 >= 0.0.43
@@ -49,6 +49,7 @@ A daemon process which provides data synchronization with various social service
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Posts.xml
+%config %{_sysconfdir}/buteo/profiles/sync/google.Calendars.xml
 %config %{_sysconfdir}/buteo/profiles/sync/google.Contacts.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.statuspost.conf

@@ -7,6 +7,7 @@
 
 #include "socialnetworksyncadaptor.h"
 #include "syncservice.h"
+#include "constants_p.h"
 #include "trace.h"
 
 #include <QtCore/QJsonDocument>
@@ -22,6 +23,10 @@
 #include <account.h>
 
 #include <socialnetworksyncdatabase.h>
+
+// include the implementations of the headers included in constants_p.h
+#include <qtcontacts-extensions_impl.h>
+#include <qcontactoriginmetadata_impl.h>
 
 /*
     Remarks on timestamps
@@ -56,7 +61,6 @@ SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName,
     , m_serviceName(serviceName)
     , m_syncService(syncService)
 {
-    m_syncDb->initDatabase();
 }
 
 SocialNetworkSyncAdaptor::~SocialNetworkSyncAdaptor()
@@ -179,7 +183,9 @@ bool SocialNetworkSyncAdaptor::updateLastSyncTimestamp(const QString &serviceNam
     // Workaround
     // TODO: do better, with a queue
     m_syncDb->addSyncTimestamp(serviceName, dataType, accountId, timestamp);
-    return m_syncDb->write();
+    m_syncDb->commit();
+    m_syncDb->wait();
+    return m_syncDb->writeStatus() == AbstractSocialCacheDatabase::Finished;
 }
 
 /*!

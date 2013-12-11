@@ -17,7 +17,6 @@
 TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(SyncService *syncService, QObject *parent)
     : TwitterDataTypeSyncAdaptor(syncService, SyncService::Posts, parent)
 {
-    m_db.initDatabase();
     setInitialActive(m_db.isValid());
 }
 
@@ -31,20 +30,21 @@ void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &p
         foreach (int accountIdentifier, purgeIds) {
             m_db.removePosts(accountIdentifier);
         }
-        m_db.write();
+        m_db.commit();
+        m_db.wait();
     }
 }
 
 void TwitterHomeTimelineSyncAdaptor::beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret)
 {
-    m_db.removePosts(accountId); // always purge all tweets for the account, prior to syncing most recent.
     requestMe(accountId, oauthToken, oauthTokenSecret);
 }
 
 void TwitterHomeTimelineSyncAdaptor::finalize(int accountId)
 {
     Q_UNUSED(accountId)
-    m_db.write();
+    m_db.commit();
+    m_db.wait();
 }
 
 void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oauthToken, const QString &oauthTokenSecret)
@@ -189,6 +189,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             return;
         }
 
+        m_db.removePosts(accountId); // purge old tweets.
+
         foreach (const QJsonValue &tweetValue, tweets) {
             // these are the fields we eventually need to fill out:
             QList<QPair<QString, SocialPostImage::ImageType> > imageList;
@@ -213,6 +215,12 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             QString name = user.value("name").toString();
             QString screenName = user.value("screen_name").toString();
             QString icon = user.value(QLatin1String("profile_image_url")).toString();
+
+            // Twitter does some HTML substitutions in their content
+            // in JSON feeds, to prevent issues with JSONP formatting.
+            body.replace(QStringLiteral("&lt;"), QStringLiteral("<"));
+            body.replace(QStringLiteral("&gt;"), QStringLiteral(">"));
+            body.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
 
             QJsonObject entities = tweet.value(QLatin1String("entities")).toObject();
             QJsonArray mediaList = entities.value(QLatin1String("media")).toArray();

@@ -240,6 +240,7 @@ void FacebookDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
 {
     // Not anymore interested about status changes of this account instance
     account->disconnect(this);
+    qWarning() << "sociald:Facebook: setting CredentialsNeedUpdate to true for account:" << account->identifier();
     account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
     account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-facebook")));
     account->sync();
