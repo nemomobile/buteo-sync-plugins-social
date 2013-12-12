@@ -49,8 +49,7 @@
 #define SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE 20
 
 static const char *WHICH_FIELDS = "name,first_name,middle_name,last_name,link,website,"\
-        "picture.type(large),cover,location,username,birthday,bio,gender,significant_other"\
-        ",updated_time";
+        "picture.type(large),cover,username,birthday,bio,gender,updated_time";
 static const char *IDENTIFIER_KEY = "identifier";
 static const char *ACCOUNT_ID_KEY = "account_id";
 static const char *TYPE_KEY = "type";
@@ -585,8 +584,6 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
             contactGender.setGender(QContactGender::GenderUnspecified);
             SAVE_DETAIL(contactGender);
         }
-
-        // XXX TODO: Location and Significant Other
 
         // Now that we've built up the contact, flag it for saving to the database if required.
         return newOrExisting; // will only be saved if *needsSaving == true.
