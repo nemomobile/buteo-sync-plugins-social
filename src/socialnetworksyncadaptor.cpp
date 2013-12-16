@@ -7,6 +7,7 @@
 
 #include "socialnetworksyncadaptor.h"
 #include "syncservice.h"
+#include "socialdnetworkaccessmanager_p.h"
 #include "constants_p.h"
 #include "trace.h"
 
@@ -55,7 +56,7 @@ SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(QString serviceName,
     : QObject(parent)
     , dataType(dataType)
     , accountManager(new AccountManager(this))
-    , networkAccessManager(new QNetworkAccessManager(this))
+    , networkAccessManager(new SocialdNetworkAccessManager(this))
     , m_syncDb(new SocialNetworkSyncDatabase())
     , m_status(SocialNetworkSyncAdaptor::Invalid)
     , m_serviceName(serviceName)
