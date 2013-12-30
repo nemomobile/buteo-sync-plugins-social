@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import org.nemomobile.lipstick 0.1
 import org.nemomobile.contacts 1.0
 import org.nemomobile.social 1.0
 import Sailfish.Accounts 1.0
@@ -23,6 +24,8 @@ Page {
     // -----------------
 
     property bool _needToPerformSignIn
+
+    allowedOrientations: Lipstick.compositor.eventsWindowOrientation
 
     onConnectedToNetworkChanged: {
         if (_needToPerformSignIn) {

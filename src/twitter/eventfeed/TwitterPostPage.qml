@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import org.nemomobile.lipstick 0.1
 import org.nemomobile.social 1.0
 import Sailfish.Accounts 1.0
 import "shared"
@@ -15,6 +16,8 @@ Page {
     property Account account
     property QtObject twitterUser
     property SocialNetworkModel twitterReplies
+
+    allowedOrientations: Lipstick.compositor.eventsWindowOrientation
 
     onModelChanged: retweeter = model.retweeter
 

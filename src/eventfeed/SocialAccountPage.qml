@@ -1,6 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
-
+import org.nemomobile.lipstick 0.1
 
 Page {
     id: container
@@ -8,6 +8,7 @@ Page {
     property int currentIndex
     property variant accounts
     property string headerText
+    allowedOrientations: Lipstick.compositor.eventsWindowOrientation
 
     ListModel {
         id: model

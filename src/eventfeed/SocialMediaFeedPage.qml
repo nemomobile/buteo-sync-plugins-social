@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import org.nemomobile.lipstick 0.1
 import org.nemomobile.socialcache 1.0
 import org.nemomobile.configuration 1.0
 import org.nemomobile.connectivity 1.0
@@ -24,6 +25,7 @@ Page {
     // -------------------------
 
     property bool _needToSync
+    allowedOrientations: Lipstick.compositor.eventsWindowOrientation
     onConnectedToNetworkChanged: {
         if (page.connectedToNetwork && page._needToSync) {
             page._needToSync = false
