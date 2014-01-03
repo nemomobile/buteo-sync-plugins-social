@@ -5,6 +5,7 @@ import Sailfish.TextLinking 1.0
 Column {
     property alias text: body.plainText
     property alias time: time.text
+
     anchors {
         left: parent.left
         right: parent.right

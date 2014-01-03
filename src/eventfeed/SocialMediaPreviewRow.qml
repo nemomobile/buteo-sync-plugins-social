@@ -7,8 +7,6 @@ Item {
 
     property var imageList
     property string mediaName
-    property string mediaCaption
-    property string mediaDescription
     property real imageSize: width / 3
     property int imageCount: imageList ? imageList.length : 0
     property bool connectedToNetwork

@@ -40,7 +40,10 @@ Item {
         }
 
         Column {
+            id: column
+
             property int _depth: parentPage && parentPage._depth ? parentPage._depth + 1 : 0
+
             visible: subSource != ""
             anchors {
                 verticalCenter: parent.verticalCenter
@@ -50,7 +53,7 @@ Item {
             spacing: -Theme.paddingSmall
 
             Label {
-                width: Math.min(implicitWidth, header.width - Theme.pageStackIndicatorWidth * _depth
+                width: Math.min(implicitWidth, header.width - Theme.pageStackIndicatorWidth * column._depth
                                 - 2 * Theme.paddingLarge)
                 truncationMode: TruncationMode.Fade
                 color: Theme.highlightColor
@@ -66,7 +69,7 @@ Item {
             }
 
             Label {
-                width: Math.min(implicitWidth, header.width - Theme.pageStackIndicatorWidth * _depth
+                width: Math.min(implicitWidth, header.width - Theme.pageStackIndicatorWidth * column._depth
                                 - 2 * Theme.paddingLarge)
                 truncationMode: TruncationMode.Fade
                 color: Theme.highlightColor

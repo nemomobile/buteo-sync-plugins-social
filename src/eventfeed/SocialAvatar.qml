@@ -19,4 +19,3 @@ SocialImage {
         visible: image.status !== Image.Ready
     }
 }
-

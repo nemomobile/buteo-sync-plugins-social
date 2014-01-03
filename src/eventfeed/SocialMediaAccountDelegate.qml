@@ -12,8 +12,6 @@ BackgroundItem {
     property alias iconSource: icon.source
     property int unseenPostCount: feedPage ? feedPage.unseenPostCount : 0
 
-    // -------------------------
-
     onClicked: {
         pageStack.push(feedPage)
         feedPage.positionViewAtBeginning()

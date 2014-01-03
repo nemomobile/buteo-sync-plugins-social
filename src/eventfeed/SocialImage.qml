@@ -11,8 +11,6 @@ Item {
     property alias fillMode: image.fillMode
     property alias sourceSize: image.sourceSize
 
-    // ---------------------
-
     onConnectedToNetworkChanged: _setImageSource()
     onSourceChanged: _setImageSource()
     Component.onCompleted: _setImageSource()

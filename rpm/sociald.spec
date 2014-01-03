@@ -84,6 +84,21 @@ Translation source for sociald
 %{_datadir}/translations/source/lipstick-jolla-home-facebook.ts
 %{_datadir}/translations/source/lipstick-jolla-home-twitter.ts
 
+%package tests
+Summary:    Automatable tests for sociald
+License:    TBD
+Group:      System/Applications
+BuildRequires:  pkgconfig(Qt5Test)
+Requires:   qt5-qtdeclarative-devel-tools
+Requires:   qt5-qtdeclarative-import-qttest
+
+%description tests
+Automatable tests for sociald
+
+%files tests
+%defattr(-,root,root,-)
+/opt/tests/sociald/*
+
 %prep
 %setup -q -n %{name}-%{version}
 
