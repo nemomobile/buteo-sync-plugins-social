@@ -4,7 +4,7 @@ import Sailfish.Silica 1.0
 BackgroundItem {
     id: item
     width: parent.width
-    height: width * .2
+    height: Screen.width * .2
 
     property Page feedPage
     property Item subviewModel
