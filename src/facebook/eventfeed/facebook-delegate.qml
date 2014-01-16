@@ -23,7 +23,7 @@ BackgroundItem {
     id: item
 
     width: parent.width
-    height: width * .2
+    height: Screen.width * .2
 
     property Page feedPage
     property Item subviewModel
