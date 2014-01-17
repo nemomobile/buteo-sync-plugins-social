@@ -199,11 +199,24 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
             notebook->setAccount(QString::number(accountId));
             notebook->setColor(QLatin1String(FACEBOOK_COLOR));
             notebook->setDescription(accountManager->account(accountId)->displayName());
+            notebook->setIsReadOnly(true);
             storage->addNotebook(notebook);
         } else {
             notebook = facebookNotebooks.first();
+            bool changed = false;
+
             if (notebook->description().isEmpty()) {
                 notebook->setDescription(accountManager->account(accountId)->displayName());
+                changed = true;
+            }
+
+            if (!notebook->isReadOnly()) {
+                notebook->setIsReadOnly(true);
+                changed = true;
+            }
+
+            if (changed) {
+                storage->updateNotebook(notebook);
             }
         }
 
@@ -216,6 +229,8 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
         QMap<QString, FacebookEvent::ConstPtr> dbEventsMap;
         QSet<QString> incidencesSet;
 
+        // Set notebook writeable locally.
+        notebook->setIsReadOnly(false);
 
         // We load incidences that are associated to Facebook into memory
         foreach (const FacebookEvent::ConstPtr &dbEvent, dbEvents) {
