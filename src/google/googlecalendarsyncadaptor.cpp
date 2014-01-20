@@ -43,6 +43,9 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds
         foreach (mKCal::Notebook::Ptr notebook, storage->notebooks()) {
             if (notebook->pluginName().startsWith(QString(QLatin1String("google-")))
                     && notebook->account() == QString::number(accountId)) {
+                // Set notebook writeable locally.
+                notebook->setIsReadOnly(false);
+
                 storage->loadNotebookIncidences(notebook->uid());
                 calendar->reload();
                 KCalCore::Incidence::List incidenceList;
@@ -185,10 +188,12 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
                 // we don't need to purge it, but we may need to update its summary/color details.
                 deviceCalendarIds.append(currDeviceCalendarId);
                 if (notebook->name() != m_serverCalendarIdToSummaryAndColor[accountId].value(currDeviceCalendarId).first
-                        || notebook->color() != m_serverCalendarIdToSummaryAndColor[accountId].value(currDeviceCalendarId).second) {
+                        || notebook->color() != m_serverCalendarIdToSummaryAndColor[accountId].value(currDeviceCalendarId).second
+                        || !notebook->isReadOnly()) {
                     // summary or color changed server-side.
                     notebook->setName(m_serverCalendarIdToSummaryAndColor[accountId].value(currDeviceCalendarId).first);
                     notebook->setColor(m_serverCalendarIdToSummaryAndColor[accountId].value(currDeviceCalendarId).second);
+                    notebook->setIsReadOnly(true);
                     storage->updateNotebook(notebook);
                 }
             } else {
@@ -216,6 +221,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
             notebook->setColor(m_serverCalendarIdToSummaryAndColor[accountId].value(serverCalendarId).second);
             notebook->setPluginName(QStringLiteral("google-") + serverCalendarId);
             notebook->setAccount(QString::number(accountId));
+            notebook->setIsReadOnly(true);
             storage->addNotebook(notebook);
         }
     }
@@ -366,6 +372,9 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
         storage->close();
         return;
     }
+
+    // Set notebook writeable locally.
+    googleNotebook->setIsReadOnly(false);
 
     // purge all incidences which exist in the notebook.
     // TODO: don't do purge+rewrite, instead do delta update.
