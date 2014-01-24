@@ -6,6 +6,8 @@ Item {
 
     property url source
     property url placeholderSource
+    property url fallbackSource
+
     property bool connectedToNetwork
 
     property alias fillMode: image.fillMode
@@ -38,5 +40,10 @@ Item {
         asynchronous: true
         width: container.width
         height: container.height
+        onStatusChanged: {
+            if (status === Image.Error) {
+                source = container.fallbackSource
+            }
+        }
     }
 }

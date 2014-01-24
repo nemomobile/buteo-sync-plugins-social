@@ -7,11 +7,12 @@ BackgroundItem {
     property string timestamp: model.timestamp
     property string formattedTime: refreshTimeCount ? Format.formatDate(timestamp, Format.DurationElapsed) : formattedTime
     property SocialAvatar avatar: _avatar
+    property alias avatarSource: _avatar.source
+    property alias fallbackAvatarSource: _avatar.fallbackSource
     property int refreshTimeCount: 1
 
     SocialAvatar {
         id: _avatar
-        source: model.icon
         width: Theme.itemSizeMedium
         height: Theme.itemSizeMedium
         connectedToNetwork: item.connectedToNetwork
