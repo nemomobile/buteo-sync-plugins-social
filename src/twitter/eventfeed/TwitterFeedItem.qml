@@ -19,6 +19,7 @@ SocialMediaFeedItem {
         width: parent.width - (item.avatar.width + Theme.paddingMedium*2)
 
         SocialMediaPreviewRow {
+            imageSize: (Screen.width - item.avatar.width) / 3
             imageList: item.imageList
             connectedToNetwork: item.connectedToNetwork
         }

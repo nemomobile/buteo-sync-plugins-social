@@ -35,8 +35,8 @@ Item {
 
         Repeater {
             id: repeater
-            property real imageSize: container.imageList.length <= 2 ? container.width / 2
-                                                                     : container.width / 4
+            property real imageSize: container.imageList.length <= 2 ? Screen.width / 2
+                                                                     : Screen.width / 4
             model: container.imageList
 
             delegate: SocialImage {
