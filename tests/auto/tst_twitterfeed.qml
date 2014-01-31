@@ -37,5 +37,18 @@ ApplicationWindow {
             compare(loader.item.accountAndModelsReady, false)
             compare(loader.item.twitterUser, null)
         }
+
+        function test_urlConversion() {
+            compare(loader.item.convertUrl("http://www.jolla.com"), "http://www.jolla.com")
+            compare(loader.item.convertUrl("http://www.jolla.com/image_normal.jpg"), "http://www.jolla.com/image_bigger.jpg")
+            compare(loader.item.convertUrl("http://www.jolla.com/image_mini.jpg"), "http://www.jolla.com/image_bigger.jpg")
+            compare(loader.item.convertUrl("http://www.jolla.com/image_normal.jpeg"), "http://www.jolla.com/image_bigger.jpeg")
+            compare(loader.item.convertUrl("http://www.jolla.com/image_mini.jpeg"), "http://www.jolla.com/image_bigger.jpeg")
+            compare(loader.item.convertUrl("http://www.jolla.com/image_normal.png"), "http://www.jolla.com/image_bigger.png")
+            compare(loader.item.convertUrl("http://www.jolla.com/image_mini.png"), "http://www.jolla.com/image_bigger.png")
+            compare(loader.item.convertUrl("http://www.jolla.com/image_normal.gif"), "http://www.jolla.com/image_bigger.gif")
+            compare(loader.item.convertUrl("http://www.jolla.com/image_mini.gif"), "http://www.jolla.com/image_bigger.gif")
+        }
+
     }
 }

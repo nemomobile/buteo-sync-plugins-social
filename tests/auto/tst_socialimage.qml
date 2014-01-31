@@ -37,6 +37,7 @@ Item {
             compare(image.fillMode, Image.PreserveAspectFit)
             compare(image.sourceSize.width, image.width)
             compare(image.sourceSize.height, image.height)
+            compare(image.fallbackSource, "")
         }
     }
 }

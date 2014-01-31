@@ -35,6 +35,7 @@ ApplicationWindow {
         function test_socialContent() {
             compare(socialContent.parentPage, page)
             compare(socialContent.avatar, "")
+            compare(socialContent.fallbackAvatar, "")
             compare(socialContent.source, "")
             compare(socialContent.subSource, "")
             verify(socialContent.timestamp.toString !== "")

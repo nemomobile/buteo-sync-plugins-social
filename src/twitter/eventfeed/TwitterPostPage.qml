@@ -12,6 +12,8 @@ Page {
     property variant model
     property string retweeter
     property bool connectedToNetwork
+    property string avatarSource
+    property string fallbackAvatarSource
 
     property Account account
     property QtObject twitterUser
@@ -204,7 +206,6 @@ Page {
                     script: view.error = ""
                 }
             }
-
         ]
 
         header: Column {
@@ -213,7 +214,8 @@ Page {
 
             SocialContent {
                 connectedToNetwork: container.connectedToNetwork
-                avatar: container.model.icon
+                avatar: container.avatarSource
+                fallbackAvatar: container.fallbackAvatarSource
                 source: container.model.name
                 subSource: "@" + container.model.screenName
                 parentPage: container

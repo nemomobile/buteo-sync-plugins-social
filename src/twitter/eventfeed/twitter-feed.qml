@@ -30,6 +30,8 @@ SocialMediaFeedPage {
         connectedToNetwork: page.connectedToNetwork
         width: ListView.view.width
         imageList: model.images
+        avatarSource: page.convertUrl(model.icon)
+        fallbackAvatarSource: model.icon
         onClicked: {
             var rv = null
             try {
@@ -45,6 +47,8 @@ SocialMediaFeedPage {
                                         "account": account,
                                         "twitterUser": Qt.binding(function() { return page.twitterUser }),
                                         "twitterReplies": twitterReplies,
+                                        "avatarSource": avatarSource,
+                                        "fallbackAvatarSource": fallbackAvatarSource,
                                         "connectedToNetwork": Qt.binding(function() { return page.connectedToNetwork })
                                     }, false)
             } catch (error) {
@@ -202,5 +206,14 @@ SocialMediaFeedPage {
             text: qsTrId("lipstick-jolla-home-me-update_feed")
             onClicked: page.sync()
         }
+    }
+
+    function convertUrl(source) {
+        if (source.indexOf("_normal.") !== -1) {
+                return source.replace("_normal.", "_bigger.");
+        } else if (source.indexOf("_mini.") !== -1) {
+            return source.replace("_mini.", "_bigger.");
+        }
+        return source
     }
 }

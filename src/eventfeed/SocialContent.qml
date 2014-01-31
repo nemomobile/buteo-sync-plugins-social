@@ -5,6 +5,7 @@ Item {
     id: container
     property Page parentPage
     property alias avatar: socialAvatar.source
+    property alias fallbackAvatar: socialAvatar.fallbackSource
     property string source
     property string subSource
     property date timestamp
@@ -24,7 +25,6 @@ Item {
         color: Theme.highlightColor
         opacity: 0.1
     }
-
 
     Item {
         id: header

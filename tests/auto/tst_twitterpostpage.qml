@@ -66,6 +66,8 @@ ApplicationWindow {
             compare(twitterPostPage.retweeter, "Test retweeter")
             compare(twitterPostPage.connectedToNetwork, false)
             compare(window.identifiersSet, true)
+            compare(twitterPostPage.avatarSource, "")
+            compare(twitterPostPage.fallbackAvatarSource, "")
         }
     }
 }

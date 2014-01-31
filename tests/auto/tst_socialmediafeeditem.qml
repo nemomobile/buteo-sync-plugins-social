@@ -46,6 +46,8 @@ Item {
             compare(feedItem.avatar.source, "")
             compare(feedItem.avatar.connectedToNetwork, false)
             compare(feedItem.refreshTimeCount, 1)
+            compare(feedItem.avatarSource, "")
+            compare(feedItem.fallbackAvatarSource, "")
 
             feedItem.connectedToNetwork = true
             compare(feedItem.connectedToNetwork, true)
