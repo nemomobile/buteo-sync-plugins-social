@@ -163,6 +163,10 @@ void GoogleContactSyncAdaptor::beginSync(int accountId, const QString &accessTok
 
 void GoogleContactSyncAdaptor::requestData(int accountId, const QString &accessToken, int startIndex, const QString &continuationRequest, const QDateTime &syncTimestamp)
 {
+    // note: this timestamp isn't good enough, as we store that timestamp
+    // even if sync failed.  We actually need to know whether we need to
+    // do a "clean + resync" or "delta" operation (and for delta, what
+    // the timestamp of the most recent successful sync was).
     QDateTime timestamp = syncTimestamp.isValid() ? syncTimestamp :
                           lastSyncTimestamp(QLatin1String("google"),
                                             SyncService::dataType(SyncService::Contacts),

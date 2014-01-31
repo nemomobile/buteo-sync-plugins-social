@@ -15,6 +15,10 @@
 #include <QtCore/QPair>
 #include <QtCore/QJsonObject>
 
+#include <extendedcalendar.h>
+#include <extendedstorage.h>
+#include <icalformat.h>
+
 class GoogleCalendarSyncAdaptor : public GoogleDataTypeSyncAdaptor
 {
     Q_OBJECT
@@ -24,22 +28,43 @@ public:
     ~GoogleCalendarSyncAdaptor();
 
 protected: // implementing GoogleDataTypeSyncAdaptor interface
+    void sync(const QString &dataTypeString);
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
+    void finalCleanup();
 
 private:
-    void requestCalendars(int accountId, const QString &accessToken, const QString &pageToken = QString());
-    void requestEvents(int accountId, const QString &accessToken, const QString &calendarId, const QString &pageToken = QString());
-    void updateLocalCalendarNotebooks(int accountId, const QString &accessToken);
-    void updateLocalCalendarNotebookEvents(int accountId, const QString &accessToken, const QString &calendarId);
+    enum UpsyncType {
+        UpsyncInsert = 1,
+        UpsyncModify = 2,
+        UpsyncDelete = 3
+    };
+    void requestCalendars(int accountId, const QString &accessToken,
+                          bool needCleanSync, const QString &pageToken = QString());
+    void requestEvents(int accountId, const QString &accessToken,
+                       const QString &calendarId, const QDateTime &since,
+                       const QString &pageToken = QString());
+    void updateLocalCalendarNotebooks(int accountId, const QString &accessToken, bool needCleanSync);
+    void updateLocalCalendarNotebookEvents(int accountId, const QString &accessToken,
+                                           const QString &calendarId, const QDateTime &since);
+    void upsyncChanges(int accountId, const QString &accessToken,
+                       GoogleCalendarSyncAdaptor::UpsyncType upsyncType,
+                       const QString &kcalEventId, const QString &calendarId,
+                       const QString &eventId,const QByteArray &eventData);
 
 private Q_SLOTS:
     void calendarsFinishedHandler();
     void eventsFinishedHandler();
+    void upsyncFinishedHandler();
 
 private:
     QMap<int, QMap<QString, QPair<QString, QString> > > m_serverCalendarIdToSummaryAndColor;
     QMap<int, QMultiMap<QString, QJsonObject> > m_calendarIdToEventObjects;
+    QMap<int, bool> m_syncSucceeded;
+
+    mKCal::ExtendedCalendar::Ptr m_calendar;
+    mKCal::ExtendedStorage::Ptr m_storage;
+    mutable KCalCore::ICalFormat m_icalFormat;
 };
 
 #endif // GOOGLECALENDARSYNCADAPTOR_H
