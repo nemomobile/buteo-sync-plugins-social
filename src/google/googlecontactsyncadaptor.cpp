@@ -30,6 +30,8 @@
 #include <QtContacts/QContactGender>
 #include <QtContacts/QContactNote>
 #include <QtContacts/QContactBirthday>
+#include <QtContacts/QContactPhoneNumber>
+#include <QtContacts/QContactEmailAddress>
 
 #include <socialcache/abstractimagedownloader.h>
 #include <socialcache/abstractimagedownloader_p.h>
@@ -317,10 +319,35 @@ bool GoogleContactSyncAdaptor::remoteContactDiffersFromLocal(const QContact &rem
             QMap<int, QVariant> rvalues = rdet.values();
             bool noFieldValueDifferences = true;
             foreach (int valueKey, rvalues.keys()) {
-                if (valueKey <= QContactDetail::FieldContext) {
-                    if (rvalues.value(valueKey) != lvalues.value(valueKey)) {
+                if (ldet.type() == QContactDetail::TypePhoneNumber
+                        && valueKey == QContactPhoneNumber::FieldSubTypes) {
+                    // special handling for phone number sub type comparison
+                    QContactPhoneNumber lph(ldet);
+                    QContactPhoneNumber rph(rdet);
+                    if (lph.subTypes() != rph.subTypes()) {
                         noFieldValueDifferences = false;
                         break;
+                    }
+                } else if (valueKey == QContactDetail::FieldContext) {
+                    if (ldet.contexts() != rdet.contexts()) {
+                        noFieldValueDifferences = false;
+                        break;
+                    }
+                } else if (valueKey < QContactDetail::FieldContext) {
+                    QVariant rdetv = rvalues.value(valueKey);
+                    QVariant ldetv = lvalues.value(valueKey);
+                    if (rdetv != ldetv) {
+                        // it could be that "invalid" variant is stored
+                        // as "empty" string, if the field is a string field.
+                        // if so, ignore that - it's not a difference.
+                        if ((!rdetv.isValid() && ldetv.type() == QVariant::String && ldetv.toString().isEmpty())
+                         || (!ldetv.isValid() && rdetv.type() == QVariant::String && rdetv.toString().isEmpty())) {
+                            // actually not different
+                        } else {
+                            // actually is different
+                            noFieldValueDifferences = false;
+                            break;
+                        }
                     }
                 }
             }

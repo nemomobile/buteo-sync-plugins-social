@@ -326,6 +326,19 @@ QContactDetail GoogleContactStream::handleEntryEmail()
 
     QContactEmailAddress email;
     email.setEmailAddress(mXml->attributes().value("address").toString());
+
+    QString rel = mXml->attributes().hasAttribute("rel")
+                ? mXml->attributes().value("rel").toString()
+                : QString();
+
+    if (rel == QStringLiteral("http://schemas.google.com/g/2005#home")) {
+        email.setContexts(QContactDetail::ContextHome);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#work")) {
+        email.setContexts(QContactDetail::ContextWork);
+    } else if (!rel.isEmpty()) {
+        email.setContexts(QContactDetail::ContextOther);
+    }
+
     return email;
 }
 
@@ -401,6 +414,48 @@ QContactDetail GoogleContactStream::handleEntryPhoneNumber()
     Q_ASSERT(mXml->isStartElement() && mXml->qualifiedName() == "gd:phoneNumber");
 
     QContactPhoneNumber phone;
+
+    QString rel = mXml->attributes().hasAttribute("rel")
+                ? mXml->attributes().value("rel").toString()
+                : QString();
+    qWarning() << "rel:" << rel << "for phone:" << phone.number();
+    if (rel == QStringLiteral("http://schemas.google.com/g/2005#home")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeLandline);
+        phone.setContexts(QContactDetail::ContextHome);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#work")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeLandline);
+        phone.setContexts(QContactDetail::ContextWork);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#mobile")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeMobile);
+        phone.setContexts(QContactDetail::ContextHome);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#work_mobile")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeMobile);
+        phone.setContexts(QContactDetail::ContextWork);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#home_fax")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeFax);
+        phone.setContexts(QContactDetail::ContextHome);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#work_fax")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeFax);
+        phone.setContexts(QContactDetail::ContextWork);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#other_fax")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeFax);
+        phone.setContexts(QContactDetail::ContextOther);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#pager")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypePager);
+        phone.setContexts(QContactDetail::ContextHome);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#work_pager")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypePager);
+        phone.setContexts(QContactDetail::ContextWork);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#tty_tdd")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeModem);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#car")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeCar);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#telex")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeBulletinBoardSystem);
+    } else if (rel == QStringLiteral("http://schemas.google.com/g/2005#assistant")) {
+        phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeAssistant);
+    } // else ignore it, malformed output from Google.
+
     phone.setNumber(mXml->readElementText());
     return phone;
 }
