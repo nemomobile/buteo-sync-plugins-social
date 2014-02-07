@@ -172,17 +172,33 @@ void GoogleDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
 
 void GoogleDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
-    // Google sends error code 204
+    // Google sends error code 204 (HTTP code 401) for Unauthorized Error
+    // Note: sometimes it sends it spuriously - see JB#15645
+    // For now, don't raise the flag, until we can solve
+    // any API rate limit issues associated with avatars
+    // which might cause this (if multiple accounts are involved).
+    // Another possible cause might be: if the ExpiresIn time
+    // is small (less than 30 seconds, say) it's possible that the
+    // access token will expire _during_ the sync process.
+    // XXX TODO: check expires time, force refresh if < 30.
     if (err == QNetworkReply::AuthenticationRequiredError) {
-        int accountId = sender()->property("accountId").toInt();
-        Account *account = accountManager->account(accountId);
-        if (account->status() == Account::Initialized) {
-            setCredentialsNeedUpdate(account);
-        } else {
-            connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
-        }
-        return;
+        //int accountId = sender()->property("accountId").toInt();
+        //Account *account = accountManager->account(accountId);
+        //if (account->status() == Account::Initialized) {
+        //    setCredentialsNeedUpdate(account);
+        //} else {
+        //    connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
+        //}
+        // instead of triggering CredentialsNeedUpdate, print some debugging.
+        QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+        int httpCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QByteArray jsonBody = reply->readAll();
+        qWarning() << "sociald:Google: would normally set CredentialsNeedUpdate for account"
+                   << reply->property("accountId").toInt() << "but could be spurious\n"
+                   << "    Http code:" << httpCode << "\n"
+                   << "    Json body:\n" << jsonBody << "\n";
     }
+
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
             .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
