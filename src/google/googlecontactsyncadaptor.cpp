@@ -45,6 +45,7 @@
 
 static const char *TOKEN_KEY = "url";
 static const char *ACCOUNT_ID_KEY = "account_id";
+static const char *IDENTIFIER_KEY = "identifier";
 
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
@@ -67,7 +68,7 @@ class GoogleContactImageDownloader: public AbstractImageDownloader
 
 public:
     explicit GoogleContactImageDownloader();
-    static QString staticOutputFile(const QString &url);
+    static QString staticOutputFile(const QString &identifier, const QUrl &url);
 protected:
     QNetworkReply * createReply(const QString &url, const QVariantMap &metadata);
     // This is a reimplemented method, used by AbstractImageDownloader
@@ -81,15 +82,9 @@ GoogleContactImageDownloader::GoogleContactImageDownloader()
 {
 }
 
-QString GoogleContactImageDownloader::staticOutputFile(const QString &url)
+QString GoogleContactImageDownloader::staticOutputFile(const QString &identifier, const QUrl &url)
 {
-    // We create the identifier by appending the type to the real identifier
-    if (url.isEmpty()) {
-        return QString();
-    }
-
-    // XXX TODO: change to Google once we modify the SocialSyncInterface to include it.
-    return makeOutputFile(SocialSyncInterface::Facebook, SocialSyncInterface::Contacts, url);
+    return makeOutputFile(SocialSyncInterface::Google, SocialSyncInterface::Contacts, identifier, url.toString());
 }
 
 QNetworkReply * GoogleContactImageDownloader::createReply(const QString &url,
@@ -107,8 +102,7 @@ QNetworkReply * GoogleContactImageDownloader::createReply(const QString &url,
 
 QString GoogleContactImageDownloader::outputFile(const QString &url, const QVariantMap &data) const
 {
-    Q_UNUSED(data)
-    return staticOutputFile(url);
+    return staticOutputFile(data.value(IDENTIFIER_KEY).toString(), url);
 }
 
 //------------------
@@ -531,9 +525,11 @@ QList<QContact> GoogleContactSyncAdaptor::transformContactAvatars(const QList<QC
                 QVariantMap metadata;
                 metadata.insert(ACCOUNT_ID_KEY, accountId);
                 metadata.insert(TOKEN_KEY, accessToken);
+                metadata.insert(IDENTIFIER_KEY, curr.detail<QContactGuid>().guid());
 
                 // transform to a local file name.
-                QString localFileName = GoogleContactImageDownloader::staticOutputFile(remoteImageUrl);
+                QString localFileName = GoogleContactImageDownloader::staticOutputFile(
+                        curr.detail<QContactGuid>().guid(), remoteImageUrl);
                 avatar.setImageUrl(localFileName);
 
                 // update the value in the current contact.
@@ -635,6 +631,7 @@ void GoogleContactSyncAdaptor::finalCleanup()
 {
     // Synchronously find any contacts which need to be removed,
     // which were somehow "left behind" by the sync process.
+    // Also, determine if any avatars were not synced, and remove those details.
 
     // first, get a list of all existing, enabled google account ids
     QList<int> googleAccountIds;
@@ -657,7 +654,7 @@ void GoogleContactSyncAdaptor::finalCleanup()
     syncTargetFilter.setValue(SOCIALD_GOOGLE_CONTACTS_SYNCTARGET);
     QContactFetchHint noRelationships;
     noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
-    noRelationships.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactOriginMetadata::Type);
+    noRelationships.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactOriginMetadata::Type << QContactAvatar::Type);
     QList<QContact> googleContacts = m_contactManager->contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
 
     // third, find all account ids from which contacts have been synced
@@ -674,7 +671,39 @@ void GoogleContactSyncAdaptor::finalCleanup()
         }
     }
 
-    // fourth, purge all data for those account ids which no longer exist.
+    // fourth, remove any non-existent avatar details.
+    // We save these first, in case some contacts get removed by purge.
+    QList<QContact> saveList;
+    for (int i = 0; i < googleContacts.size(); ++i) {
+        bool contactAddedToSaveList = false;
+        QContact contact = googleContacts.at(i);
+        QList<QContactAvatar> allAvatars = contact.details<QContactAvatar>();
+        for (int j = 0; j < allAvatars.size(); ++j) {
+            QContactAvatar av = allAvatars[j];
+            if (!av.imageUrl().isEmpty()) {
+                // this avatar may have failed to sync.
+                QUrl avatarUrl = av.imageUrl();
+                if (avatarUrl.isLocalFile() && !QFile::exists(av.imageUrl().toString())) {
+                    // download failed, remove it from the contact.
+                    contact.removeDetail(&av);
+                    if (!contactAddedToSaveList) {
+                        saveList.append(contact);
+                        contactAddedToSaveList = true;
+                    }
+                }
+            }
+        }
+    }
+    if (m_contactManager->saveContacts(&saveList)) {
+        TRACE(SOCIALD_INFORMATION,
+            QString(QLatin1String("finalCleanup() purged non-existent avatars from %1 Google contacts"))
+            .arg(saveList.size()));
+    } else {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("finalCleanup() failed to save non-existent avatar removals for Google contacts")));
+    }
+
+    // fifth, purge all data for those account ids which no longer exist.
     if (purgeAccountIds.size()) {
         TRACE(SOCIALD_INFORMATION,
             QString(QLatin1String("finalCleanup() purging contacts from %1 non-existent Google accounts"))
