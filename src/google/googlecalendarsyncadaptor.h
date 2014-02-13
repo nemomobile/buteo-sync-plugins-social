@@ -19,6 +19,8 @@
 #include <extendedstorage.h>
 #include <icalformat.h>
 
+#include <socialcache/googlecalendardatabase.h>
+
 class GoogleCalendarSyncAdaptor : public GoogleDataTypeSyncAdaptor
 {
     Q_OBJECT
@@ -65,6 +67,8 @@ private:
     mKCal::ExtendedCalendar::Ptr m_calendar;
     mKCal::ExtendedStorage::Ptr m_storage;
     mutable KCalCore::ICalFormat m_icalFormat;
+
+    GoogleCalendarDatabase m_idDb; // solely for local-deletion-upsync support
 };
 
 #endif // GOOGLECALENDARSYNCADAPTOR_H
