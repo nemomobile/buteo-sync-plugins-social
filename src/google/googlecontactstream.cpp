@@ -418,7 +418,7 @@ QContactDetail GoogleContactStream::handleEntryPhoneNumber()
     QString rel = mXml->attributes().hasAttribute("rel")
                 ? mXml->attributes().value("rel").toString()
                 : QString();
-    qWarning() << "rel:" << rel << "for phone:" << phone.number();
+
     if (rel == QStringLiteral("http://schemas.google.com/g/2005#home")) {
         phone.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeLandline);
         phone.setContexts(QContactDetail::ContextHome);

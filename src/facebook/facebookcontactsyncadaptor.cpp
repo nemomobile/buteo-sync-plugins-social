@@ -80,7 +80,7 @@ public:
         ContactCover
     };
     explicit FacebookContactImageDownloader();
-    static QString staticOutputFile(const QVariantMap &data);
+    static QString staticOutputFile(const QString &url, const QVariantMap &data);
 protected:
     QString outputFile(const QString &url, const QVariantMap &data) const;
 };
@@ -90,29 +90,23 @@ FacebookContactImageDownloader::FacebookContactImageDownloader()
 {
 }
 
-QString FacebookContactImageDownloader::staticOutputFile(const QVariantMap &data)
+QString FacebookContactImageDownloader::staticOutputFile(const QString &url, const QVariantMap &data)
 {
     // We create the file identifier by appending the type to the real identifier
     QString identifier = data.value(QLatin1String(IDENTIFIER_KEY)).toString();
-    if (identifier.isEmpty()) {
-        return QString();
-    }
-
     QString typeString = data.value(QLatin1String(TYPE_KEY)).toString();
-    if (typeString.isEmpty()) {
+    if (identifier.isEmpty() || typeString.isEmpty() || url.isEmpty()) {
         return QString();
     }
 
     identifier.append(typeString);
-
-    return makeOutputFile(SocialSyncInterface::Facebook, SocialSyncInterface::Contacts, identifier);
+    return makeOutputFile(SocialSyncInterface::Facebook, SocialSyncInterface::Contacts, identifier, url);
 }
 
 QString FacebookContactImageDownloader::outputFile(const QString &url,
                                                    const QVariantMap &data) const
 {
-    Q_UNUSED(url)
-    return staticOutputFile(data);
+    return staticOutputFile(url, data);
 }
 
 //------------------------------------------------
@@ -462,8 +456,8 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
                     data.insert(IDENTIFIER_KEY, fbuid);
                     data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactCover);
                     data.insert(ACCOUNT_ID_KEY, accountId);
-                    QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(data);
-                    if (!QFile::exists(avatarFileName)) { // XXX TODO: staticOutputFile() should take URL_KEY as parameter, else server-side change will not be detected!
+                    QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(cover, data);
+                    if (!QFile::exists(avatarFileName)) {
                         m_queuedAvatarDownloads[accountId].append(qMakePair<QString, QVariantMap>(cover, data));
                     }
 
@@ -482,8 +476,8 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
                     data.insert(IDENTIFIER_KEY, fbuid);
                     data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactPicture);
                     data.insert(ACCOUNT_ID_KEY, accountId);
-                    QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(data);
-                    if (!QFile::exists(avatarFileName)) { // XXX TODO: staticOutputFile() should take URL_KEY as parameter, else server-side change will not be detected!
+                    QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(picture, data);
+                    if (!QFile::exists(avatarFileName)) {
                         m_queuedAvatarDownloads[accountId].append(qMakePair<QString, QVariantMap>(picture, data));
                     }
 
@@ -498,8 +492,8 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
             data.insert(IDENTIFIER_KEY, fbuid);
             data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactCover);
             data.insert(ACCOUNT_ID_KEY, accountId);
-            QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(data);
-            if (!QFile::exists(avatarFileName)) { // XXX TODO: staticOutputFile() should take URL_KEY as parameter, else server-side change will not be detected!
+            QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(cover, data);
+            if (!QFile::exists(avatarFileName)) {
                 m_queuedAvatarDownloads[accountId].append(qMakePair<QString, QVariantMap>(cover, data));
             }
 
@@ -514,8 +508,8 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
             data.insert(IDENTIFIER_KEY, fbuid);
             data.insert(TYPE_KEY, FacebookContactImageDownloader::ContactPicture);
             data.insert(ACCOUNT_ID_KEY, accountId);
-            QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(data);
-            if (!QFile::exists(avatarFileName)) { // XXX TODO: staticOutputFile() should take URL_KEY as parameter, else server-side change will not be detected!
+            QString avatarFileName = FacebookContactImageDownloader::staticOutputFile(picture, data);
+            if (!QFile::exists(avatarFileName)) {
                 m_queuedAvatarDownloads[accountId].append(qMakePair<QString, QVariantMap>(picture, data));
             }
 

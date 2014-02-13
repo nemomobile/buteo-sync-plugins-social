@@ -273,6 +273,8 @@ static QString hmacSha1(const QString &signingKey, const QString &baseString)
 
 QString TwitterDataTypeSyncAdaptor::authorizationHeader(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &requestMethod, const QString &requestUrl, const QList<QPair<QString, QString> > &parameters)
 {
+    Q_UNUSED(accountId);
+
     // Twitter requires all requests to be signed with an authorization header.
     QString key = consumerKey();
     QString secret = consumerSecret();
