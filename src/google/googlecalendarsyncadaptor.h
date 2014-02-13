@@ -67,6 +67,7 @@ private:
     mKCal::ExtendedCalendar::Ptr m_calendar;
     mKCal::ExtendedStorage::Ptr m_storage;
     mutable KCalCore::ICalFormat m_icalFormat;
+    bool m_storageNeedsSave;
 
     GoogleCalendarDatabase m_idDb; // solely for local-deletion-upsync support
 };

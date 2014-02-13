@@ -24,6 +24,9 @@ static const char *FACEBOOK_COLOR = "#3B5998";
 FacebookCalendarTypeSyncAdaptor::FacebookCalendarTypeSyncAdaptor(SyncService *syncService,
                                                                  QObject *parent)
     : FacebookDataTypeSyncAdaptor(syncService, SyncService::Calendars, parent)
+    , m_calendar(mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(QLatin1String("UTC"))))
+    , m_storage(mKCal::ExtendedCalendar::defaultStorage(m_calendar))
+    , m_storageNeedsSave(false)
 {
     setInitialActive(m_db.isValid());
 }
@@ -32,32 +35,46 @@ FacebookCalendarTypeSyncAdaptor::~FacebookCalendarTypeSyncAdaptor()
 {
 }
 
+void FacebookCalendarTypeSyncAdaptor::sync(const QString &dataTypeString)
+{
+    m_storageNeedsSave = false;
+    m_storage->open(); // we close it in finalCleanup()
+    FacebookDataTypeSyncAdaptor::sync(dataTypeString);
+}
+
+void FacebookCalendarTypeSyncAdaptor::finalCleanup()
+{
+    // commit changes to db
+    if (m_storageNeedsSave) {
+        m_storage->save();
+    }
+    m_storage->close();
+}
+
 void FacebookCalendarTypeSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds)
 {
     // We clean all the entries in the calendar
-    mKCal::ExtendedCalendar::Ptr calendar =
-            mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(QLatin1String("UTC")));
-    mKCal::ExtendedStorage::Ptr storage = mKCal::ExtendedCalendar::defaultStorage(calendar);
-    storage->open();
     foreach (int accountId, oldIds) {
         QList<FacebookEvent::ConstPtr> events = m_db.events(accountId);
 
         // Delete events from the calendar
         foreach (const FacebookEvent::ConstPtr &event, events) {
             QString incidenceId = event->incidenceId();
-            storage->load(incidenceId);
-            KCalCore::Event::Ptr event = calendar->event(incidenceId);
+            m_storage->load(incidenceId);
+            KCalCore::Event::Ptr event = m_calendar->event(incidenceId);
             if (!event.isNull()) {
-                calendar->deleteEvent(event);
+                m_calendar->deleteEvent(event);
+                m_storageNeedsSave = true;
             }
         }
 
         // Delete the notebook from the storage
         // (we even check if there are several of them, in case of an error)
-        foreach (mKCal::Notebook::Ptr notebook, storage->notebooks()) {
+        foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
             if (notebook->pluginName() == QLatin1String(FACEBOOK)
                 && notebook->account() == QString::number(accountId)) {
-                storage->deleteNotebook(notebook);
+                m_storage->deleteNotebook(notebook);
+                m_storageNeedsSave = true;
             }
         }
 
@@ -66,9 +83,6 @@ void FacebookCalendarTypeSyncAdaptor::purgeDataForOldAccounts(const QList<int> &
         m_db.sync(accountId);
         m_db.wait();
     }
-
-    storage->save();
-    storage->close();
 }
 
 void FacebookCalendarTypeSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -145,17 +159,11 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
         TRACE(SOCIALD_DEBUG,
               QString(QLatin1String("%1 events in the database")).arg(dbEvents.count()));
 
-        // We open the calendar and storage associated to it
-        mKCal::ExtendedCalendar::Ptr calendar =
-                mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(QLatin1String("UTC")));
-        mKCal::ExtendedStorage::Ptr storage = mKCal::ExtendedCalendar::defaultStorage(calendar);
-        storage->open();
-
         // Search for the Facebook Notebook
         // Create one if not found (TODO: check if it failed)
         // TODO: set a name to the notebook
         mKCal::Notebook::List facebookNotebooks;
-        foreach (mKCal::Notebook::Ptr notebook, storage->notebooks()) {
+        foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
             if (notebook->pluginName() == QLatin1String(FACEBOOK)
                 && notebook->account() == QString::number(accountId)) {
                 facebookNotebooks.append(notebook);
@@ -173,17 +181,14 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
                   QString(QLatin1String("Resetting notebooks")));
 
             foreach (mKCal::Notebook::Ptr notebook, facebookNotebooks) {
-                storage->loadNotebookIncidences(notebook->uid());
-                calendar->reload();
+                m_storage->loadNotebookIncidences(notebook->uid());
                 KCalCore::Incidence::List incidenceList;
-                storage->allIncidences(&incidenceList, notebook->uid());
+                m_storage->allIncidences(&incidenceList, notebook->uid());
                 foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-                    calendar->deleteIncidence(calendar->incidence(incidence->uid()));
+                    m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
                 }
-
-                calendar->save();
-                storage->save();
-                storage->deleteNotebook(notebook);
+                m_storage->deleteNotebook(notebook);
+                m_storageNeedsSave = true;
             }
 
             facebookNotebooks.clear();
@@ -200,7 +205,8 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
             notebook->setColor(QLatin1String(FACEBOOK_COLOR));
             notebook->setDescription(accountManager->account(accountId)->displayName());
             notebook->setIsReadOnly(true);
-            storage->addNotebook(notebook);
+            m_storage->addNotebook(notebook);
+            m_storageNeedsSave = true;
         } else {
             notebook = facebookNotebooks.first();
             bool changed = false;
@@ -216,7 +222,8 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
             }
 
             if (changed) {
-                storage->updateNotebook(notebook);
+                m_storage->updateNotebook(notebook);
+                m_storageNeedsSave = true;
             }
         }
 
@@ -235,8 +242,8 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
         // We load incidences that are associated to Facebook into memory
         foreach (const FacebookEvent::ConstPtr &dbEvent, dbEvents) {
             QString incidenceId = dbEvent->incidenceId();
-            storage->load(incidenceId);
-            KCalCore::Event::Ptr event = calendar->event(incidenceId);
+            m_storage->load(incidenceId);
+            KCalCore::Event::Ptr event = m_calendar->event(incidenceId);
             if (!event.isNull()) {
                 dbEventsMap.insert(dbEvent->fbEventId(), dbEvent);
                 calendarEventsMap.insert(dbEvent->fbEventId(), event);
@@ -310,26 +317,22 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
             if (update) {
                 event->endUpdates();
             } else {
-                calendar->addEvent(event, notebook->uid());
+                m_calendar->addEvent(event, notebook->uid());
             }
         }
 
         // Remove all other incidences
         foreach (const QString &incidence, incidencesSet) {
-            KCalCore::Incidence::Ptr incidencePtr = calendar->incidence(incidence);
+            KCalCore::Incidence::Ptr incidencePtr = m_calendar->incidence(incidence);
             if (incidencePtr) {
-                calendar->deleteIncidence(incidencePtr);
+                m_calendar->deleteIncidence(incidencePtr);
             }
         }
-
-        // Write to calendar
-        calendar->save();
-        storage->save();
-        storage->close();
 
         // Perform removal and insertions
         m_db.sync(accountId);
         m_db.wait();
+        m_storageNeedsSave = true;
 
     } else {
         // error occurred during request.

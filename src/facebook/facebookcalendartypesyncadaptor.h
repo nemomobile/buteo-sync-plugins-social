@@ -11,6 +11,9 @@
 #include "facebookdatatypesyncadaptor.h"
 #include "internaldatabasemanipulationinterface.h"
 
+#include <extendedcalendar.h>
+#include <extendedstorage.h>
+
 #include <socialcache/facebookcalendardatabase.h>
 
 class FacebookCalendarTypeSyncAdaptor
@@ -23,8 +26,10 @@ public:
     ~FacebookCalendarTypeSyncAdaptor();
 
 protected: // implementing FacebookDataTypeSyncAdaptor interface
+    void sync(const QString &dataTypeString);
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
+    void finalCleanup();
 
 private:
     void requestEvents(int accountId, const QString &accessToken,
@@ -34,7 +39,10 @@ private Q_SLOTS:
     void finishedHandler();
 
 private:
+    mKCal::ExtendedCalendar::Ptr m_calendar;
+    mKCal::ExtendedStorage::Ptr m_storage;
     FacebookCalendarDatabase m_db;
+    bool m_storageNeedsSave;
 };
 
 #endif // FACEBOOKCALENDARTYPESYNCADAPTOR_H
