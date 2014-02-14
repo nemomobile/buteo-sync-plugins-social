@@ -328,6 +328,8 @@ void GoogleCalendarSyncAdaptor::finalCleanup()
         m_storage->save();
     }
     m_storage->close();
+    m_idDb.sync();
+    m_idDb.wait();
 
     // set the success status for each of our account settings.
     QList<int> succeededAccounts;
