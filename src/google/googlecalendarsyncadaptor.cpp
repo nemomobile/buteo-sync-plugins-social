@@ -306,7 +306,7 @@ GoogleCalendarSyncAdaptor::GoogleCalendarSyncAdaptor(SyncService *syncService, Q
     , m_calendar(mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(QLatin1String("UTC"))))
     , m_storage(mKCal::ExtendedCalendar::defaultStorage(m_calendar))
 {
-    setInitialActive(true);
+    setInitialActive(m_idDb.isValid());
 }
 
 GoogleCalendarSyncAdaptor::~GoogleCalendarSyncAdaptor()
@@ -338,6 +338,9 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds
                 m_storage->deleteNotebook(notebook);
             }
         }
+
+        // Delete ids from our local->remote id mapping
+        m_idDb.removeEvents(accountId);
     }
 
     m_storage->save();
@@ -710,11 +713,13 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             } // else, newly added+updated locally, no gcalId yet.
         }
         Q_FOREACH(const KCalCore::Incidence::Ptr incidence, deletedList) {
-            // XXX TODO: FIXME: this doesn't seem to work...
-            // mkcal deletes extended properties of deleted incidences?
-            // We cannot find the gcal event id of deleted incidences...
-            QString gcalId = gCalEventId(incidence);
+            // We would like to do the following, but mkcal removes
+            // custom properties of deleted incidences:
+            //QString gcalId = gCalEventId(incidence);
+            // Instead, read from the out-of-band id database.
+            QString gcalId = m_idDb.gcalEventId(accountId, googleNotebook->uid(), incidence->uid());
             if (gcalId.size()) {
+                m_idDb.removeEvent(accountId, gcalId); // it has been removed from mkcal.
                 deletedMap.insert(gcalId, incidence->uid());
                 updatedMap.remove(gcalId); // don't upsync updates to deleted events.
             } // else, newly added+deleted locally, no gcalId yet.
@@ -741,6 +746,11 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
 
         m_storage->save();
         m_storage->loadNotebookIncidences(googleNotebook->uid());
+
+        // clean the local->remote id mappings for this notebook (if they exist)
+        if (!nbUid.isEmpty()) {
+            m_idDb.removeEvents(accountId, nbUid);
+        }
     }
 
     // for each each of the events downloaded from the server, create a local event.
@@ -751,6 +761,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
         if (eventWasDeletedRemotely) {
             // delete existing event.
             remoteRemoved++;
+            m_idDb.removeEvent(accountId, eventId);
             if (allMap.contains(eventId)) {
                 m_calendar->deleteEvent(allMap.value(eventId));
             } // else already deleted locally, can ignore.
@@ -774,6 +785,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             KCalCore::Event::Ptr event = KCalCore::Event::Ptr(new KCalCore::Event);
             jsonToKCal(eventData, event, m_icalFormat); // direct conversion
             m_calendar->addEvent(event, googleNotebook->uid());
+            m_idDb.insertEvent(accountId, eventId, googleNotebook->uid(), event->uid());
         }
     }
 
@@ -789,7 +801,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
         int localAdded = 0, localModified = 0, localRemoved = 0;
 
         // first, push up deletions.
-        Q_FOREACH (const QString &deletedGcalId, deletedMap) {
+        Q_FOREACH (const QString &deletedGcalId, deletedMap.keys()) {
             QString incidenceUid = deletedMap.value(deletedGcalId);
             localRemoved++;
             upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncDelete,
@@ -831,6 +843,8 @@ void GoogleCalendarSyncAdaptor::finalCleanup()
     // commit changes to db
     m_storage->save();
     m_storage->close();
+    m_idDb.sync();
+    m_idDb.wait();
 
     // set the success status for each of our account settings.
     QList<int> succeededAccounts;
@@ -894,8 +908,8 @@ void GoogleCalendarSyncAdaptor::upsyncChanges(int accountId, const QString &acce
         connect(reply, SIGNAL(finished()), this, SLOT(upsyncFinishedHandler()));
 
         TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("Upsyncing change: %1 to calendarId: %2 of account %3:\n%4\n"))
-                .arg(upsyncTypeStr).arg(calendarId).arg(accountId).arg(QString::fromUtf8(eventData)));
+                QString(QLatin1String("Upsyncing change: %1 to calendarId: %2 of account %3:\n%4\n%5\n"))
+                .arg(upsyncTypeStr).arg(calendarId).arg(accountId).arg(request.url().toString()).arg(QString::fromUtf8(eventData)));
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request upsync for calendar %1"
@@ -917,6 +931,12 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
     QByteArray replyData = reply->readAll();
     bool isError = reply->property("isError").toBool();
 
+    // QNetworkReply can report an error even if there isn't one...
+    if (isError && reply->error() == QNetworkReply::UnknownContentError
+            && upsyncType == GoogleCalendarSyncAdaptor::UpsyncDelete) {
+        isError = false; // not a real error; Google returns an empty response.
+    }
+
     disconnect(reply);
     reply->deleteLater();
 
@@ -927,14 +947,16 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                 QString(QLatin1String("error occurred while upsyncing calendar data to Google account %1; got: %2"))
                 .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
         m_syncSucceeded[accountId] = false;
-    } else if (upsyncType == GoogleCalendarSyncAdaptor::UpsyncDelete && !replyData.isEmpty()) {
+    } else if (upsyncType == GoogleCalendarSyncAdaptor::UpsyncDelete) {
         // we expect an empty response body on success for Delete operations
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error occurred while upsyncing calendar event deletion to Google account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
-        m_syncSucceeded[accountId] = false;
+        if (!replyData.isEmpty()) {
+            TRACE(SOCIALD_ERROR,
+                    QString(QLatin1String("error occurred while upsyncing calendar event deletion to Google account %1; got: %2"))
+                    .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+            m_syncSucceeded[accountId] = false;
+        }
     } else {
-        // we expect an event resource body on success
+        // we expect an event resource body on success for Insert/Modify requests.
         bool ok = false;
         QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
         if (!ok) {
@@ -993,6 +1015,7 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                             .arg(event->dtStart().toString(RFC3339_FORMAT))
                             .arg(event->dtEnd().toString(RFC3339_FORMAT)));
                     event->endUpdates();
+                    m_idDb.insertEvent(accountId, gCalEventId(event), googleNotebook->uid(), kcalEventId);
                 }
             }
         }
