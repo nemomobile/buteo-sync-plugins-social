@@ -305,6 +305,7 @@ GoogleCalendarSyncAdaptor::GoogleCalendarSyncAdaptor(SyncService *syncService, Q
     : GoogleDataTypeSyncAdaptor(syncService, SyncService::Calendars, parent)
     , m_calendar(mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(QLatin1String("UTC"))))
     , m_storage(mKCal::ExtendedCalendar::defaultStorage(m_calendar))
+    , m_storageNeedsSave(false)
 {
     setInitialActive(m_idDb.isValid());
 }
@@ -315,8 +316,27 @@ GoogleCalendarSyncAdaptor::~GoogleCalendarSyncAdaptor()
 
 void GoogleCalendarSyncAdaptor::sync(const QString &dataTypeString)
 {
+    m_storageNeedsSave = false;
     m_storage->open(); // we close it in finalCleanup()
     GoogleDataTypeSyncAdaptor::sync(dataTypeString);
+}
+
+void GoogleCalendarSyncAdaptor::finalCleanup()
+{
+    // commit changes to db
+    if (m_storageNeedsSave) {
+        m_storage->save();
+    }
+    m_storage->close();
+
+    // set the success status for each of our account settings.
+    QList<int> succeededAccounts;
+    Q_FOREACH (int accountId, m_syncSucceeded.keys()) {
+        if (m_syncSucceeded.value(accountId)) {
+            succeededAccounts.append(accountId);
+        }
+    }
+    setLastSyncSuccessful(succeededAccounts);
 }
 
 void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds)
@@ -336,14 +356,13 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds
                     m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
                 }
                 m_storage->deleteNotebook(notebook);
+                m_storageNeedsSave = true;
             }
         }
 
         // Delete ids from our local->remote id mapping
         m_idDb.removeEvents(accountId);
     }
-
-    m_storage->save();
 }
 
 void GoogleCalendarSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -485,6 +504,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
                     notebook->setName(m_serverCalendarIdToSummaryAndColor[accountId].value(currDeviceCalendarId).first);
                     notebook->setColor(m_serverCalendarIdToSummaryAndColor[accountId].value(currDeviceCalendarId).second);
                     m_storage->updateNotebook(notebook);
+                    m_storageNeedsSave = true;
                 }
             } else {
                 // the calendar has been removed from the server.
@@ -500,6 +520,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
                     m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
                 }
                 m_storage->deleteNotebook(notebook);
+                m_storageNeedsSave = true;
             }
         }
     }
@@ -518,13 +539,9 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
             notebook->setPluginName(QStringLiteral("google-") + serverCalendarId);
             notebook->setAccount(QString::number(accountId));
             m_storage->addNotebook(notebook);
+            m_storageNeedsSave = true;
         }
     }
-
-    // commit changes to calendar backend on device.
-    // addNotebook/updateNotebook/deleteNotebook are all synchronous
-    // but deleteIncidence may not be.
-    m_storage->save();
 
     // Finally, request the events for each calendar.
     // If the last sync was successful, we can do a fast sync (using change deltas).
@@ -744,8 +761,8 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
         googleNotebook->setAccount(nbAccount);
         m_storage->addNotebook(googleNotebook);
 
-        m_storage->save();
         m_storage->loadNotebookIncidences(googleNotebook->uid());
+        m_storageNeedsSave = true;
 
         // clean the local->remote id mappings for this notebook (if they exist)
         if (!nbUid.isEmpty()) {
@@ -764,6 +781,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             m_idDb.removeEvent(accountId, eventId);
             if (allMap.contains(eventId)) {
                 m_calendar->deleteEvent(allMap.value(eventId));
+                m_storageNeedsSave = true;
             } // else already deleted locally, can ignore.
         } else if (deletedMap.contains(eventId)) {
             // event was deleted locally, can ignore.
@@ -779,12 +797,14 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             event->startUpdates();
             jsonToKCal(eventData, event, m_icalFormat);
             event->endUpdates();
+            m_storageNeedsSave = true;
         } else {
             // add a new local event
             remoteAdded++;
             KCalCore::Event::Ptr event = KCalCore::Event::Ptr(new KCalCore::Event);
             jsonToKCal(eventData, event, m_icalFormat); // direct conversion
             m_calendar->addEvent(event, googleNotebook->uid());
+            m_storageNeedsSave = true;
             m_idDb.insertEvent(accountId, eventId, googleNotebook->uid(), event->uid());
         }
     }
@@ -833,27 +853,6 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
               .arg(googleNotebook->name()).arg(accountId)
               .arg(localAdded).arg(localModified).arg(localRemoved));
     }
-
-    // Write changes to local calendar.
-    m_storage->save();
-}
-
-void GoogleCalendarSyncAdaptor::finalCleanup()
-{
-    // commit changes to db
-    m_storage->save();
-    m_storage->close();
-    m_idDb.sync();
-    m_idDb.wait();
-
-    // set the success status for each of our account settings.
-    QList<int> succeededAccounts;
-    Q_FOREACH (int accountId, m_syncSucceeded.keys()) {
-        if (m_syncSucceeded.value(accountId)) {
-            succeededAccounts.append(accountId);
-        }
-    }
-    setLastSyncSuccessful(succeededAccounts);
 }
 
 void GoogleCalendarSyncAdaptor::upsyncChanges(int accountId, const QString &accessToken,
@@ -1015,6 +1014,7 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                             .arg(event->dtStart().toString(RFC3339_FORMAT))
                             .arg(event->dtEnd().toString(RFC3339_FORMAT)));
                     event->endUpdates();
+                    m_storageNeedsSave = true;
                     m_idDb.insertEvent(accountId, gCalEventId(event), googleNotebook->uid(), kcalEventId);
                 }
             }
