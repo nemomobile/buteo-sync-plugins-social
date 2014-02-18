@@ -4,10 +4,18 @@ OTHER_FILES += facebook_eventfeed.files
 
 # lipstick event feed subview
 facebook_eventfeed.path = /usr/share/lipstick/eventfeed/
-facebook_eventfeed.files = $$PWD/FacebookPostPage.qml \
+facebook_eventfeed.files = $$PWD/FacebookNotificationPage.qml \
+                           $$PWD/FacebookGenericNotificationPage.qml \
+                           $$PWD/FacebookCommentablePage.qml \
+                           $$PWD/FacebookAccountMenu.qml \
+                           $$PWD/FacebookEvent.qml \
+                           $$PWD/FacebookListView.qml \
+                           $$PWD/FacebookEventpage.qml \
+                           $$PWD/FacebookPostPage.qml \
+                           $$PWD/FacebookPicturePage.qml \
                            $$PWD/facebook-update.qml \
                            $$PWD/facebook-delegate.qml \
-                           $$PWD/FacebookFeedItem.qml \
+                           $$PWD/FacebookNotificationItem.qml \
                            $$PWD/facebook-feed.qml
 
 # translations

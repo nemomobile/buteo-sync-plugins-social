@@ -9,9 +9,9 @@
 #include "trace.h"
 
 #include <QUrlQuery>
+#include <QDebug>
 
-//nemo-qml-plugins/notifications
-#include <notification.h>
+static const int OLD_NOTIFICATION_LIMIT_IN_DAYS = 21;
 
 FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(QObject *parent)
     : FacebookDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Notifications, parent)
@@ -25,35 +25,31 @@ FacebookNotificationSyncAdaptor::~FacebookNotificationSyncAdaptor()
 
 QString FacebookNotificationSyncAdaptor::syncServiceName() const
 {
-    return QStringLiteral("facebook-notifications");
+    return QStringLiteral("facebook-microblog");
 }
 
 void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
-    foreach (int accountId, purgeIds) {
-        // Search for the notification and close it
-        Notification *notification = 0;
-        QList<QObject *> notifications = Notification::notifications();
-        foreach (QObject *object, notifications) {
-            Notification *castedNotification = static_cast<Notification *>(object);
-            if (castedNotification->category() == "x-nemo.social.facebook.notification"
-                && castedNotification->hintValue("x-nemo.sociald.account-id").toInt() == accountId) {
-                notification = castedNotification;
-                break;
-            }
+    if (purgeIds.size()) {
+        foreach (int accountIdentifier, purgeIds) {
+            m_db.removeNotifications(accountIdentifier);
         }
-
-        if (notification) {
-            notification->close();
-        }
-
-        qDeleteAll(notifications);
+        m_db.sync();
+        m_db.wait();
     }
 }
 
 void FacebookNotificationSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
     requestNotifications(accountId, accessToken);
+}
+
+void FacebookNotificationSyncAdaptor::finalize(int accountId)
+{
+    Q_UNUSED(accountId)
+    m_db.purgeOldNotifications(OLD_NOTIFICATION_LIMIT_IN_DAYS);
+    m_db.sync();
+    m_db.wait();
 }
 
 void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const QString &accessToken, const QString &until, const QString &pagingToken)
@@ -101,66 +97,34 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
     bool ok = false;
 
-    QDateTime lastSync = lastSyncTimestamp(serviceName(), SocialNetworkSyncAdaptor::dataTypeName(dataType),
-                                           accountId).toUTC();
-
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!isError && ok && parsed.contains(QLatin1String("summary"))) {
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
-        int notificationCount = 0;
-        bool haveNewNotifs = false;
         foreach (const QJsonValue &entry, data) {
-            QString updatedTimeStr
-                    = entry.toObject().value(QLatin1String("updated_time")).toString();
-            QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
+            QJsonObject object = entry.toObject();
+            QDateTime createdTime = QDateTime::fromString(object.value(QLatin1String("created_time")).toString(), Qt::ISODate);
+            createdTime.setTimeSpec(Qt::UTC);
+            QDateTime updatedTime = QDateTime::fromString(object.value(QLatin1String("updated_time")).toString(), Qt::ISODate);
             updatedTime.setTimeSpec(Qt::UTC);
 
-            if (updatedTime > lastSync) {
-                haveNewNotifs = true;
-                notificationCount++;
-            }
+            QJsonObject sender = object.value(QLatin1String("from")).toObject();
+            QJsonObject receiver = object.value(QLatin1String("to")).toObject();
+            QJsonObject application = object.value(QLatin1String("application")).toObject();
+            QJsonObject notificationObject = object.value(QLatin1String("object")).toObject();
+
+            m_db.addFacebookNotification(object.value(QLatin1String("id")).toString(),
+                                         sender.value(QLatin1String("id")).toString(),
+                                         receiver.value(QLatin1String("id")).toString(),
+                                         createdTime,
+                                         updatedTime,
+                                         object.value(QLatin1String("title")).toString(),
+                                         object.value(QLatin1String("link")).toString(),
+                                         application.value(QLatin1String("name")).toString(),
+                                         notificationObject.value(QLatin1String("id")).toString(),
+                                         accountId,
+                                         clientId());
         }
-
-        Notification *notification = existingNemoNotification(accountId);
-        if (notification != 0) {
-            notificationCount += notification->itemCount();
-        }
-
-        // Only publish a notification if one doesn't exist or we have new notifications to publish.
-        if (haveNewNotifs) {
-            if (notification == 0) {
-                notification = new Notification;
-                notification->setCategory("x-nemo.social.facebook.notification");
-                notification->setHintValue("x-nemo.sociald.account-id", accountId);
-            }
-
-            // When clicked, take the user to their notifications list page
-            QStringList openUrlArgs(QLatin1String("https://touch.facebook.com/notifications"));
-            notification->setRemoteDBusCallServiceName("org.sailfishos.browser");
-            notification->setRemoteDBusCallObjectPath("/");
-            notification->setRemoteDBusCallInterface("org.sailfishos.browser");
-            notification->setRemoteDBusCallMethodName("openUrl");
-            notification->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
-
-            //: The summary text of the Facebook Notifications device notification
-            //% "You have %n new notification(s)!"
-            QString summary = qtTrId("sociald_facebook_notifications-notification_body", notificationCount);
-            //: The body text of the Facebook Notifications device notification, describing that it came from Facebook.
-            //% "Facebook"
-            QString body = qtTrId("sociald_facebook_notifications-notification_summary");
-            notification->setSummary(summary);
-            notification->setBody(body);
-            notification->setPreviewSummary(summary);
-            notification->setPreviewBody(body);
-            notification->setItemCount(notificationCount);
-            notification->setTimestamp(QDateTime::currentDateTime());
-            notification->publish();
-        } else if (notificationCount == 0 && notification != 0) {
-            // Destroy any existing notification if there should be no notifications
-            notification->close();
-        }
-        delete notification;
     } else {
         // error occurred during request.
         TRACE(SOCIALD_ERROR,
@@ -170,15 +134,4 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
-}
-
-Notification *FacebookNotificationSyncAdaptor::existingNemoNotification(int accountId)
-{
-    foreach (QObject *object, Notification::notifications()) {
-        Notification *notification = static_cast<Notification *>(object);
-        if (notification->category() == "x-nemo.social.facebook.notification" && notification->hintValue("x-nemo.sociald.account-id").toInt() == accountId) {
-            return notification;
-        }
-    }
-    return 0;
 }

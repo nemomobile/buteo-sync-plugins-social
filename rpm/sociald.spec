@@ -139,6 +139,20 @@ Provides notification synchronisation with Facebook
 %config %{_sysconfdir}/buteo/profiles/client/facebook-notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Notifications.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
+%{_datadir}/translations/lipstick-jolla-home-facebook_eng_en.qm
+%{_datadir}/lipstick/eventfeed/FacebookNotificationPage.qml
+%{_datadir}/lipstick/eventfeed/FacebookGenericNotificationPage.qml
+%{_datadir}/lipstick/eventfeed/FacebookCommentablePage.qml
+%{_datadir}/lipstick/eventfeed/FacebookAccountMenu.qml
+%{_datadir}/lipstick/eventfeed/FacebookListView.qml
+%{_datadir}/lipstick/eventfeed/FacebookPostPage.qml
+%{_datadir}/lipstick/eventfeed/FacebookEventPage.qml
+%{_datadir}/lipstick/eventfeed/FacebookPicturePage.qml
+%{_datadir}/lipstick/eventfeed/FacebookEvent.qml
+%{_datadir}/lipstick/eventfeed/facebook-update.qml
+%{_datadir}/lipstick/eventfeed/facebook-delegate.qml
+%{_datadir}/lipstick/eventfeed/FacebookNotificationItem.qml
+%{_datadir}/lipstick/eventfeed/facebook-feed.qml
 
 %pre facebook-notifications
 rm -f /home/nemo/.cache/msyncd/sync/client/facebook-notifications.xml
@@ -163,11 +177,6 @@ Provides post synchronisation with Facebook
 
 %files facebook-posts
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.statuspost.conf
-%{_datadir}/lipstick/eventfeed/FacebookPostPage.qml
-%{_datadir}/lipstick/eventfeed/facebook-update.qml
-%{_datadir}/lipstick/eventfeed/facebook-delegate.qml
-%{_datadir}/lipstick/eventfeed/FacebookFeedItem.qml
-%{_datadir}/lipstick/eventfeed/facebook-feed.qml
 %{_datadir}/translations/lipstick-jolla-home-facebook_eng_en.qm
 ###/usr/lib/buteo-plugins-qt5/libfacebook-posts-client.so
 ###%config %{_sysconfdir}/buteo/profiles/client/facebook-posts.xml

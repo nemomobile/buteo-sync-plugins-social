@@ -12,6 +12,8 @@ PullDownMenu {
     property var pageContainer
     property string serviceName
     property bool switchEnabled
+    property string link
+    property string linkTitle
 
     // internal.index stores the index of the current account in
     // internal.account, while container.currentAccountIndex
@@ -61,6 +63,13 @@ PullDownMenu {
             }
         }
     ]
+
+    MenuItem {
+        id: gotoItem
+        text: container.linkTitle
+        visible: container.link !== ""
+        onClicked: Qt.openUrlExternally(container.link)
+    }
 
     MenuItem {
         text: {

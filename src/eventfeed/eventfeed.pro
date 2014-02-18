@@ -9,8 +9,10 @@ shared_eventfeed.files = \
     $$PWD/SocialBody.qml \
     $$PWD/SocialButton.qml \
     $$PWD/SocialContent.qml \
+    $$PWD/SocialEventContent.qml \
     $$PWD/SocialMediaRow.qml \
     $$PWD/SocialImage.qml \
+    $$PWD/SocialLabel.qml \
     $$PWD/SocialInfoLabel.qml \
     $$PWD/SocialComment.qml \
     $$PWD/SocialReplyField.qml \
@@ -21,7 +23,8 @@ shared_eventfeed.files = \
     $$PWD/SocialMediaFeedItem.qml \
     $$PWD/SocialMediaAccountDelegate.qml \
     $$PWD/SocialMediaIndicator.qml \
-    $$PWD/SocialMediaPreviewRow.qml
+    $$PWD/SocialMediaPreviewRow.qml \
+    $$PWD/SocialToggleButton.qml
 
 # translations
 TS_FILE = $$OUT_PWD/sociald.ts

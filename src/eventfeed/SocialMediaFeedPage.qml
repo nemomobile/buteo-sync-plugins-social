@@ -22,6 +22,7 @@ Page {
                                      // are bound to this property, directly or indirectly.
     property int refreshTimeCount: 1 // Increment this to trigger feed items to refresh times.
     property bool _needToSync
+    property alias dataType: syncHelper.dataType
     allowedOrientations: Lipstick.compositor.eventsWindowOrientation
 
     onConnectedToNetworkChanged: {

@@ -6,21 +6,18 @@ Column {
     property alias text: body.plainText
     property alias time: time.text
 
-    anchors {
-        left: parent.left
-        right: parent.right
-    }
+    width: parent.width
 
     LinkedText {
         id: body
-        anchors {
-            left: parent.left
-            right: parent.right
-        }
+        width: parent.width
         color: Theme.highlightColor
         wrapMode: Text.WordWrap
         font.pixelSize: Theme.fontSizeSmall
         shortenUrl: true
+        visible: text.length > 0
+        opacity: visible ? 1.0 : 0
+        Behavior on opacity { FadeAnimation {} }
     }
     Label {
         id: time
@@ -28,4 +25,6 @@ Column {
         opacity: 0.6
         font.pixelSize: Theme.fontSizeExtraSmall
     }
+
+    Behavior on height { FadeAnimation {} }
 }

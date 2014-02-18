@@ -9,14 +9,7 @@
 #define FACEBOOKNOTIFICATIONSYNCADAPTOR_H
 
 #include "facebookdatatypesyncadaptor.h"
-
-#include <QtCore/QObject>
-#include <QtCore/QString>
-#include <QtCore/QDateTime>
-#include <QtCore/QVariantMap>
-#include <QtCore/QList>
-#include <QtNetwork/QNetworkReply>
-#include <QtNetwork/QSslError>
+#include <socialcache/facebooknotificationsdatabase.h>
 
 class Notification;
 
@@ -33,6 +26,7 @@ public:
 protected: // implementing FacebookDataTypeSyncAdaptor interface
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
+    void finalize(int accountId);
 
 private:
     void requestNotifications(int accountId, const QString &accessToken,
@@ -43,7 +37,7 @@ private Q_SLOTS:
     void finishedHandler();
 
 private:
-    Notification *existingNemoNotification(int accountId);
+    FacebookNotificationsDatabase m_db;
 };
 
 #endif // FACEBOOKNOTIFICATIONSYNCADAPTOR_H

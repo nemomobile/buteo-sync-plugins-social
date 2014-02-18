@@ -3,11 +3,8 @@ import Sailfish.Silica 1.0
 
 Item {
     property alias text: label.text
-    anchors {
-        left: parent.left
-        right: parent.right
-    }
 
+    width: parent.width
     height: label.text !== "" ? (label.height + 2 * Theme.paddingLarge) : Theme.paddingLarge
     opacity: label.text !== "" ? 1 : 0
 
