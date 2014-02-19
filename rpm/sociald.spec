@@ -35,6 +35,8 @@ Requires: buteo-syncfw-qt5-msyncd
 Requires: mkcal-qt5
 Obsoletes: buteo-sync-plugins-google-simple <= 0.0.2
 Provides: buteo-sync-plugins-google-simple
+Requires: systemd
+Requires(post): systemd
 
 %description
 A daemon process which provides data synchronization with various social services.
@@ -121,4 +123,5 @@ rm -rf %{buildroot}
 %qmake5_install
 
 %post
-su nemo -c "systemctl --user restart msyncd.service"
+systemctl-user restart msyncd.service || :
+
