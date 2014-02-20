@@ -10,8 +10,6 @@
 #include <QtGlobal>
 #include <QTest>
 
-#include "syncservice.h"
-
 #include "twitterhometimelinesyncadaptor.h"
 #include "twittermentiontimelinesyncadaptor.h"
 
@@ -65,15 +63,13 @@ void tst_twitter::cleanup()
 
 void tst_twitter::notifications()
 {
-    QScopedPointer<SyncService> twNotSs(new SyncService(QString::fromLatin1("twitter.Notifications"), this));
-    QScopedPointer<TwitterMentionTimelineSyncAdaptor> fbNotSa(new TwitterMentionTimelineSyncAdaptor(twNotSs.data(), this));
+    QScopedPointer<TwitterMentionTimelineSyncAdaptor> fbNotSa(new TwitterMentionTimelineSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 
 void tst_twitter::posts()
 {
-    QScopedPointer<SyncService> twPstSs(new SyncService(QString::fromLatin1("twitter.Posts"), this));
-    QScopedPointer<TwitterHomeTimelineSyncAdaptor> fbNotSa(new TwitterHomeTimelineSyncAdaptor(twPstSs.data(), this));
+    QScopedPointer<TwitterHomeTimelineSyncAdaptor> fbNotSa(new TwitterHomeTimelineSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 

@@ -22,10 +22,11 @@
 #include <QtContacts/QContactNote>
 #include <QtContacts/QContactBirthday>
 
-#include "syncservice.h"
 #include "constants_p.h"
+#include <qtcontacts-extensions_impl.h>
+#include <qcontactoriginmetadata_impl.h>
 
-#include "facebookcalendartypesyncadaptor.h"
+#include "facebookcalendarsyncadaptor.h"
 #include "facebookcontactsyncadaptor.h"
 #include "facebookimagesyncadaptor.h"
 #include "facebooknotificationsyncadaptor.h"
@@ -63,8 +64,8 @@ class TestFacebookContactSyncAdaptor : public FacebookContactSyncAdaptor
 {
     Q_OBJECT
 public:
-    TestFacebookContactSyncAdaptor(SyncService *syncService, QObject *parent)
-        : FacebookContactSyncAdaptor(syncService, parent), m_doFinalCleanup(false) {}
+    TestFacebookContactSyncAdaptor(QObject *parent)
+        : FacebookContactSyncAdaptor(parent), m_doFinalCleanup(false) {}
     void doBeginSync(int accountId, const QString &accessToken) { beginSync(accountId, accessToken); }
     void doPurge(int accountId) { purgeDataForOldAccounts(QList<int>() << accountId); }
 protected:
@@ -102,11 +103,9 @@ void tst_facebook::cleanup()
 
 // --------------------------------
 
-typedef FacebookCalendarTypeSyncAdaptor FacebookCalendarSyncAdaptor; // somehow the typename got screwed up...
 void tst_facebook::calendars()
 {
-    QScopedPointer<SyncService> fbCalSs(new SyncService(QString::fromLatin1("facebook.Calendars"), this));
-    QScopedPointer<FacebookCalendarSyncAdaptor> fbCalSa(new FacebookCalendarSyncAdaptor(fbCalSs.data(), this));
+    QScopedPointer<FacebookCalendarSyncAdaptor> fbCalSa(new FacebookCalendarSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 
@@ -116,8 +115,7 @@ void tst_facebook::contacts()
     // step two: trigger sync
     // step three: check database state -> should have gotten the "new" contacts / ensure data matches
     // step four: trigger the purge, and ensure that the data is removed (but no other data)
-    QScopedPointer<SyncService> fbConSs(new SyncService(QString::fromLatin1("facebook.Contacts"), this));
-    QScopedPointer<TestFacebookContactSyncAdaptor> fbConSa(new TestFacebookContactSyncAdaptor(fbConSs.data(), this));
+    QScopedPointer<TestFacebookContactSyncAdaptor> fbConSa(new TestFacebookContactSyncAdaptor(this));
 
     QContactDetailFilter facebookFilter;
     facebookFilter.setDetailType(QContactDetail::TypeSyncTarget, QContactSyncTarget::FieldSyncTarget);
@@ -237,15 +235,13 @@ void tst_facebook::contacts()
 
 void tst_facebook::images()
 {
-    QScopedPointer<SyncService> fbImgSs(new SyncService(QString::fromLatin1("facebook.Images"), this));
-    QScopedPointer<FacebookImageSyncAdaptor> fbConSa(new FacebookImageSyncAdaptor(fbImgSs.data(), this));
+    QScopedPointer<FacebookImageSyncAdaptor> fbConSa(new FacebookImageSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 
 void tst_facebook::notifications()
 {
-    QScopedPointer<SyncService> fbNotSs(new SyncService(QString::fromLatin1("facebook.Notifications"), this));
-    QScopedPointer<FacebookNotificationSyncAdaptor> fbNotSa(new FacebookNotificationSyncAdaptor(fbNotSs.data(), this));
+    QScopedPointer<FacebookNotificationSyncAdaptor> fbNotSa(new FacebookNotificationSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 

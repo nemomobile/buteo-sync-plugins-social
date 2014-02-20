@@ -9,7 +9,6 @@
 #define FACEBOOKDATATYPESYNCADAPTOR_H
 
 #include "socialnetworksyncadaptor.h"
-#include "syncservice.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
@@ -29,15 +28,14 @@ class FacebookDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent);
+    FacebookDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::DataType dataType, QObject *parent);
     virtual ~FacebookDataTypeSyncAdaptor();
-    virtual void sync(const QString &dataTypeString);
+    virtual void sync(const QString &dataTypeString, int accountId);
 
 protected:
     QString clientId();
     virtual void updateDataForAccounts(const QList<int> &accountIds);
-    virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0;    // must at least implement these two
-    virtual void beginSync(int accountId, const QString &accessToken) = 0; // must at least implement these two
+    virtual void beginSync(int accountId, const QString &accessToken) = 0;
 
 protected Q_SLOTS:
     virtual void errorHandler(QNetworkReply::NetworkError err);

@@ -9,7 +9,6 @@
 #define GOOGLEDATATYPESYNCADAPTOR_H
 
 #include "socialnetworksyncadaptor.h"
-#include "syncservice.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
@@ -29,16 +28,15 @@ class GoogleDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    GoogleDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent);
+    GoogleDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::DataType dataType, QObject *parent);
     virtual ~GoogleDataTypeSyncAdaptor();
-    virtual void sync(const QString &dataTypeString);
+    virtual void sync(const QString &dataTypeString, int accountId);
 
 protected:
     QString clientId();
     QString clientSecret();
     virtual void updateDataForAccounts(const QList<int> &accountIds);
-    virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0;    // must at least implement these two
-    virtual void beginSync(int accountId, const QString &accessToken) = 0; // must at least implement these two
+    virtual void beginSync(int accountId, const QString &accessToken) = 0;
     virtual void finalCleanup();
 
 protected Q_SLOTS:

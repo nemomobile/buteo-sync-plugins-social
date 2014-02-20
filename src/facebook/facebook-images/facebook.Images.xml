@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<profile name="facebook.Images" type="sync" >
+    <key name="category" value="facebook.Images" />
+    <key name="enabled" value="true" />
+    <key name="use_accounts" value="false" />
+    <key name="destinationtype" value="online" />
+    <key name="hidden" value="true" />
+    <key name="displayname" value="Facebook Images"/>
+
+    <schedule enabled="true" interval="" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="05:00:00" />
+
+    <profile name="facebook-images" type="client" >
+        <key name="Sync Direction" value="from-remote" />
+    </profile>
+</profile>

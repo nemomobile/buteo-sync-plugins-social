@@ -9,7 +9,6 @@
 #define TWITTERDATATYPESYNCADAPTOR_H
 
 #include "socialnetworksyncadaptor.h"
-#include "syncservice.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
@@ -28,16 +27,15 @@ class TwitterDataTypeSyncAdaptor : public SocialNetworkSyncAdaptor
     Q_OBJECT
 
 public:
-    TwitterDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent);
+    TwitterDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::DataType dataType, QObject *parent);
     virtual ~TwitterDataTypeSyncAdaptor();
-    virtual void sync(const QString &dataTypeString);
+    virtual void sync(const QString &dataTypeString, int accountId);
 
 protected:
     static QDateTime parseTwitterDateTime(const QString &tdt);
     virtual QString authorizationHeader(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &requestMethod, const QString &requestUrl, const QList<QPair<QString, QString> > &parameters);
     virtual void updateDataForAccounts(const QList<int> &accountIds);
-    virtual void purgeDataForOldAccounts(const QList<int> &oldIds) = 0; // must at least implement these two
-    virtual void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret) = 0; // must at least implement these two
+    virtual void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret) = 0;
     QString consumerKey();
     QString consumerSecret();
 protected Q_SLOTS:

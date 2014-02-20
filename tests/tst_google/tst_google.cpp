@@ -10,7 +10,9 @@
 #include <QtGlobal>
 #include <QTest>
 
-#include "syncservice.h"
+#include "constants_p.h"
+#include <qtcontacts-extensions_impl.h>
+#include <qcontactoriginmetadata_impl.h>
 
 #include "googlecalendarsyncadaptor.h"
 #include "googlecontactsyncadaptor.h"
@@ -65,15 +67,13 @@ void tst_google::cleanup()
 
 void tst_google::calendars()
 {
-    QScopedPointer<SyncService> ggCalSs(new SyncService(QString::fromLatin1("google.Calendars"), this));
-    QScopedPointer<GoogleCalendarSyncAdaptor> ggCalSa(new GoogleCalendarSyncAdaptor(ggCalSs.data(), this));
+    QScopedPointer<GoogleCalendarSyncAdaptor> ggCalSa(new GoogleCalendarSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 
 void tst_google::contacts()
 {
-    QScopedPointer<SyncService> ggConSs(new SyncService(QString::fromLatin1("google.Contacts"), this));
-    QScopedPointer<GoogleContactSyncAdaptor> ggConSa(new GoogleContactSyncAdaptor(ggConSs.data(), this));
+    QScopedPointer<GoogleContactSyncAdaptor> ggConSa(new GoogleContactSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 

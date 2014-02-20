@@ -25,8 +25,8 @@
 //libsignon-qt: SignOn::NoUserInteractionPolicy
 #include <SignOn/SessionData>
 
-FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SyncService *syncService, SyncService::DataType dataType, QObject *parent)
-    : SocialNetworkSyncAdaptor("facebook", dataType, syncService, parent), m_triedLoading(false)
+FacebookDataTypeSyncAdaptor::FacebookDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::DataType dataType, QObject *parent)
+    : SocialNetworkSyncAdaptor("facebook", dataType, parent), m_triedLoading(false)
 {
 }
 
@@ -34,12 +34,12 @@ FacebookDataTypeSyncAdaptor::~FacebookDataTypeSyncAdaptor()
 {
 }
 
-void FacebookDataTypeSyncAdaptor::sync(const QString &dataTypeString)
+void FacebookDataTypeSyncAdaptor::sync(const QString &dataTypeString, int accountId)
 {
-    if (dataTypeString != SyncService::dataType(dataType)) {
+    if (dataTypeString != SocialNetworkSyncAdaptor::dataTypeName(dataType)) {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: facebook %1 sync adaptor was asked to sync %2"))
-                .arg(SyncService::dataType(dataType)).arg(dataTypeString));
+                .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(dataTypeString));
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
@@ -50,30 +50,49 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataTypeString)
         return;
     }
 
-    // three stage process.
+    // either a single-account sync, or an all-account sync.
+    // an all-account sync is a three stage process.
     // 1) if an account has been removed, we need to purge the data we retrieved with it
     // 2) if an account has been added, we need to pull data for the account
     // 3) for existing accounts, pull new data for the existing account
     setStatus(SocialNetworkSyncAdaptor::Busy);
 
     QList<int> newIds, purgeIds, updateIds;
-    // Implemented in socialsyncadaptor
-    checkAccounts(dataType, &newIds, &purgeIds, &updateIds);
-    purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
-    updateDataForAccounts(newIds);
-    updateDataForAccounts(updateIds);
+    if (accountId == 0) {
+        // all account sync.  determine accounts added/removed/need updating.
+        checkAccounts(dataType, &newIds, &purgeIds, &updateIds);
 
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("successfully triggered sync of %1: %2 purged, %3 new, %4 updated accounts"))
-            .arg(SyncService::dataType(dataType)).arg(purgeIds.size()).arg(newIds.size()).arg(updateIds.size()));
+        // We only actually perform the purge operation for all-account (template) syncs.
+        purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
 
-    if (newIds.count() == 0 && updateIds.count() == 0) {
+        TRACE(SOCIALD_DEBUG,
+                QString(QLatin1String("successfully triggered sync of %1: purged %2 accounts"))
+                .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(purgeIds.size()));
+
         setFinishedInactive(); // just had to purge, and we're done.
+    } else {
+        // single account sync.
+        updateDataForAccounts(QList<int>() << accountId);
+
+        TRACE(SOCIALD_DEBUG,
+                QString(QLatin1String("successfully triggered sync with profile: %1"))
+                .arg(m_accountSyncProfile->name()));
     }
 }
 
 void FacebookDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
 {
+    if (accountIds.size() != 1) {
+        // Since the "split monolithic plugin" refactoring, this function
+        // should only ever be called for a single account.
+        // TODO: refactor all of the plugins even more completely, to
+        // remove the per-accountId state data (maps etc) and "fix" the
+        // function signatures to match the new per-account paradigm.
+        qWarning() << Q_FUNC_INFO << "called with multiple accounts - ERROR!";
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        return;
+    }
+
     foreach (int accountId, accountIds) {
         // will be decremented by either signOnError or signOnResponse.
         // we increment them prior to the loop below to avoid spurious
@@ -88,6 +107,7 @@ void FacebookDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accoun
             TRACE(SOCIALD_ERROR,
                   QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
                   .arg(accountId));
+            setStatus(SocialNetworkSyncAdaptor::Error);
             decrementSemaphore(accountId);
             continue;
         }
@@ -171,7 +191,7 @@ void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
-            .arg(SyncService::dataType(dataType)).arg(accountId).arg(err));
+            .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(accountId).arg(err));
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     reply->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
@@ -205,7 +225,7 @@ void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     }
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
-            .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
+            .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     sender()->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.

@@ -1,14 +1,10 @@
 DEFINES += SOCIALD_TEST_DEFINE
 DEFINES += 'PRIVILEGED_DATA_DIR=\'\"/tmp/\"\''
 
-INCLUDEPATH += \
-    $$PWD/../src/ \
-    $$PWD/../src/facebook \
-    $$PWD/../src/twitter \
-    $$PWD/../src/google
-
+DEFINES += SOCIALD_USE_QTPIM
 include($$PWD/../src/common.pri)
 
+INCLUDEPATH += $$PWD
 HEADERS += $$PWD/networkstubs_p.h
 SOURCES += $$PWD/networkstubs_p.cpp
 

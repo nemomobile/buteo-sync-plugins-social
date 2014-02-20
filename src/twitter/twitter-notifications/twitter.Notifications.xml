@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<profile name="twitter.Notifications" type="sync" >
+    <key name="category" value="eventfeed" />
+    <key name="enabled" value="true" />
+    <key name="use_accounts" value="false" />
+    <key name="destinationtype" value="online" />
+    <key name="hidden" value="true" />
+    <key name="displayname" value="Twitter Notifications"/>
+
+    <schedule enabled="true" interval="30" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="" />
+
+    <profile name="twitter-notifications" type="client" >
+        <key name="Sync Direction" value="from-remote" />
+    </profile>
+</profile>
