@@ -217,8 +217,17 @@ void GoogleContactSyncAdaptor::contactsFinishedHandler()
     int accountId = reply->property("accountId").toInt();
     QString accessToken = reply->property("accessToken").toString();
     QDateTime lastSyncTimestamp = reply->property("lastSyncTimestamp").toDateTime();
+    bool isError = reply->property("isError").toBool();
     reply->deleteLater();
-    if (data.isEmpty()) {
+    if (isError) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error occurred when performing contacts request for Google account %1"))
+              .arg(accountId));
+
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    } else if (data.isEmpty()) {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("error: no contact data in reply from Google with account %1"))
               .arg(accountId));
