@@ -181,6 +181,7 @@ void GoogleDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
     // is small (less than 30 seconds, say) it's possible that the
     // access token will expire _during_ the sync process.
     // XXX TODO: check expires time, force refresh if < 30.
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     if (err == QNetworkReply::AuthenticationRequiredError) {
         //int accountId = sender()->property("accountId").toInt();
         //Account *account = accountManager->account(accountId);
@@ -190,7 +191,6 @@ void GoogleDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         //    connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
         //}
         // instead of triggering CredentialsNeedUpdate, print some debugging.
-        QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
         int httpCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         QByteArray jsonBody = reply->readAll();
         qWarning() << "sociald:Google: would normally set CredentialsNeedUpdate for account"
@@ -200,10 +200,11 @@ void GoogleDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
     }
 
     TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
-            .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
+            QString(QLatin1String("error: %1 request with account %2 experienced error: %3\n%4"))
+            .arg(SyncService::dataType(dataType)).arg(reply->property("accountId").toInt()).arg(err)
+            .arg(QString::fromUtf8(reply->readAll())));
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
-    sender()->setProperty("isError", QVariant::fromValue<bool>(true));
+    reply->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 }
 
