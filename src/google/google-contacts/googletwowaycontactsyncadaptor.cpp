@@ -1,0 +1,932 @@
+/****************************************************************************
+ **
+ ** Copyright (C) 2014 Jolla Ltd.
+ ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ **
+ ****************************************************************************/
+
+#include "googletwowaycontactsyncadaptor.h"
+#include "googlecontactstream.h"
+#include "googlecontactatom.h"
+#include "googlecontactimagedownloader.h"
+
+#include "constants_p.h"
+#include "trace.h"
+
+#include <twowaycontactsyncadapter_impl.h>
+#include <qtcontacts-extensions_manager_impl.h>
+
+#include <QtCore/QUrl>
+#include <QtCore/QUrlQuery>
+#include <QtCore/QFile>
+#include <QtCore/QByteArray>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
+#include <QtCore/QJsonArray>
+
+#include <QtContacts/QContactDetailFilter>
+#include <QtContacts/QContactIntersectionFilter>
+#include <QtContacts/QContact>
+#include <QtContacts/QContactSyncTarget>
+#include <QtContacts/QContactGuid>
+#include <QtContacts/QContactName>
+#include <QtContacts/QContactNickname>
+#include <QtContacts/QContactAvatar>
+#include <QtContacts/QContactUrl>
+#include <QtContacts/QContactGender>
+#include <QtContacts/QContactNote>
+#include <QtContacts/QContactBirthday>
+#include <QtContacts/QContactPhoneNumber>
+#include <QtContacts/QContactEmailAddress>
+
+// sailfish-components-accounts-qt5
+#include <accountmanager.h>
+#include <account.h>
+
+#define SOCIALD_GOOGLE_CONTACTS_SYNCTARGET QLatin1String("google")
+#define SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS 50
+
+static const char *IMAGE_DOWNLOADER_TOKEN_KEY = "url";
+static const char *IMAGE_DOWNLOADER_ACCOUNT_ID_KEY = "account_id";
+static const char *IMAGE_DOWNLOADER_IDENTIFIER_KEY = "identifier";
+
+GoogleTwoWayContactSyncAdaptor::GoogleTwoWayContactSyncAdaptor(QObject *parent)
+    : GoogleDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Contacts, parent)
+    , QtContactsSqliteExtensions::TwoWayContactSyncAdapter(QStringLiteral("google"))
+    , m_workerObject(new GoogleContactImageDownloader())
+{
+    connect(m_workerObject, &AbstractImageDownloader::imageDownloaded,
+            this, &GoogleTwoWayContactSyncAdaptor::imageDownloaded);
+
+    // can sync, enabled
+    setInitialActive(true);
+}
+
+GoogleTwoWayContactSyncAdaptor::~GoogleTwoWayContactSyncAdaptor()
+{
+    delete m_workerObject;
+}
+
+QString GoogleTwoWayContactSyncAdaptor::syncServiceName() const
+{
+    return QStringLiteral("google-contacts");
+}
+
+void GoogleTwoWayContactSyncAdaptor::sync(const QString &dataTypeString, int accountId)
+{
+    // call superclass impl.
+    GoogleDataTypeSyncAdaptor::sync(dataTypeString, accountId);
+}
+
+void GoogleTwoWayContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+{
+    foreach (int pid, purgeIds) {
+        purgeAccount(pid);
+    }
+}
+
+void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &accessToken)
+{
+    Account *account = accountManager->account(accountId);
+    if (!account) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("unable to load Google account %1"))
+              .arg(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        return;
+    }
+
+    // we need to load account settings (asynchronously).
+    incrementSemaphore(accountId);
+
+    account->setProperty("accessToken", accessToken);
+    account->setProperty("accountId", accountId);
+    connect(account, SIGNAL(statusChanged()), this, SLOT(accountInitialized()));
+}
+
+void GoogleTwoWayContactSyncAdaptor::accountInitialized()
+{
+    Account *account = qobject_cast<Account*>(sender());
+    QString emailAddress = account->configurationValues(QString()).value("default_credentials_username").toString();
+    if (emailAddress.isEmpty()) {
+        emailAddress = account->configurationValues(QString()).value("name").toString();
+    }
+    int accountId = account->property("accountId").toInt();
+    QString accessToken = account->property("accessToken").toString();
+    disconnect(account);
+    account->deleteLater();
+
+    if (emailAddress.isEmpty()) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("unable to determine email address, aborting sync of Google contacts with account %1"))
+              .arg(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    // clear our cache lists if necessary.
+    m_localChanges[accountId].clear();
+    m_remoteAddMods[accountId].clear();
+    m_remoteDels[accountId].clear();
+    m_accessTokens[accountId] = accessToken;
+    m_emailAddresses[accountId] = emailAddress;
+
+    QDateTime remoteSince;
+    if (!initSyncAdapter(QString::number(accountId))
+            || !readSyncStateData(&remoteSince, QString::number(accountId))
+            || !readExtraStateData(accountId)) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("unable to init sync adapter - aborting sync Google contacts with account %1"))
+              .arg(accountId));
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    if (m_myContactsGroupAtomIds[accountId].isEmpty()) {
+        // we need to determine the atom id of the My Contacts group
+        // because we upload newly added contacts to that group.
+        requestData(accountId, m_accessTokens[accountId], 0, QString(), remoteSince, true); // true = isGroupRequest
+    } else {
+        // we can just sync changes immediately
+        determineRemoteChanges(remoteSince, QString::number(accountId));
+    }
+
+    decrementSemaphore(accountId);
+}
+
+void GoogleTwoWayContactSyncAdaptor::determineRemoteChanges(const QDateTime &remoteSince, const QString &accountId)
+{
+    int accId = accountId.toInt();
+    requestData(accId, m_accessTokens[accId], 0, QString(), remoteSince);
+}
+
+void GoogleTwoWayContactSyncAdaptor::requestData(int accountId, const QString &accessToken, int startIndex, const QString &continuationRequest, const QDateTime &syncTimestamp, bool isGroupRequest)
+{
+    QUrl requestUrl;
+    if (continuationRequest.isEmpty()) {
+        QUrlQuery urlQuery;
+        if (isGroupRequest) {
+            requestUrl = QUrl(QStringLiteral("https://www.google.com/m8/feeds/groups/default/full"));
+        } else {
+            requestUrl = QUrl(QStringLiteral("https://www.google.com/m8/feeds/contacts/default/full/"));
+            if (!syncTimestamp.isNull()) { // delta query
+                urlQuery.addQueryItem("updated-min", syncTimestamp.toString(Qt::ISODate));
+                urlQuery.addQueryItem("showdeleted", QStringLiteral("true"));
+            }
+        }
+        if (startIndex >= 1) {
+            urlQuery.addQueryItem ("start-index", QString::number(startIndex));
+        }
+        urlQuery.addQueryItem("max-results", QString::number(SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS));
+        requestUrl.setQuery(urlQuery);
+    } else {
+        requestUrl = QUrl(continuationRequest);
+    }
+
+    QNetworkRequest req(requestUrl);
+    req.setRawHeader("GData-Version", "3.0");
+    req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
+                     QString(QLatin1String("Bearer ") + accessToken).toUtf8());
+
+    // we're requesting data.  Increment the semaphore so that we know we're still busy.
+    incrementSemaphore(accountId);
+    QNetworkReply *reply = networkAccessManager->get(req);
+    if (reply) {
+        reply->setProperty("accountId", accountId);
+        reply->setProperty("accessToken", accessToken);
+        reply->setProperty("continuationRequest", continuationRequest);
+        reply->setProperty("lastSyncTimestamp", syncTimestamp);
+        reply->setProperty("startIndex", startIndex);
+        if (isGroupRequest) {
+            connect(reply, SIGNAL(finished()), this, SLOT(groupsFinishedHandler()));
+        } else {
+            connect(reply, SIGNAL(finished()), this, SLOT(contactsFinishedHandler()));
+        }
+        connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
+        connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslErrorsHandler(QList<QSslError>)));
+        setupReplyTimeout(accountId, reply);
+    } else {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: unable to request data from Google account with id %1"))
+              .arg(accountId));
+
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+    }
+}
+
+void GoogleTwoWayContactSyncAdaptor::groupsFinishedHandler()
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QByteArray data = reply->readAll();
+    int startIndex = reply->property("startIndex").toInt();
+    int accountId = reply->property("accountId").toInt();
+    QString accessToken = reply->property("accessToken").toString();
+    QDateTime lastSyncTimestamp = reply->property("lastSyncTimestamp").toDateTime();
+    bool isError = reply->property("isError").toBool();
+    reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
+
+    if (isError) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error occurred when performing groups request for Google account %1"))
+              .arg(accountId));
+
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    } else if (data.isEmpty()) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: no groups data in reply from Google with account %1"))
+              .arg(accountId));
+
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    GoogleContactStream parser(false, accountId);
+    GoogleContactAtom *atom = parser.parse(data);
+
+    if (!atom) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: unable to parse groups data from reply from Google using account with id %1"))
+              .arg(accountId));
+
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    if (atom->entrySystemGroups().contains(QStringLiteral("Contacts"))) {
+        // we have found the atom id of the group we need to upload new contacts to.
+        QString myContactsGroupAtomId = atom->entrySystemGroups().value(QStringLiteral("Contacts"));
+        m_myContactsGroupAtomIds[accountId] = myContactsGroupAtomId;
+        if (myContactsGroupAtomId.isEmpty()) {
+            // We don't consider this a fatal error,
+            // instead, we just refuse to upsync new contacts.
+            TRACE(SOCIALD_INFORMATION,
+                  QString(QLatin1String("the My Contacts group was found, but atom id not parsed correctly for account: %1"))
+                  .arg(accountId));
+        }
+        // we can now continue with contact sync.
+        determineRemoteChanges(lastSyncTimestamp, QString::number(accountId));
+    } else if (!atom->nextEntriesUrl().isEmpty()) {
+        // request more groups if they exist.
+        startIndex += SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS;
+        requestData(accountId, accessToken, startIndex, atom->nextEntriesUrl(), lastSyncTimestamp, true); // true = isGroupRequest
+    } else {
+        // couldn't find the My Contacts group.
+        // We don't consider this a fatal error,
+        // instead we just refuse to upsync new contacts.
+        TRACE(SOCIALD_INFORMATION,
+              QString(QLatin1String("unable to find My Contacts group when syncing Google contacts for account: %1"))
+              .arg(accountId));
+        // we can now continue with contact sync.
+        determineRemoteChanges(lastSyncTimestamp, QString::number(accountId));
+    }
+
+    delete atom;
+    decrementSemaphore(accountId);
+}
+
+void GoogleTwoWayContactSyncAdaptor::contactsFinishedHandler()
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QByteArray data = reply->readAll();
+    int startIndex = reply->property("startIndex").toInt();
+    int accountId = reply->property("accountId").toInt();
+    QString accessToken = reply->property("accessToken").toString();
+    QDateTime lastSyncTimestamp = reply->property("lastSyncTimestamp").toDateTime();
+    bool isError = reply->property("isError").toBool();
+    reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
+
+    if (isError) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error occurred when performing contacts request for Google account %1"))
+              .arg(accountId));
+
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    } else if (data.isEmpty()) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: no contact data in reply from Google with account %1"))
+              .arg(accountId));
+
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    GoogleContactStream parser(false, accountId);
+    GoogleContactAtom *atom = parser.parse(data);
+
+    if (!atom) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: unable to parse contacts data from reply from Google using account with id %1"))
+              .arg(accountId));
+
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    // for each remote contact, there are some associated XML elements which
+    // could not be stored in QContactDetail form (eg, link URIs etc).
+    // build up some datastructures to help us retrieve that information
+    // when we need it.
+    // we also store the etag data out-of-band to avoid spurious contact saves
+    // when the etag changes are reported by the remote server.
+    // finally, we can set the id of the contact.
+    QList<QPair<QContact, QStringList> > remoteAddModContacts = atom->entryContacts();
+    for (int i = 0; i < remoteAddModContacts.size(); ++i) {
+        QContact c = remoteAddModContacts[i].first;
+        m_unsupportedXmlElements[accountId].insert(
+                c.detail<QContactGuid>().guid(),
+                remoteAddModContacts[i].second);
+        m_contactEtags[accountId].insert(c.detail<QContactGuid>().guid(), c.detail<QContactOriginMetadata>().id());
+        c.setId(QContactId::fromString(m_contactIds[accountId].value(c.detail<QContactGuid>().guid())));
+        m_remoteAddMods[accountId].append(c);
+    }
+    QList<QContact> remoteDelContacts = atom->deletedEntryContacts();
+    for (int i = 0; i < remoteDelContacts.size(); ++i) {
+        QContact c = remoteDelContacts[i];
+        c.setId(QContactId::fromString(m_contactIds[accountId].value(c.detail<QContactGuid>().guid())));
+        m_remoteDels[accountId].append(c);
+    }
+
+    if (!atom->nextEntriesUrl().isEmpty()) {
+        // request more if they exist.
+        startIndex += SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS;
+        requestData(accountId, accessToken, startIndex, atom->nextEntriesUrl(), lastSyncTimestamp);
+    } else {
+        // we're finished downloading the remote changes - we should sync local changes up.
+        int addModCount = m_remoteAddMods[accountId].size(), removedCount = m_remoteDels[accountId].size();
+        TRACE(SOCIALD_INFORMATION,
+              QString(QLatin1String("Google contact sync with account %1 got remote changes: a/m: %2 r: %3."))
+              .arg(accountId).arg(addModCount).arg(removedCount));
+        continueSync(accountId, accessToken);
+    }
+
+    delete atom;
+    decrementSemaphore(accountId);
+}
+
+void GoogleTwoWayContactSyncAdaptor::continueSync(int accountId, const QString &accessToken)
+{
+    // for each of the addmods, we need to fixup the contact avatars.
+    transformContactAvatars(m_remoteAddMods[accountId], accountId, accessToken);
+
+    // now store the changes locally
+    if (!storeRemoteChanges(m_remoteDels[accountId], &m_remoteAddMods[accountId], QString::number(accountId))) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("unable to store remote changes locally - aborting sync Google contacts for account %1"))
+              .arg(accountId));
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        // note: don't decrement here - it's done by contactsFinishedHandler().
+        return;
+    }
+
+    // update our mapping of GUID to QContactId
+    foreach (const QContact &c, m_remoteAddMods[accountId]) {
+        m_contactIds[accountId].insert(c.detail<QContactGuid>().guid(),
+                                       c.id().toString());
+    }
+
+    // now determine which local changes need to be upsynced to the remote server
+    QDateTime localSince;
+    QList<QContact> locallyAdded, locallyModified, locallyDeleted;
+    if (!determineLocalChanges(&localSince, &locallyAdded, &locallyModified, &locallyDeleted, QString::number(accountId))) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("unable to determine local changes - aborting sync Google contacts for account %1"))
+              .arg(accountId));
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        // note: don't decrement here - it's done by contactsFinishedHandler().
+        return;
+    }
+
+    // now push those changes up to google.
+    upsyncLocalChanges(localSince, locallyAdded, locallyModified, locallyDeleted, QString::number(accountId));
+}
+
+void GoogleTwoWayContactSyncAdaptor::upsyncLocalChanges(const QDateTime &localSince,
+                                                        const QList<QContact> &locallyAdded,
+                                                        const QList<QContact> &locallyModified,
+                                                        const QList<QContact> &locallyDeleted,
+                                                        const QString &accountId)
+{
+    // add the etag field back to the locallyModified contacts.
+    int accId = accountId.toInt();
+    QList<QContact> updatedLocallyModified;
+    for (int i = 0; i < locallyModified.size(); ++i) {
+        QContact c = locallyModified.at(i);
+        QContactOriginMetadata omd = c.detail<QContactOriginMetadata>();
+        omd.setId(m_contactEtags[accId].value(c.detail<QContactGuid>().guid()));
+        c.saveDetail(&omd);
+        updatedLocallyModified.append(c);
+    }
+
+    QList<QPair<QContact, GoogleContactStream::UpdateType> > contactUpdatesToPost;
+    foreach (const QContact &c, locallyAdded)
+        contactUpdatesToPost.append(qMakePair(c, GoogleContactStream::Add));
+    foreach (const QContact &c, updatedLocallyModified)
+        contactUpdatesToPost.append(qMakePair(c, GoogleContactStream::Modify));
+    foreach (const QContact &c, locallyDeleted)
+        contactUpdatesToPost.append(qMakePair(c, GoogleContactStream::Remove));
+    m_localChanges[accId] = contactUpdatesToPost;
+
+    TRACE(SOCIALD_INFORMATION,
+          QString(QLatin1String("Google account: %1 upsyncing local contact changes since:%2\n"
+                                "    locally added:    %3\n"
+                                "    locally modified: %4\n"
+                                "    locally removed:  %5\n"))
+          .arg(accId).arg(localSince.toString(Qt::ISODate)).arg(locallyAdded.count()).arg(locallyModified.count()).arg(locallyDeleted.count()));
+
+    upsyncLocalChangesList(accId);
+}
+
+void GoogleTwoWayContactSyncAdaptor::upsyncLocalChangesList(int accountId)
+{
+    bool postedData = false;
+    QMultiMap<GoogleContactStream::UpdateType, QPair<QContact, QStringList> > batch;
+    for (int i = m_localChanges[accountId].size() - 1; i >= 0; --i) {
+        QPair<QContact, GoogleContactStream::UpdateType> entry = m_localChanges[accountId].takeAt(i);
+        QStringList extraXmlElements = m_unsupportedXmlElements[accountId].value(entry.first.detail<QContactGuid>().guid());
+        if (entry.second == GoogleContactStream::Add) {
+            // new contacts need to be inserted into the My Contacts group
+            QString myContactsGroupAtomId = m_myContactsGroupAtomIds[accountId];
+            if (myContactsGroupAtomId.isEmpty()) {
+                TRACE(SOCIALD_INFORMATION,
+                      QString(QLatin1String("skipping upload of locally added contact %1 to account %2 due to unknown My Contacts group atom id"))
+                      .arg(entry.first.id().toString()).arg(accountId));
+            } else {
+                extraXmlElements.append(QStringLiteral("<gContact:groupMembershipInfo deleted=\"false\" href=\"%1\"></gContact:groupMembershipInfo>").arg(myContactsGroupAtomId));
+                batch.insertMulti(entry.second, qMakePair(entry.first, extraXmlElements));
+            }
+        } else {
+            batch.insertMulti(entry.second, qMakePair(entry.first, extraXmlElements));
+        }
+
+        if (batch.size() == SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS || i == 0) {
+            GoogleContactStream encoder(false, accountId, m_emailAddresses[accountId]);
+            QByteArray encodedContactUpdates = encoder.encode(batch);
+            storeToRemote(accountId, m_accessTokens[accountId], encodedContactUpdates);
+            postedData = true;
+            break;
+        }
+    }
+
+    if (!postedData) {
+        // nothing left to upsync.
+        if (!storeExtraStateData(accountId) || !storeSyncStateData(QString::number(accountId))) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("unable to finalize sync of Google contacts with account %1"))
+                  .arg(accountId));
+
+            purgeSyncStateData(QString::number(accountId));
+            setStatus(SocialNetworkSyncAdaptor::Error);
+            // note: don't decrementSemaphore here - it's done by contactsFinishedHandler().
+            return;
+        }
+    }
+}
+
+void GoogleTwoWayContactSyncAdaptor::storeToRemote(int accountId, const QString &accessToken, const QByteArray &encodedContactUpdates)
+{
+    QUrl requestUrl(QUrl(QString(QLatin1String("https://www.google.com/m8/feeds/contacts/default/full/batch"))));
+    QNetworkRequest req(requestUrl);
+    req.setRawHeader("GData-Version", "3.0");
+    req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
+                     QString(QLatin1String("Bearer ") + accessToken).toUtf8());
+    req.setRawHeader(QString(QLatin1String("Content-Type")).toUtf8(),
+                     QString(QLatin1String("application/atom+xml; charset=UTF-8; type=feed")).toUtf8());
+    req.setHeader(QNetworkRequest::ContentLengthHeader, encodedContactUpdates.size());
+    req.setRawHeader(QString(QLatin1String("If-Match")).toUtf8(),
+                     QString(QLatin1String("*")).toUtf8());
+
+    // we're posting data.  Increment the semaphore so that we know we're still busy.
+    incrementSemaphore(accountId);
+    QNetworkReply *reply = networkAccessManager->post(req, encodedContactUpdates);
+    if (reply) {
+        reply->setProperty("accountId", accountId);
+        reply->setProperty("accessToken", accessToken);
+        connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(postErrorHandler()));
+        connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(postErrorHandler()));
+        connect(reply, SIGNAL(finished()), this, SLOT(postFinishedHandler()));
+        setupReplyTimeout(accountId, reply);
+    } else {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("error: unable to post contacts to Google account with id %1"))
+              .arg(accountId));
+
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+    }
+}
+
+void GoogleTwoWayContactSyncAdaptor::postFinishedHandler()
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QByteArray response = reply->readAll();
+    int accountId = reply->property("accountId").toInt();
+    reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
+
+    if (reply->property("isError").toBool()) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("Error occurred posting contact data to google with account %1, got response: %2"))
+              .arg(accountId).arg(QString::fromUtf8(response)));
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    GoogleContactStream parser(false, accountId);
+    GoogleContactAtom *atom = parser.parse(response);
+    QMap<QString, GoogleContactAtom::BatchOperationResponse> operationResponses = atom->batchOperationResponses();
+    QMap<QString, QString> batchOperationIdsToGuids;
+
+    bool errorOccurredInBatch = false;
+    foreach (const GoogleContactAtom::BatchOperationResponse &response, operationResponses) {
+        if (response.isError) {
+            errorOccurredInBatch = true;
+            TRACE(SOCIALD_DEBUG,
+                  QString(QLatin1String("batch operation error:\n"
+                                        "    id:     %1\n"
+                                        "    type:   %2\n"
+                                        "    code:   %3\n"
+                                        "    reason: %4\n"
+                                        "    descr:  %5\n"))
+                  .arg(response.operationId)
+                  .arg(response.type)
+                  .arg(response.code)
+                  .arg(response.reason)
+                  .arg(response.reasonDescription));
+        } else {
+            batchOperationIdsToGuids.insert(response.operationId, response.contactGuid);
+        }
+    }
+
+    if (errorOccurredInBatch) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("Error occurred during batch operation with Google account %1"))
+              .arg(accountId));
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    // update our map of guid to contact id, now that we know which remote GUID was generated for which contactId.
+    foreach (const QString &contactId, batchOperationIdsToGuids.keys()) {
+        if (!batchOperationIdsToGuids.value(contactId).isEmpty()) {
+            m_contactIds[accountId].insert(batchOperationIdsToGuids.value(contactId), contactId);
+        }
+    }
+
+    // continue with more, if there were more than one page of updates to post.
+    upsyncLocalChangesList(accountId);
+
+    // finished with this request, so decrementing semaphore.
+    decrementSemaphore(accountId);
+}
+
+void GoogleTwoWayContactSyncAdaptor::postErrorHandler()
+{
+    sender()->setProperty("isError", QVariant::fromValue<bool>(true));
+}
+
+void GoogleTwoWayContactSyncAdaptor::transformContactAvatars(QList<QContact> &remoteContacts, int accountId, const QString &accessToken)
+{
+    // The avatar detail from the remote contact will be of the form:
+    // https://www.google.com/m8/feeds/photos/media/user@gmail.com/userId
+    // We need to:
+    // 1) transform this to a local filename.
+    // 2) determine if the local file exists.
+    // 3) if not, trigger downloading the avatar.
+
+    for (int i = 0; i < remoteContacts.size(); ++i) {
+        QContact &curr(remoteContacts[i]);
+
+        // We only deal with the first avatar from the contact.  If it has multiple,
+        // then later avatars will not be transformed.  TODO: fix this.
+        // We also only bother to do this for contacts with a GUID, as we don't
+        // store locally any contact without one.
+        if (curr.details<QContactAvatar>().size() && !curr.detail<QContactGuid>().guid().isEmpty()) {
+            // we have a remote avatar which we need to transform.
+            QContactAvatar avatar = curr.detail<QContactAvatar>();
+            QString remoteImageUrl = avatar.imageUrl().toString();
+            if (!remoteImageUrl.isEmpty() && !avatar.imageUrl().isLocalFile()) {
+                QVariantMap metadata;
+                metadata.insert(IMAGE_DOWNLOADER_ACCOUNT_ID_KEY, accountId);
+                metadata.insert(IMAGE_DOWNLOADER_TOKEN_KEY, accessToken);
+                metadata.insert(IMAGE_DOWNLOADER_IDENTIFIER_KEY, curr.detail<QContactGuid>().guid());
+
+                // transform to a local file name.
+                QString localFileName = GoogleContactImageDownloader::staticOutputFile(
+                        curr.detail<QContactGuid>().guid(), remoteImageUrl);
+                avatar.setImageUrl(localFileName);
+
+                // update the value in the current contact.
+                curr.saveDetail(&avatar);
+
+                // and trigger downloading the image, if it doesn't already exist.
+                // this means that we shouldn't download images needlessly after
+                // first sync, but it also means that if it updates/changes on the
+                // server side, we also won't retrieve any updated image.
+                if (!QFile::exists(localFileName)) {
+                    incrementSemaphore(accountId);
+                    m_workerObject->queue(remoteImageUrl, metadata);
+                }
+            }
+        }
+    }
+}
+
+void GoogleTwoWayContactSyncAdaptor::imageDownloaded(const QString &url, const QString &path,
+                                                     const QVariantMap &metadata)
+{
+    Q_UNUSED(url)
+    Q_UNUSED(path)
+
+    // Load finished, decrement semaphore
+    int accountId = metadata.value(IMAGE_DOWNLOADER_ACCOUNT_ID_KEY).toInt();
+    decrementSemaphore(accountId);
+}
+
+void GoogleTwoWayContactSyncAdaptor::purgeAccount(int pid)
+{
+    QContactDetailFilter syncTargetFilter;
+    syncTargetFilter.setDetailType(QContactDetail::TypeSyncTarget, QContactSyncTarget::FieldSyncTarget);
+    syncTargetFilter.setValue(SOCIALD_GOOGLE_CONTACTS_SYNCTARGET);
+    QContactFetchHint noRelationships;
+    noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
+
+    int purgeCount = 0;
+    QList<QContactId> contactsToRemove;
+    QList<QContact> localContacts = m_contactManager.contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
+    for (int i = 0; i < localContacts.size(); ++i) {
+        const QContact &c(localContacts[i]);
+        if (c.detail<QContactGuid>().guid().startsWith(QStringLiteral("%1:").arg(pid))) {
+            // it was provided by this account.  Remove this one.
+            contactsToRemove.append(c.id());
+            purgeCount++;
+        } else {
+            // it was always provided by some other account only.  Don't modify this one.
+        }
+    }
+
+    // now write the changes to the database.
+    bool success = true;
+    if (contactsToRemove.size()) {
+        success = m_contactManager.removeContacts(contactsToRemove);
+        if (!success) {
+            TRACE(SOCIALD_ERROR,
+                  QString(QLatin1String("Failed to remove stale contacts: %1 - during purge of account %2"))
+                  .arg(m_contactManager.error()).arg(pid));
+        }
+    }
+
+    // ensure we remove the OOB data for the account.
+    // if we do not, restoring accounts from backup and then triggering sync could cause issues.
+    QStringList purgeKeys;
+    // purge the "build-in" OOB keys
+    purgeKeys << QStringLiteral("prevRemote") << QStringLiteral("exportedIds")
+              << QStringLiteral("remoteSince") << QStringLiteral("localSince");
+    // purge the extra OOB keys
+    purgeKeys << QStringLiteral("myContactsGroupAtomId")
+              << QStringLiteral("unsupportedElements")
+              << QStringLiteral("contactEtags")
+              << QStringLiteral("contactIds");
+    if (!d->m_engine->removeOOB(d->m_stateData[QString::number(pid)].m_oobScope, purgeKeys)) {
+        success = false;
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("Error occurred while purging OOB data for removed Google account %1"))
+              .arg(pid));
+    }
+
+    if (success) {
+        TRACE(SOCIALD_INFORMATION,
+                QString(QLatin1String("Purged account %1 and successfully removed %2 contacts"))
+                .arg(pid).arg(purgeCount));
+    }
+}
+
+void GoogleTwoWayContactSyncAdaptor::finalCleanup()
+{
+    // Synchronously find any contacts which need to be removed,
+    // which were somehow "left behind" by the sync process.
+    // Also, determine if any avatars were not synced, and remove those details.
+
+    // first, get a list of all existing, enabled google account ids
+    QList<int> googleAccountIds;
+    QList<int> purgeAccountIds;
+    QList<int> currentAccountIds = accountManager->accountIdentifiers();
+    foreach (int currId, currentAccountIds) {
+        Account *act = accountManager->account(currId);
+        if (act) {
+            if (act->providerName() == QString(QLatin1String("google")) && act->enabled()
+                    && act->isEnabledWithService(QString(QLatin1String("google-sync")))) {
+                googleAccountIds.append(currId);
+            }
+            act->deleteLater();
+        }
+    }
+
+    // second, get all contacts which have been synced from Google.
+    QContactDetailFilter syncTargetFilter;
+    syncTargetFilter.setDetailType(QContactDetail::TypeSyncTarget, QContactSyncTarget::FieldSyncTarget);
+    syncTargetFilter.setValue(SOCIALD_GOOGLE_CONTACTS_SYNCTARGET);
+    QContactFetchHint noRelationships;
+    noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
+    noRelationships.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactGuid::Type << QContactAvatar::Type);
+    QList<QContact> googleContacts = m_contactManager.contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
+
+    // third, find all account ids from which contacts have been synced
+    foreach (const QContact &contact, googleContacts) {
+        QContactGuid guid = contact.detail<QContactGuid>();
+        QStringList guidParts = guid.guid().split(":");
+        QString accountIdStr = guidParts.size() ? guidParts.first() : QString();
+        if (!accountIdStr.isEmpty()) {
+            int purgeId = accountIdStr.toInt();
+            if (purgeId && !googleAccountIds.contains(purgeId)
+                    && !purgeAccountIds.contains(purgeId)) {
+                // this account no longer exists, and needs to be purged.
+                purgeAccountIds.append(purgeId);
+            }
+        } else {
+            qWarning() << Q_FUNC_INFO << "Malformed GUID not of form <accountId>:<remoteGuid>";
+        }
+    }
+
+    // fourth, remove any non-existent avatar details.
+    // We save these first, in case some contacts get removed by purge.
+    QList<QContact> saveList;
+    for (int i = 0; i < googleContacts.size(); ++i) {
+        bool contactAddedToSaveList = false;
+        QContact contact = googleContacts.at(i);
+        QList<QContactAvatar> allAvatars = contact.details<QContactAvatar>();
+        for (int j = 0; j < allAvatars.size(); ++j) {
+            QContactAvatar av = allAvatars[j];
+            if (!av.imageUrl().isEmpty()) {
+                // this avatar may have failed to sync.
+                QUrl avatarUrl = av.imageUrl();
+                if (avatarUrl.isLocalFile() && !QFile::exists(av.imageUrl().toString())) {
+                    // download failed, remove it from the contact.
+                    contact.removeDetail(&av);
+                    if (!contactAddedToSaveList) {
+                        saveList.append(contact);
+                        contactAddedToSaveList = true;
+                    }
+                }
+            }
+        }
+    }
+    if (m_contactManager.saveContacts(&saveList)) {
+        TRACE(SOCIALD_INFORMATION,
+            QString(QLatin1String("finalCleanup() purged non-existent avatars from %1 Google contacts"))
+            .arg(saveList.size()));
+    } else {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("finalCleanup() failed to save non-existent avatar removals for Google contacts")));
+    }
+
+    // fifth, purge all data for those account ids which no longer exist.
+    if (purgeAccountIds.size()) {
+        TRACE(SOCIALD_INFORMATION,
+            QString(QLatin1String("finalCleanup() purging contacts from %1 non-existent Google accounts"))
+            .arg(purgeAccountIds.size()));
+        foreach (int purgeId, purgeAccountIds) {
+            purgeAccount(purgeId);
+        }
+    }
+}
+
+// this function must be called directly after readSyncStateData()
+bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
+{
+    QMap<QString, QVariant> values;
+    QStringList keys;
+    keys << QStringLiteral("myContactsGroupAtomId")
+         << QStringLiteral("unsupportedElements")
+         << QStringLiteral("contactEtags")
+         << QStringLiteral("contactIds");
+    if (!d->m_engine->fetchOOB(d->m_stateData[QString::number(accountId)].m_oobScope, keys, &values)) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("failed to read extra data for %1 account %2"))
+            .arg(d->m_syncTarget).arg(accountId));
+        d->clear(QString::number(accountId));
+        return false;
+    }
+
+    // m_myContactsGroupAtomIds
+    QString myContactsGroupAtomId = values.value(QStringLiteral("myContactsGroupAtomId")).toString();
+    m_myContactsGroupAtomIds.insert(accountId, myContactsGroupAtomId);
+
+    // m_unsupportedElements
+    QVariant ueValue = values.value(QStringLiteral("unsupportedElements"));
+    QByteArray ueValueBA = ueValue.toByteArray();
+    QJsonObject ueJsonObj = QJsonDocument::fromBinaryData(ueValueBA).object();
+    QStringList contactGuids = ueJsonObj.keys();
+    QMap<QString, QStringList> guidToUnsupportedElements;
+    foreach (const QString &guid, contactGuids) {
+        QVariantList unsupportedElementsVL = ueJsonObj.value(guid).toArray().toVariantList();
+        QStringList unsupportedElements;
+        foreach (const QVariant &v, unsupportedElementsVL) {
+            if (!v.toString().isEmpty()) {
+                unsupportedElements.append(v.toString());
+            }
+        }
+
+        guidToUnsupportedElements.insert(guid, unsupportedElements);
+    }
+    m_unsupportedXmlElements[accountId] = guidToUnsupportedElements;
+
+    // m_contactEtags
+    QVariant ceValue = values.value(QStringLiteral("contactEtags"));
+    QByteArray ceValueBA = ceValue.toByteArray();
+    QJsonObject ceJsonObj = QJsonDocument::fromBinaryData(ceValueBA).object();
+    contactGuids = ceJsonObj.keys();
+    QMap<QString, QString> guidToContactEtag;
+    foreach (const QString &guid, contactGuids) {
+        guidToContactEtag.insert(guid, ceJsonObj.value(guid).toString());
+    }
+    m_contactEtags[accountId] = guidToContactEtag;
+
+    // m_contactIds
+    QVariant ciValue = values.value(QStringLiteral("contactIds"));
+    QByteArray ciValueBA = ciValue.toByteArray();
+    QJsonObject ciJsonObj = QJsonDocument::fromBinaryData(ciValueBA).object();
+    contactGuids = ciJsonObj.keys();
+    QMap<QString, QString> guidToContactId;
+    foreach (const QString &guid, contactGuids) {
+        guidToContactId.insert(guid, ciJsonObj.value(guid).toString());
+    }
+    m_contactIds[accountId] = guidToContactId;
+
+    // done.
+    return true;
+}
+
+// this function must be called directly before storeSyncStateData()
+bool GoogleTwoWayContactSyncAdaptor::storeExtraStateData(int accountId)
+{
+    // m_myContactsGroupAtomIds
+    QVariant mcghValue(m_myContactsGroupAtomIds[accountId]);
+
+    // m_unsupportedXmlElements
+    QJsonObject ueJsonObj;
+    foreach (const QString &guid, m_unsupportedXmlElements[accountId].keys()) {
+        ueJsonObj.insert(guid, QJsonValue(QJsonArray::fromStringList(m_unsupportedXmlElements[accountId].value(guid))));
+    }
+    QJsonDocument ueJsonDoc(ueJsonObj);
+    QVariant ueValue(ueJsonDoc.toBinaryData());
+
+    // m_contactEtags
+    QJsonObject ceJsonObj;
+    foreach (const QString &guid, m_contactEtags[accountId].keys()) {
+        ceJsonObj.insert(guid, QJsonValue(m_contactEtags[accountId].value(guid)));
+    }
+    QJsonDocument ceJsonDoc(ceJsonObj);
+    QVariant ceValue(ceJsonDoc.toBinaryData());
+
+    // m_contactIds
+    QJsonObject ciJsonObj;
+    foreach (const QString &guid, m_contactIds[accountId].keys()) {
+        ciJsonObj.insert(guid, QJsonValue(m_contactIds[accountId].value(guid)));
+    }
+    QJsonDocument ciJsonDoc(ciJsonObj);
+    QVariant ciValue(ciJsonDoc.toBinaryData());
+
+    // store to OOB
+    QMap<QString, QVariant> values;
+    values.insert("myContactsGroupAtomId", mcghValue);
+    values.insert("unsupportedElements", ueValue);
+    values.insert("contactEtags", ceValue);
+    values.insert("contactIds", ciValue);
+    if (!d->m_engine->storeOOB(d->m_stateData[QString::number(accountId)].m_oobScope, values)) {
+        TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("failed to store extra state data for %1 account %2"))
+            .arg(d->m_syncTarget).arg(accountId));
+        d->clear(QString::number(accountId));
+        return false;
+    }
+
+    return true;
+}

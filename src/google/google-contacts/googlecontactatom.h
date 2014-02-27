@@ -22,14 +22,7 @@ USE_CONTACTS_NAMESPACE
 
 class GoogleContactAtom {
 public:
-    GoogleContactAtom ();
-
-    typedef enum
-    {
-        text,
-        html,
-        xhtml
-    } TYPE;
+    GoogleContactAtom();
 
     void setAuthorName(const QString &authorName);
     QString authorName() const;
@@ -43,17 +36,19 @@ public:
     void setUpdated(const QString &updated);
     QString updated() const;
 
-    void setCategory (const QString &schema = QLatin1String("http://schemas.google.com/g/2005#kind"),
-                      const QString &term = QLatin1String("http://schemas.google.com/contact/2008#contact"));
+    void setCategory(const QString &schema = QStringLiteral("http://schemas.google.com/g/2005#kind"),
+                     const QString &term = QStringLiteral("http://schemas.google.com/contact/2008#contact"));
+    QString categorySchema() const;
+    QString categoryTerm() const;
 
     void setTitle(const QString &title);
     QString title() const;
 
-    void setContent (const QString &note, const QString &type = QLatin1String("text"));
+    void setContent(const QString &note, const QString &type = QStringLiteral("text"));
 
-    void setGenerator(const QString &name = QLatin1String("Contacts"),
-                      const QString &version = QLatin1String("1.0"),
-                      const QString &uri = QLatin1String("http://sailfish.org"));
+    void setGenerator(const QString &name = QStringLiteral("Contacts"),
+                      const QString &version = QStringLiteral("1.0"),
+                      const QString &uri = QStringLiteral("https://sailfishos.org"));
     QString generatorName() const;
     QString generatorVersion() const;
     QString generatorUri() const;
@@ -67,18 +62,37 @@ public:
     void setItemsPerPage(int itemsPerPage);
     int itemsPerPage() const;
 
-    void addEntryContact(const QContact &contact);
-    QList<QContact> entryContacts() const;
+    void addEntryContact(const QContact &contact, const QStringList &unsupportedElements);
+    QList<QPair<QContact, QStringList> > entryContacts() const;
+    void addDeletedEntryContact(const QContact &contact);
+    QList<QContact> deletedEntryContacts() const;
 
-    void setNextEntriesUrl (const QString &nextUrl);
+    void addEntrySystemGroup(const QString &systemGroupId, const QString &systemGroupAtomId);
+    QMap<QString, QString> entrySystemGroups() const;
+
+    void setNextEntriesUrl(const QString &nextUrl);
     QString nextEntriesUrl() const;
+
+    class BatchOperationResponse {
+    public:
+        BatchOperationResponse();
+        QString operationId;
+        QString type;
+        QString code;
+        QString reason;
+        QString reasonDescription;
+        QString contactGuid;
+        bool isError;
+    };
+    void addBatchOperationResponse(const QString &operationId, BatchOperationResponse response);
+    QMap<QString, BatchOperationResponse> batchOperationResponses() const;
 
 private:
     QString mAuthorEmail;
     QString mAuthorName;
     QString mCategory;
+    QString mCategorySchema;
     QString mCategoryTerm;
-    QString mSchema;
     QString mContributor;
     QString mGeneratorName;
     QString mGeneratorVersion;
@@ -96,7 +110,13 @@ private:
     int mStartIndex;
     int mItemsPerPage;
 
-    QList<QContact> mContactList;
+    QMap<QString, BatchOperationResponse> mBatchOperationResponses;
+
+    QList<QContact> mDeletedContactList;
+    QList<QPair<QContact, QStringList> > mContactList;
+
+    QMap<QString, QString> mSystemGroupAtomIds;
+
     QString mNextEntriesUrl;
 };
 

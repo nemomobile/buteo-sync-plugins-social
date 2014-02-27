@@ -8,6 +8,7 @@
 #include "googlecontactsyncadaptor.h"
 #include "googlecontactstream.h"
 #include "googlecontactatom.h"
+#include "googlecontactimagedownloader.h"
 #include "constants_p.h"
 #include "trace.h"
 
@@ -42,9 +43,9 @@
 #define SOCIALD_GOOGLE_CONTACTS_SYNCTARGET QLatin1String("google")
 #define SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS 50
 
-static const char *TOKEN_KEY = "url";
-static const char *ACCOUNT_ID_KEY = "account_id";
-static const char *IDENTIFIER_KEY = "identifier";
+static const char *IMAGE_DOWNLOADER_TOKEN_KEY = "url";
+static const char *IMAGE_DOWNLOADER_ACCOUNT_ID_KEY = "account_id";
+static const char *IMAGE_DOWNLOADER_IDENTIFIER_KEY = "identifier";
 
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
@@ -60,51 +61,6 @@ static QContactManager *aggregatingContactManager(QObject *parent)
 
     return retn;
 }
-
-class GoogleContactImageDownloader: public AbstractImageDownloader
-{
-    Q_OBJECT
-
-public:
-    explicit GoogleContactImageDownloader();
-    static QString staticOutputFile(const QString &identifier, const QUrl &url);
-protected:
-    QNetworkReply * createReply(const QString &url, const QVariantMap &metadata);
-    // This is a reimplemented method, used by AbstractImageDownloader
-    QString outputFile(const QString &url, const QVariantMap &data) const;
-private:
-    Q_DECLARE_PRIVATE(AbstractImageDownloader)
-};
-
-GoogleContactImageDownloader::GoogleContactImageDownloader()
-    : AbstractImageDownloader()
-{
-}
-
-QString GoogleContactImageDownloader::staticOutputFile(const QString &identifier, const QUrl &url)
-{
-    return makeOutputFile(SocialSyncInterface::Google, SocialSyncInterface::Contacts, identifier, url.toString());
-}
-
-QNetworkReply * GoogleContactImageDownloader::createReply(const QString &url,
-                                                          const QVariantMap &metadata)
-{
-    Q_D(AbstractImageDownloader);
-
-    QString accessToken = metadata.value(TOKEN_KEY).toString();
-    QNetworkRequest request(url);
-    request.setRawHeader("GData-Version", "3.0");
-    request.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
-                         QString(QLatin1String("Bearer ") + accessToken).toUtf8());
-    return d->networkAccessManager->get(request);
-}
-
-QString GoogleContactImageDownloader::outputFile(const QString &url, const QVariantMap &data) const
-{
-    return staticOutputFile(data.value(IDENTIFIER_KEY).toString(), url);
-}
-
-//------------------
 
 GoogleContactSyncAdaptor::GoogleContactSyncAdaptor(QObject *parent)
     : GoogleDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Contacts, parent)
@@ -244,7 +200,7 @@ void GoogleContactSyncAdaptor::contactsFinishedHandler()
         return;
     }
 
-    GoogleContactStream parser(false);
+    GoogleContactStream parser(false, accountId);
     GoogleContactAtom *atom = parser.parse(data);
 
     if (!atom) {
@@ -257,9 +213,10 @@ void GoogleContactSyncAdaptor::contactsFinishedHandler()
         return;
     }
 
-    QList<QContact> remoteContacts = atom->entryContacts();
-    if (remoteContacts.size() > 0) {
-        m_remoteContacts[accountId].append(remoteContacts);
+    QList<QPair<QContact, QStringList> > remoteContacts = atom->entryContacts();
+    for (int i = 0; i < remoteContacts.size(); ++i) {
+        // one way sync can ignore the unsupported elements.
+        m_remoteContacts[accountId].append(remoteContacts[i].first);
     }
 
     if (!atom->nextEntriesUrl().isEmpty()) {
@@ -397,7 +354,6 @@ bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int acco
     QList<QContact> remoteToSave;
     QList<QContactId> localToRemove;
     QList<QContactId> foundLocal;
-    QString accountIdStr = QString::number(accountId);
 
     // we always use the remote server's data in conflicts
     for (int i = 0; i < remoteContacts.size(); ++i) {
@@ -414,23 +370,6 @@ bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int acco
         for (int j = 0; j < localContacts.size(); ++j) {
             const QContact &lc = localContacts[j];
             if (lc.detail<QContactGuid>().guid() == guid) {
-                // We need to see if more than one account provides this contact.
-                QContactOriginMetadata metaData = lc.detail<QContactOriginMetadata>();
-                QStringList accountIds = metaData.groupId().split(',');
-
-                QContactOriginMetadata modMetaData = rc.detail<QContactOriginMetadata>();
-                modMetaData.setId(metaData.id());
-                modMetaData.setGroupId(metaData.groupId());
-                modMetaData.setEnabled(metaData.enabled());
-
-                if (accountIds.contains(accountIdStr)) {
-                    rc.saveDetail(&modMetaData);
-                } else {
-                    accountIds.append(accountIdStr);
-                    modMetaData.setGroupId(accountIds.join(QString::fromLatin1(",")));
-                    rc.saveDetail(&modMetaData);
-                }
-
                 // determine whether we need to update the locally stored contact at all
                 if (remoteContactDiffersFromLocal(rc, lc)) {
                     // we clobber local data with remote data.
@@ -454,43 +393,28 @@ bool GoogleContactSyncAdaptor::storeToLocal(const QString &accessToken, int acco
             *modifiedCount += 1;
             remoteToSave.append(rc);
         } else {
-            // adding a new contact
             *addedCount += 1;
-            // need new metadata.
-            QContactOriginMetadata metadata = rc.detail<QContactOriginMetadata>();
-            metadata.setGroupId(accountIdStr);
-            rc.saveDetail(&metadata);
             remoteToSave.append(rc);
         }
     }
 
     // any local contacts which exist without a remote counterpart
-    // are "stale" and should be removed.  Alternatively, if the
-    // contact is provided by a different account as well, we need
-    // to remove this account from the metadata.
+    // are "stale" and should be removed.
     for (int i = 0; i < localContacts.size(); ++i) {
         QContact lc = localContacts.at(i);
         if (!foundLocal.contains(lc.id())) {
-            QContactOriginMetadata metadata = lc.detail<QContactOriginMetadata>();
-            QStringList accountIds = metadata.groupId().split(',');
-            if (accountIds.contains(accountIdStr)) {
-                // this account used to provide this contact, but now does not.
-                accountIds.removeAll(accountIdStr);
-                if (accountIds.isEmpty()) {
-                    // no other account provides this contact, it can be removed.
-                    localToRemove.append(lc.id());
-                    *removedCount += 1;
-                } else {
-                    // at least one other account provides this contact also.
-                    metadata.setGroupId(accountIds.join(QString::fromLatin1(",")));
-                    lc.saveDetail(&metadata);
-                    remoteToSave.append(lc); // actually updating a local.
-                    *removedCount += 1;      // but we consider it a removal from the account's pov.
-                }
-            } else {
-                // it was always provided by some other account only.  Don't modify this one.
-            }
+            localToRemove.append(lc.id());
+            *removedCount += 1;
         }
+    }
+
+    // ensure that each of the remoteToSave have a sync target set.
+    for (int i = 0; i < remoteToSave.size(); ++i) {
+        QContact mod = remoteToSave.at(i);
+        QContactSyncTarget gst = mod.detail<QContactSyncTarget>();
+        gst.setSyncTarget(QStringLiteral("google"));
+        mod.saveDetail(&gst);
+        remoteToSave.replace(i, mod);
     }
 
     // now write the changes to the database.
@@ -537,11 +461,11 @@ QList<QContact> GoogleContactSyncAdaptor::transformContactAvatars(const QList<QC
             // we have a remote avatar which we need to transform.
             QContactAvatar avatar = curr.detail<QContactAvatar>();
             QString remoteImageUrl = avatar.imageUrl().toString();
-            if (!remoteImageUrl.isEmpty()) {
+            if (!remoteImageUrl.isEmpty() && !avatar.imageUrl().isLocalFile()) {
                 QVariantMap metadata;
-                metadata.insert(ACCOUNT_ID_KEY, accountId);
-                metadata.insert(TOKEN_KEY, accessToken);
-                metadata.insert(IDENTIFIER_KEY, curr.detail<QContactGuid>().guid());
+                metadata.insert(IMAGE_DOWNLOADER_ACCOUNT_ID_KEY, accountId);
+                metadata.insert(IMAGE_DOWNLOADER_TOKEN_KEY, accessToken);
+                metadata.insert(IMAGE_DOWNLOADER_IDENTIFIER_KEY, curr.detail<QContactGuid>().guid());
 
                 // transform to a local file name.
                 QString localFileName = GoogleContactImageDownloader::staticOutputFile(
@@ -575,7 +499,7 @@ void GoogleContactSyncAdaptor::imageDownloaded(const QString &url, const QString
     Q_UNUSED(path)
 
     // Load finished, decrement semaphore
-    int accountId = metadata.value(ACCOUNT_ID_KEY).toInt();
+    int accountId = metadata.value(IMAGE_DOWNLOADER_ACCOUNT_ID_KEY).toInt();
     decrementSemaphore(accountId);
 }
 
@@ -592,41 +516,20 @@ void GoogleContactSyncAdaptor::purgeAccount(int pid)
 
     QString accountIdStr = QString::number(pid);
     QList<QContact> localContacts = m_contactManager->contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
-    QList<QContact> contactsToUpdate;
     QList<QContactId> contactsToRemove;
+
+    // in the past, we used QContactOriginMetadata to store which account ids
+    // a given contact was provided by.  Now, however, we encode the account
+    // id into the QContactGuid -- so every instance of a contact from Google
+    // synced from a particular account will be represented by a separate
+    // QContact in the database.
     for (int i = 0; i < localContacts.size(); ++i) {
-        QContact c = localContacts.at(i);
-        QContactOriginMetadata metadata = c.detail<QContactOriginMetadata>();
-        QStringList accountIds = metadata.groupId().split(',');
-        if (accountIds.contains(accountIdStr)) {
-            // this account used to provide this contact, and we're purging this account.
-            accountIds.removeAll(accountIdStr);
-            if (accountIds.isEmpty()) {
-                // no other account provides this contact, it can be removed.
-                contactsToRemove.append(c.id());
-                purgeCount += 1;
-            } else {
-                // at least one other account provides this contact also.
-                metadata.setGroupId(accountIds.join(QString::fromLatin1(",")));
-                c.saveDetail(&metadata);
-                contactsToUpdate.append(c);
-                modifiedCount += 1;
-            }
-        } else {
-            // it was always provided by some other account only.  Don't modify this one.
-        }
+        contactsToRemove.append(localContacts[i].id());
+        purgeCount += 1;
     }
 
     // now write the changes to the database.
     bool success = true;
-    if (contactsToUpdate.size()) {
-        success = m_contactManager->saveContacts(&contactsToUpdate);
-        if (!success) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("Failed to update contacts: %1 - during purge of account %2"))
-                  .arg(m_contactManager->error()).arg(pid));
-        }
-    }
     if (contactsToRemove.size()) {
         success = m_contactManager->removeContacts(contactsToRemove);
         if (!success) {
@@ -670,14 +573,17 @@ void GoogleContactSyncAdaptor::finalCleanup()
     syncTargetFilter.setValue(SOCIALD_GOOGLE_CONTACTS_SYNCTARGET);
     QContactFetchHint noRelationships;
     noRelationships.setOptimizationHints(QContactFetchHint::NoRelationships);
-    noRelationships.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactOriginMetadata::Type << QContactAvatar::Type);
+    noRelationships.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactGuid::Type << QContactAvatar::Type);
     QList<QContact> googleContacts = m_contactManager->contacts(syncTargetFilter, QList<QContactSortOrder>(), noRelationships);
 
     // third, find all account ids from which contacts have been synced
     foreach (const QContact &contact, googleContacts) {
-        QContactOriginMetadata metadata = contact.detail<QContactOriginMetadata>();
-        QStringList accountIds = metadata.groupId().split(',');
-        foreach (const QString &accountIdStr, accountIds) {
+        QContactGuid guid = contact.detail<QContactGuid>();
+        QString accountIdStr = guid.guid().split(':').size() ? guid.guid().split(':').first() : QString();
+        if (accountIdStr.isEmpty()) {
+            TRACE(SOCIALD_ERROR,
+                QString(QLatin1String("finalCleanup() found Google contact with invalid Guid")));
+        } else {
             int purgeId = accountIdStr.toInt();
             if (purgeId && !googleAccountIds.contains(purgeId)
                     && !purgeAccountIds.contains(purgeId)) {
@@ -729,5 +635,3 @@ void GoogleContactSyncAdaptor::finalCleanup()
         }
     }
 }
-
-#include "googlecontactsyncadaptor.moc"
