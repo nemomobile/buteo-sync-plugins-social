@@ -103,6 +103,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         int notificationCount = 0;
+        bool haveNewNotifs = false;
         foreach (const QJsonValue &entry, data) {
             QString updatedTimeStr
                     = entry.toObject().value(QLatin1String("updated_time")).toString();
@@ -110,43 +111,46 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
             updatedTime.setTimeSpec(Qt::UTC);
 
             if (updatedTime > lastSync) {
-                notificationCount ++;
+                haveNewNotifs = true;
+                notificationCount++;
             }
         }
 
         Notification *notification = existingNemoNotification(accountId);
-        if (notificationCount > 0) {
-            // Only publish a notification if one doesn't exist or the published notification count is different
-            if (notification == 0 || notification->itemCount() != notificationCount) {
-                if (notification == 0) {
-                    notification = new Notification;
-                    notification->setCategory("x-nemo.social.facebook.notification");
-                    notification->setHintValue("x-nemo.sociald.account-id", accountId);
-                }
+        if (notification != 0) {
+            notificationCount += notification->itemCount();
+        }
 
-                // When clicked, take the user to their notifications list page
-                QStringList openUrlArgs(QLatin1String("https://touch.facebook.com/notifications"));
-                notification->setRemoteDBusCallServiceName("org.sailfishos.browser");
-                notification->setRemoteDBusCallObjectPath("/");
-                notification->setRemoteDBusCallInterface("org.sailfishos.browser");
-                notification->setRemoteDBusCallMethodName("openUrl");
-                notification->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
-
-                //: The summary text of the Facebook Notifications device notification
-                //% "You have %n new notification(s)!"
-                QString summary = qtTrId("sociald_facebook_notifications-notification_body", notificationCount);
-                //: The body text of the Facebook Notifications device notification, describing that it came from Facebook.
-                //% "Facebook"
-                QString body = qtTrId("sociald_facebook_notifications-notification_summary");
-                notification->setSummary(summary);
-                notification->setBody(body);
-                notification->setPreviewSummary(summary);
-                notification->setPreviewBody(body);
-                notification->setItemCount(notificationCount);
-                notification->setTimestamp(QDateTime::currentDateTime());
-                notification->publish();
+        // Only publish a notification if one doesn't exist or we have new notifications to publish.
+        if (haveNewNotifs) {
+            if (notification == 0) {
+                notification = new Notification;
+                notification->setCategory("x-nemo.social.facebook.notification");
+                notification->setHintValue("x-nemo.sociald.account-id", accountId);
             }
-        } else if (notification != 0) {
+
+            // When clicked, take the user to their notifications list page
+            QStringList openUrlArgs(QLatin1String("https://touch.facebook.com/notifications"));
+            notification->setRemoteDBusCallServiceName("org.sailfishos.browser");
+            notification->setRemoteDBusCallObjectPath("/");
+            notification->setRemoteDBusCallInterface("org.sailfishos.browser");
+            notification->setRemoteDBusCallMethodName("openUrl");
+            notification->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
+
+            //: The summary text of the Facebook Notifications device notification
+            //% "You have %n new notification(s)!"
+            QString summary = qtTrId("sociald_facebook_notifications-notification_body", notificationCount);
+            //: The body text of the Facebook Notifications device notification, describing that it came from Facebook.
+            //% "Facebook"
+            QString body = qtTrId("sociald_facebook_notifications-notification_summary");
+            notification->setSummary(summary);
+            notification->setBody(body);
+            notification->setPreviewSummary(summary);
+            notification->setPreviewBody(body);
+            notification->setItemCount(notificationCount);
+            notification->setTimestamp(QDateTime::currentDateTime());
+            notification->publish();
+        } else if (notificationCount == 0 && notification != 0) {
             // Destroy any existing notification if there should be no notifications
             notification->close();
         }
