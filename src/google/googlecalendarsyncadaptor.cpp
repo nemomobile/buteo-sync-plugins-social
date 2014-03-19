@@ -145,7 +145,7 @@ void extractStartAndEnd(const QJsonObject &eventData,
 
             *start = parsedStartTime.toLocalZone();
         } else {
-            *start = KDateTime(QDate::fromString(endTimeString, QDATEONLY_FORMAT), QTime(), KDateTime::ClockTime);
+            *start = KDateTime(QDate::fromString(startTimeString, QDATEONLY_FORMAT), QTime(), KDateTime::ClockTime);
             // note: don't call start->setDateOnly(true); or mkcal doesn't like it.
         }
     }
@@ -163,23 +163,30 @@ void extractStartAndEnd(const QJsonObject &eventData,
 
             *end = parsedEndTime.toLocalZone();
         } else {
-            // Hack to work around mkcal issues: if the end date is the same
-            // as the start date, then it's an all day event, and we have
-            // to set some magic flags.
+            // Special handling for all-day events is required.
             if (*startExists && *startIsDateOnly) {
                 if (QDate::fromString(startTimeString, QDATEONLY_FORMAT)
                         == QDate::fromString(endTimeString, QDATEONLY_FORMAT)) {
                     // single-day all-day event
                     *endExists = false;
                     *isAllDay = true;
+                } else if (QDate::fromString(startTimeString, QDATEONLY_FORMAT)
+                        == QDate::fromString(endTimeString, QDATEONLY_FORMAT).addDays(-1)) {
+                    // Google will send a single-day all-day event has having an end-date
+                    // of startDate+1 to conform to iCal spec.  Hence, this is actually
+                    // a single-day all-day event, despite the difference in end-date.
+                    *endExists = false;
+                    *isAllDay = true;
                 } else {
-                    // multi-day all-day event.  Work around mkcal bugs.
+                    // multi-day all-day event.
+                    // as noted above, Google will send all-day events as having an end-date
+                    // of real-end-date+1 in order to conform to iCal spec (exclusive end dt).
                     *start = KDateTime(QDate::fromString(startTimeString, QDATEONLY_FORMAT), QTime(), KDateTime::ClockTime);
-                    *end = KDateTime(QDate::fromString(endTimeString, QDATEONLY_FORMAT), QTime(), KDateTime::ClockTime);
+                    *end = KDateTime(QDate::fromString(endTimeString, QDATEONLY_FORMAT).addDays(-1), QTime(), KDateTime::ClockTime);
                     *isAllDay = true;
                 }
             } else {
-                *end = KDateTime(QDate::fromString(endTimeString, QDATEONLY_FORMAT), QTime(), KDateTime::ClockTime);
+                *end = KDateTime(QDate::fromString(endTimeString, QDATEONLY_FORMAT).addDays(-1), QTime(), KDateTime::ClockTime);
                 // note: don't call end->setDateOnly(true); or mkcal doesn't like it.
                 *isAllDay = false;
             }
