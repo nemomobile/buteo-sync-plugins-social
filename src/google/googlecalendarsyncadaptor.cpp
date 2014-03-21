@@ -77,7 +77,8 @@ QJsonObject kCalToJson(KCalCore::Event::Ptr event, KCalCore::ICalFormat &icalFor
         start.insert(QLatin1String("timeZone"), QJsonValue(event->dtStart().toString(KLONGTZ_FORMAT)));
     }
     if (event->dtEnd().isDateOnly() || (event->allDay() && event->dtEnd().time() == QTime(0,0,0))) {
-        end.insert(QLatin1String("date"), event->dateEnd().toString(QDATEONLY_FORMAT));
+        // note: for iCal spec, allDay events need to have an end date of real-end-date+1 as end date is exclusive.
+        end.insert(QLatin1String("date"), event->dateEnd().addDays(1).toString(QDATEONLY_FORMAT));
     } else {
         end.insert(QLatin1String("dateTime"), event->dtEnd().toString(RFC3339_FORMAT));
         end.insert(QLatin1String("timeZone"), QJsonValue(event->dtEnd().toString(KLONGTZ_FORMAT)));
