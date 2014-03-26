@@ -258,22 +258,22 @@ void FacebookDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
     // Not anymore interested about status changes of this account instance
     account->disconnect(this);
     qWarning() << "sociald:Facebook: setting CredentialsNeedUpdate to true for account:" << account->identifier();
-    account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
-    account->setConfigurationValue("facebook-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-facebook")));
+    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-facebook")));
     account->sync();
 }
 
 void FacebookDataTypeSyncAdaptor::signIn(Account *account)
 {
     // grab out a valid identity for the sync service.
-    if (!account->isEnabledWithService("facebook-sync")) {
+    if (!account->isEnabledWithService(syncServiceName())) {
         TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("account with id %1 has no enabled facebook sync service"))
-              .arg(account->identifier()));
+              QString(QLatin1String("account with id %1 is not enabled with service %2"))
+              .arg(account->identifier()).arg(syncServiceName()));
         return;
     }
 
-    SignInParameters *sip = account->signInParameters("facebook-sync");
+    SignInParameters *sip = account->signInParameters(syncServiceName());
     sip->setParameter(QLatin1String("ClientId"), clientId());
     sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
 

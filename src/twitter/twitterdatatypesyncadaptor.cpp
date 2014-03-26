@@ -407,18 +407,18 @@ void TwitterDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
     // Not anymore interested about status changes of this account instance
     account->disconnect(this);
     qWarning() << "sociald:Twitter: setting CredentialsNeedUpdate to true for account:" << account->identifier();
-    account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
-    account->setConfigurationValue("twitter-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
+    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
     account->sync();
 }
 
 void TwitterDataTypeSyncAdaptor::signIn(Account *account)
 {
     // grab out a valid identity for the sync service.
-    if (!account->isEnabledWithService("twitter-sync")) {
+    if (!account->isEnabledWithService(syncServiceName())) {
         TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("account with id %1 has no enabled sync service"))
-              .arg(account->identifier()));
+              QString(QLatin1String("account with id %1 is not enabled with service %2"))
+              .arg(account->identifier()).arg(syncServiceName()));
         return;
     }
 
@@ -429,7 +429,7 @@ void TwitterDataTypeSyncAdaptor::signIn(Account *account)
         return;
     }
 
-    SignInParameters *sip = account->signInParameters("twitter-sync");
+    SignInParameters *sip = account->signInParameters(syncServiceName());
     sip->setParameter(QLatin1String("ConsumerKey"), key);
     sip->setParameter(QLatin1String("ConsumerSecret"), secret);
     sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);

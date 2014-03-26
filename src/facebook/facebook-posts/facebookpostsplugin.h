@@ -9,7 +9,6 @@
 #define FACEBOOKPOSTSPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class FacebookPostsPlugin : public SocialdButeoPlugin
 {

@@ -9,7 +9,6 @@
 #define FACEBOOKNOTIFICATIONSPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class FacebookNotificationsPlugin : public SocialdButeoPlugin
 {

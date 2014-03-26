@@ -9,7 +9,6 @@
 #define TWITTERNOTIFICATIONSPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class TwitterNotificationsPlugin : public SocialdButeoPlugin
 {

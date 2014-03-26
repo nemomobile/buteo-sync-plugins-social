@@ -9,7 +9,6 @@
 #define GOOGLECONTACTSPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class GoogleContactsPlugin : public SocialdButeoPlugin
 {

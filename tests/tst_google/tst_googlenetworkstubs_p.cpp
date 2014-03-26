@@ -13,12 +13,14 @@
 
 static QByteArray createGoogleCalendarsData(const QString &generator)
 {
+    Q_UNUSED(generator);
     // XXX TODO
     return QByteArray();
 }
 
 static QByteArray createGoogleContactsData(const QString &generator)
 {
+    Q_UNUSED(generator);
     // XXX TODO
     return QByteArray();
 }

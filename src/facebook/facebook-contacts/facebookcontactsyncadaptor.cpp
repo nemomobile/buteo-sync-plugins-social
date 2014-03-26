@@ -951,7 +951,7 @@ void FacebookContactSyncAdaptor::finalCleanup()
         Account *act = accountManager->account(currId);
         if (act) {
             if (act->providerName() == QString(QLatin1String("facebook")) && act->enabled()
-                    && act->isEnabledWithService(QString(QLatin1String("facebook-sync")))) {
+                    && act->isEnabledWithService(syncServiceName())) {
                 facebookAccountIds.append(currId);
             }
             act->deleteLater();

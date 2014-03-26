@@ -9,7 +9,6 @@
 #define FACEBOOKCONTACTSPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class FacebookContactsPlugin : public SocialdButeoPlugin
 {

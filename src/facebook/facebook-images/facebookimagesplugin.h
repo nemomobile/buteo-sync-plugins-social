@@ -9,7 +9,6 @@
 #define FACEBOOKIMAGESPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class FacebookImagesPlugin : public SocialdButeoPlugin
 {

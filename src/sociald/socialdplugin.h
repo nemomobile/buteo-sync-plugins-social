@@ -11,8 +11,7 @@
 #include <QString>
 #include <QObject>
 
-#include <ClientPlugin.h>
-#include <SyncResults.h>
+#include "buteosyncfw_p.h"
 
 /*
    This plugin implementation provides a simple way

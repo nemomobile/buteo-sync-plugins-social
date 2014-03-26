@@ -9,7 +9,6 @@
 #define FACEBOOKCALENDARSPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class FacebookCalendarsPlugin : public SocialdButeoPlugin
 {

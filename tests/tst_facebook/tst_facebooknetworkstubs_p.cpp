@@ -13,6 +13,8 @@
 
 static QByteArray createFacebookMeData(const QString &generator)
 {
+    Q_UNUSED(generator);
+
     // if the request is for https://graph.facebook.com/me
 
     QDateTime currDt = QDateTime::currentDateTime();
@@ -39,6 +41,8 @@ static QByteArray createFacebookMeData(const QString &generator)
 
 static QByteArray createFacebookMeNotificationsData(const QString &generator)
 {
+    Q_UNUSED(generator);
+
     // if the request is for https://graph.facebook.com/me/notifications
 
     QDateTime currDt = QDateTime::currentDateTime();
@@ -103,6 +107,8 @@ static QByteArray createFacebookMeNotificationsData(const QString &generator)
 
 static QByteArray createFacebookMeHomeData(const QString &generator)
 {
+    Q_UNUSED(generator);
+
     // if the request is for https://graph.facebook.com/me/home
 
     QDateTime currDt = QDateTime::currentDateTime();
@@ -192,6 +198,8 @@ static QByteArray createFacebookMeHomeData(const QString &generator)
 
 static QByteArray createFacebookMeFriendsData(const QString &generator)
 {
+    Q_UNUSED(generator);
+
     // if the request is for https://graph.facebook.com/me/friends
 
     QString dataStr = QString(QLatin1String(
@@ -248,6 +256,8 @@ static QByteArray createFacebookMeFriendsData(const QString &generator)
 
 static QByteArray createFacebookMeAlbumsData(const QString &generator)
 {
+    Q_UNUSED(generator);
+
     // if the request is for https://graph.facebook.com/me/albums
 
     QDateTime currDt = QDateTime::currentDateTime();
@@ -353,6 +363,8 @@ static QByteArray createFacebookMeAlbumsData(const QString &generator)
 
 static QByteArray createFacebookAlbumPhotosData(const QString &generator)
 {
+    Q_UNUSED(generator);
+
     // if the request is for https://graph.facebook.com/SOME_ALBUM_ID/photos
 
     QDateTime currDt = QDateTime::currentDateTime();
@@ -433,6 +445,8 @@ static QByteArray createFacebookAlbumPhotosData(const QString &generator)
 
 static QByteArray createFacebookAlbumPhotosContinuationData(const QString &generator)
 {
+    Q_UNUSED(generator);
+
     // if the request is for a continuation (page) of https://graph.facebook.com/SOME_ALBUM_ID/photos
 
     QString dataStr = QString(QLatin1String(

@@ -13,12 +13,14 @@
 
 static QByteArray createTwitterHomeTimelineData(const QString &generator)
 {
+    Q_UNUSED(generator);
     // XXX TODO
     return QByteArray();
 }
 
 static QByteArray createTwitterMentionsTimelineData(const QString &generator)
 {
+    Q_UNUSED(generator);
     // XXX TODO
     return QByteArray();
 }

@@ -9,7 +9,6 @@
 #define TWITTERPOSTSPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class TwitterPostsPlugin : public SocialdButeoPlugin
 {

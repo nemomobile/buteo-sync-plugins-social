@@ -19,12 +19,7 @@
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 
-// buteo
-#include <ProfileEngineDefs.h>
-#include <SyncProfile.h>
-#include <Profile.h>
-#include <PluginCbInterface.h>
-#include <LogMacros.h>
+#include "buteosyncfw_p.h"
 
 // sailfish-components-accounts-qt5
 #include <accountmanager.h>

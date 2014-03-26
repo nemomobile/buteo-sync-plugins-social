@@ -1,3 +1,4 @@
+QMAKE_CXXFLAGS += -Werror
 CONFIG += link_pkgconfig
 PKGCONFIG += \
     libsailfishkeyprovider \
@@ -23,6 +24,7 @@ DEFINES += 'SOCIALD_SYNC_DATABASE_NAME=\'\"sociald.db\"\''
 INCLUDEPATH += . $$PWD/common/
 
 HEADERS += \
+    $$PWD/common/buteosyncfw_p.h \
     $$PWD/common/socialdbuteoplugin.h \
     $$PWD/common/socialnetworksyncadaptor.h \
     $$PWD/common/trace.h

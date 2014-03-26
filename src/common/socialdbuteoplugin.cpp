@@ -12,17 +12,15 @@
 #include <QCoreApplication>
 #include <QTranslator>
 
-#include <SyncClientInterface.h>
-#include <ProfileEngineDefs.h>
-#include <SyncProfile.h>
-#include <Profile.h>
-#include <PluginCbInterface.h>
-#include <LogMacros.h>
+#include <QDBusMessage>
+#include <QDBusConnection>
+#include <QDBusPendingCall>
+
+#include "buteosyncfw_p.h"
 
 #include <Accounts/Manager>
 #include <Accounts/Account>
 #include <Accounts/Service>
-
 
 SocialdButeoPlugin::SocialdButeoPlugin(const QString& pluginName,
                                        const Buteo::SyncProfile& profile,
@@ -72,9 +70,11 @@ bool SocialdButeoPlugin::startSync()
         // or (due to scheduling/etc) another plugin instance might
         // be created to sync that profile at the same time, and
         // we don't handle concurrency.
-        Buteo::SyncClientInterface buteoClient;
         foreach (Buteo::SyncProfile *perAccountProfile, perAccountProfiles) {
-            buteoClient.startSync(perAccountProfile->name());
+            QDBusMessage message = QDBusMessage::createMethodCall(
+                    "com.meego.msyncd", "/synchronizer", "com.meego.msyncd", "startSync");
+            message.setArguments(QVariantList() << perAccountProfile->name());
+            QDBusConnection::sessionBus().asyncCall(message);
         }
     } else {
         m_socialNetworkSyncAdaptor->setAccountSyncProfile(profile().clone());
@@ -159,46 +159,12 @@ void SocialdButeoPlugin::updateResults(const Buteo::SyncResults &results)
     m_syncResults.setScheduled(true);
 }
 
-// Helper function to generate a per-account sync profile for a particular datatype.
-Buteo::SyncProfile *generatePerAccountSyncProfile(Accounts::Account *account,
-                                                  const Buteo::SyncProfile &templateProfile,
-                                                  Buteo::ProfileManager &profileManager,
-                                                  const Accounts::Service &syncService)
-{
-    QString accountIdStr = QString::number(account->id());
-    Buteo::SyncProfile *perAccountProfile = templateProfile.clone();
-    if (!perAccountProfile) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("unable to clone template profile: %1"))
-              .arg(templateProfile.name()));
-        return NULL;
-    }
-
-    bool profileEnabled = account->enabled();
-    account->selectService(syncService);
-    profileEnabled = profileEnabled && account->enabled();
-
-    perAccountProfile->setName(templateProfile.name() + "-" + accountIdStr);
-    perAccountProfile->setKey(Buteo::KEY_DISPLAY_NAME, templateProfile.name() + "-" + account->displayName());
-    perAccountProfile->setKey(Buteo::KEY_ACCOUNT_ID, accountIdStr);
-    perAccountProfile->setBoolKey(Buteo::KEY_USE_ACCOUNTS, true);
-    perAccountProfile->setEnabled(profileEnabled);
-    profileManager.updateProfile(*perAccountProfile);
-
-    account->setValue(QStringLiteral("%1/%2").arg(templateProfile.name()).arg(Buteo::KEY_PROFILE_ID),
-                      perAccountProfile->name());
-    account->selectService(Accounts::Service());
-    account->syncAndBlock();
-
-    return perAccountProfile;
-}
-
 // This function is called when the non-per-account profile is triggered.
 // The implementation does:
 // - get all profiles from the ProfileManager
 // - get all accounts from the AccountManager
 // - build a mapping of profile -> account for the current data type. (should be one-to-one for the datatype).
-// - any account which doesn't have a profile, generate the profile for it.
+// - any account which doesn't have a profile, print an error.
 // - check the enabled status of the account -> ensure that the enabled status is reflected in the profile.
 // It then returns a list of the appropriate (per account for this data-type) sync profiles.
 // The caller takes ownership of the list.
@@ -239,21 +205,10 @@ QList<Buteo::SyncProfile*> SocialdButeoPlugin::ensurePerAccountSyncProfilesExist
         }
 
         if (!foundProfile) {
-            // we need to generate a sync profile for this account.
-            TRACE(SOCIALD_INFORMATION,
-                    QString(QLatin1String("generating a %1 sync profile for account: %2"))
+            // it should have been generated for the account when the account was added.
+            TRACE(SOCIALD_ERROR,
+                    QString(QLatin1String("no per-account %1 sync profile exists for account: %2"))
                     .arg(profile().name()).arg(currAccount->id()));
-            Buteo::SyncProfile *generated = generatePerAccountSyncProfile(currAccount,
-                                                                          profile(),
-                                                                          m_profileManager,
-                                                                          dataTypeSyncService);
-            if (generated) {
-                perAccountProfiles.insert(currAccount, generated);
-            } else {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("couldn't generate per-account sync profile: %1:%2"))
-                        .arg(currAccount->id()).arg(profile().name()));
-            }
         }
     }
 

@@ -98,6 +98,8 @@ bool SocialdPlugin::startSync()
     updateResults(Buteo::SyncResults(QDateTime::currentDateTime(),
                                      Buteo::SyncResults::SYNC_RESULT_SUCCESS,
                                      Buteo::SyncResults::NO_ERROR));
+
+    return true;
 }
 
 void SocialdPlugin::abortSync(Sync::SyncStatus)

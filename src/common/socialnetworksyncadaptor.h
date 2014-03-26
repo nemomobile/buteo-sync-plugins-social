@@ -16,8 +16,7 @@
 #include <QtCore/QMap>
 #include <QtCore/QList>
 
-// buteo
-#include <SyncProfile.h>
+#include "buteosyncfw_p.h"
 
 class QSqlDatabase;
 class QNetworkAccessManager;

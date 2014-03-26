@@ -297,22 +297,22 @@ void GoogleDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
     // Not anymore interested about status changes of this account instance
     account->disconnect(this);
     qWarning() << "sociald:Google: setting CredentialsNeedUpdate to true for account:" << account->identifier();
-    account->setConfigurationValue("google-sync", "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
-    account->setConfigurationValue("google-sync", "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-google")));
+    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
+    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-google")));
     account->sync();
 }
 
 void GoogleDataTypeSyncAdaptor::signIn(Account *account)
 {
     // grab out a valid identity for the sync service.
-    if (!account->isEnabledWithService("google-sync")) {
+    if (!account->isEnabledWithService(syncServiceName())) {
         TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("account with id %1 has no enabled Google sync service"))
-              .arg(account->identifier()));
+              QString(QLatin1String("account with id %1 is not enabled with service %2"))
+              .arg(account->identifier()).arg(syncServiceName()));
         return;
     }
 
-    SignInParameters *sip = account->signInParameters("google-sync");
+    SignInParameters *sip = account->signInParameters(syncServiceName());
     sip->setParameter(QLatin1String("ClientId"), clientId());
     sip->setParameter(QLatin1String("ClientSecret"), clientSecret());
     sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);

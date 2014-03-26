@@ -9,7 +9,6 @@
 #define GOOGLECALENDARSPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
 class GoogleCalendarsPlugin : public SocialdButeoPlugin
 {
