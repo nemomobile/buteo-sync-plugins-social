@@ -28,12 +28,14 @@ Item {
         width: parent.width
     }
 
+    FadeAnimation { id: fadeAnimation }
+
     TestCase {
         name: "SocialComment"
         when: windowShown
 
         function test_comment() {
-            wait(300) // make sure fade animation is over
+            wait(fadeAnimation.duration + 50)
             compare(comment.opacity, 1.0)
             compare(comment.avatar, "")
             compare(comment.message, "Test message")

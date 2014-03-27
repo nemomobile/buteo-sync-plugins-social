@@ -69,6 +69,8 @@ ApplicationWindow {
             compare(pullDownMenu.pageContainer, page)
             compare(pullDownMenu.serviceName, "")
             compare(pullDownMenu.switchEnabled, false)
+            compare(pullDownMenu.link, "")
+            compare(pullDownMenu.linkTitle, "")
         }
     }
 }

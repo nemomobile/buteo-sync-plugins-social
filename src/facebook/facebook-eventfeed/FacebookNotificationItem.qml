@@ -6,10 +6,6 @@ import "shared"
 SocialMediaFeedItem {
     id: item
 
-    property string timestamp: model.timestamp
-    property string formattedTime: refreshTimeCount ? Format.formatDate(timestamp, Format.DurationElapsed) : formattedTime
-    property int refreshTimeCount: 1
-
     avatarSource: model.from !== "" ? "https://graph.facebook.com/"+model.from+"/picture?width=200&height=200" : ""
     height: Math.max(content.height, avatar.height) + Theme.paddingMedium * 3
     width: parent.width

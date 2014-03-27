@@ -5,7 +5,7 @@ import Sailfish.Accounts 1.0
 import org.nemomobile.lipstick 0.1
 
 Page {
-    property string nodeIdentifier: model.object
+    property string nodeIdentifier: model ? model.object : ""
     property variant model
     property Item subviewModel
     property bool allowLike: true

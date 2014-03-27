@@ -1,6 +1,6 @@
 /****************************************************************************************
 **
-** Copyright (C) 2013 Jolla Ltd.
+** Copyright (C) 2014 Jolla Ltd.
 ** Contact: Antti Seppälä <antti.seppala@jollamobile.com>
 ** All rights reserved.
 **
@@ -14,30 +14,33 @@ import Sailfish.Silica 1.0
 import "eventfeed/shared"
 
 Item {
+    id: item
     width: 100; height: 100
 
-    SocialInfoLabel {
+    SocialLabel {
         id: label
-        width: parent.width
         text: "Testing"
     }
 
     FadeAnimation { id: fadeAnimation }
 
     TestCase {
-        name: "SocialInfoLabel"
+        name: "SocialLabel"
         when: windowShown
 
-        function test_infoLabel() {
+        function test_socialLabel() {
             compare(label.text, "Testing")
-            verify(label.height > 2 * Theme.paddingLarge)
+            compare(label.width, item.width)
             compare(label.opacity, 1.0)
+            compare(label.wrapMode, Text.Wrap)
+            compare(label.elide, Text.ElideRight)
+            compare(label.visible, true)
 
             label.text = ""
             compare(label.text, "")
             wait(fadeAnimation.duration + 50)
-            compare(label.height, Theme.paddingLarge)
             compare(label.opacity, 0)
+            compare(label.visible, false)
         }
     }
 }

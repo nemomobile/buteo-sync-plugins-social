@@ -12,6 +12,7 @@ import QtTest 1.0
 import QtQuick 2.0
 import Sailfish.Silica 1.0
 import org.nemomobile.configuration 1.0
+import org.nemomobile.socialcache 1.0
 import "eventfeed/shared"
 
 ApplicationWindow {
@@ -59,9 +60,10 @@ ApplicationWindow {
             verify(feedPage.listView !== null)
             compare(feedPage.updating, false)
             compare(feedPage.syncNotifications, false)
-            compare(feedPage.connectedToNetwork, false)
+            verify(typeof feedPage.connectedToNetwork !== "undefined")
             compare(feedPage.refreshTimeCount, 2)  // Status change increases this by one
             compare(window.modelWasRefreshed, true)
+            compare(feedPage.dataType, SocialSync.Posts)
         }
 
         function test_timeUpdate() {

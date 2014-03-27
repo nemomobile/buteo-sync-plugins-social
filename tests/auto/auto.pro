@@ -13,4 +13,7 @@ shared.path = /opt/tests/sociald/auto/eventfeed/shared
 twitter.files = ../../src/twitter/twitter-eventfeed/*.qml
 twitter.path = /opt/tests/sociald/auto/eventfeed
 
-INSTALLS += unittest shared twitter
+facebook.files = ../../src/facebook/facebook-eventfeed/*.qml
+facebook.path = /opt/tests/sociald/auto/eventfeed
+
+INSTALLS += unittest shared twitter facebook
