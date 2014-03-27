@@ -49,7 +49,8 @@ public:
         Videos,         // "Videos"
         Posts,          // "Posts"
         Messages,       // "Messages"
-        Emails          // "Emails"
+        Emails,         // "Emails"
+        Signon          // "Signon" -- for refreshing AccessTokens etc.
     };
     static QStringList validDataTypes();
     static QString dataTypeName(DataType t);

@@ -190,6 +190,30 @@ rm -f /home/nemo/.cache/msyncd/sync/facebook.Posts.xml
 systemctl-user restart msyncd.service || :
 
 
+%package facebook-signon
+Summary:    Provides signon credentials refreshing with Facebook
+License:    TBD
+Group:      System/Libraries
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description facebook-signon
+Provides signon credentials refreshing with Facebook
+
+%files facebook-signon
+/usr/lib/buteo-plugins-qt5/libfacebook-signon-client.so
+%config %{_sysconfdir}/buteo/profiles/client/facebook-signon.xml
+%config %{_sysconfdir}/buteo/profiles/sync/facebook.Signon.xml
+
+%pre facebook-signon
+rm -f /home/nemo/.cache/msyncd/sync/client/facebook-signon.xml
+rm -f /home/nemo/.cache/msyncd/sync/facebook.Signon.xml
+
+%post facebook-signon
+systemctl-user restart msyncd.service || :
+
+
+
 %package google-calendars
 Summary:    Provides calendar synchronisation with Google
 License:    TBD
