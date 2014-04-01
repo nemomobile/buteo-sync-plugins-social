@@ -192,9 +192,6 @@ void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
             }
         }
     }
-
-    disconnect(reply);
-    reply->deleteLater();
 }
 
 void FacebookDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)

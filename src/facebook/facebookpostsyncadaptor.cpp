@@ -139,6 +139,7 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request feed posts from Facebook account with id %1"))
@@ -173,6 +174,7 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request home posts from Facebook account with id %1"))
@@ -189,6 +191,7 @@ void FacebookPostSyncAdaptor::finishedMeHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
@@ -216,6 +219,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);

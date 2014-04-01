@@ -19,6 +19,8 @@
 class QSqlDatabase;
 class SyncService;
 class QNetworkAccessManager;
+class QTimer;
+class QNetworkReply;
 class AccountManager;
 class SocialNetworkSyncDatabase;
 
@@ -69,6 +71,10 @@ protected:
     void incrementSemaphore(int accountId);
     void decrementSemaphore(int accountId);
 
+    // network reply timeouts
+    void setupReplyTimeout(int accountId, QNetworkReply *reply);
+    void removeReplyTimeout(int accountId, QNetworkReply *reply);
+
     // Parsing methods
     static QJsonObject parseJsonObjectReplyData(const QByteArray &replyData, bool *ok);
     static QJsonArray parseJsonArrayReplyData(const QByteArray &replyData, bool *ok);
@@ -76,6 +82,8 @@ protected:
     AccountManager *const accountManager;
     QNetworkAccessManager * const networkAccessManager; // Do not allow the pointer to be changed
 
+protected Q_SLOTS:
+    virtual void timeoutReply();
 
 private:
     SocialNetworkSyncDatabase *m_syncDb;
@@ -84,6 +92,7 @@ private:
     QString m_serviceName;
     SyncService *m_syncService;
     QMap<int, int> m_accountSyncSemaphores;
+    QMap<int, QMap<QNetworkReply*, QTimer *> > m_networkReplyTimeouts;
 };
 
 #endif // SOCIALNETWORKSYNCADAPTOR_H

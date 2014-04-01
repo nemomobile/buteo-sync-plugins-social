@@ -199,6 +199,7 @@ void GoogleContactSyncAdaptor::requestData(int accountId, const QString &accessT
         connect(reply, SIGNAL(finished()), this, SLOT(contactsFinishedHandler()));
         connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
         connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslErrorsHandler(QList<QSslError>)));
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("error: unable to request contacts from Google account with id %1"))
@@ -219,6 +220,8 @@ void GoogleContactSyncAdaptor::contactsFinishedHandler()
     QDateTime lastSyncTimestamp = reply->property("lastSyncTimestamp").toDateTime();
     bool isError = reply->property("isError").toBool();
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
+
     if (isError) {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("error occurred when performing contacts request for Google account %1"))
