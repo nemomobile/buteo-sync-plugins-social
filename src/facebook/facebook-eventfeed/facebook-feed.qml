@@ -168,7 +168,7 @@ SocialMediaFeedPage {
         }
 
         try {
-            rv = pageStack.push(Qt.resolvedUrl("FacebookGenericNotificationPage.qml"), {
+            pageStack.push(Qt.resolvedUrl("FacebookGenericNotificationPage.qml"), {
                                     "model": model,
                                     "subviewModel": subviewModel,
                                     "account": account,
@@ -195,9 +195,8 @@ SocialMediaFeedPage {
             facebookUser.nodeIdentifier = ""
         }
 
-        var rv = null
         try {
-            rv = pageStack.push(Qt.resolvedUrl("FacebookPostPage.qml"), {
+            pageStack.push(Qt.resolvedUrl("FacebookPostPage.qml"), {
                                     "model": model,
                                     "subviewModel": subviewModel,
                                     "account": account,
@@ -215,7 +214,7 @@ SocialMediaFeedPage {
 
     function openPhoto(model, subviewModel) {
         try {
-            rv = pageStack.push(Qt.resolvedUrl("FacebookPicturePage.qml"), {
+            pageStack.push(Qt.resolvedUrl("FacebookPicturePage.qml"), {
                                     "model": model,
                                     "subviewModel": subviewModel,
                                     "account": account,
@@ -235,7 +234,7 @@ SocialMediaFeedPage {
         facebookUser.nodeIdentifier = ""
 
         try {
-            rv = pageStack.push(Qt.resolvedUrl("FacebookEventPage.qml"), {
+            pageStack.push(Qt.resolvedUrl("FacebookEventPage.qml"), {
                                     "model": model,
                                     "subviewModel": subviewModel,
                                     "account": account,
