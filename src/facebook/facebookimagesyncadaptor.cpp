@@ -131,6 +131,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request data from Facebook account with id %1"))
@@ -151,6 +152,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
@@ -256,6 +258,7 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
@@ -398,6 +401,9 @@ void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, int a
         connect(reply, SIGNAL(sslErrors(QList<QSslError>)),
                 this, SLOT(sslErrorsHandler(QList<QSslError>)));
         connect(reply, SIGNAL(finished()), this, SLOT(userFinishedHandler()));
+
+        incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     }
 }
 
@@ -424,6 +430,7 @@ void FacebookImageSyncAdaptor::userFinishedHandler()
     QString updatedStr = parsed.value(QLatin1String("updated_time")).toString();
 
     m_db.addUser(fbUserId, QDateTime::fromString(updatedStr, Qt::ISODate), fbName);
+    decrementSemaphore(accountId);
 }
 
 void FacebookImageSyncAdaptor::initRemovalDetectionLists()

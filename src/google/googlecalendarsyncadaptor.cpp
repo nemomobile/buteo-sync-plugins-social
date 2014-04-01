@@ -421,6 +421,8 @@ void GoogleCalendarSyncAdaptor::requestCalendars(int accountId, const QString &a
         connect(reply, SIGNAL(sslErrors(QList<QSslError>)),
                 this, SLOT(sslErrorsHandler(QList<QSslError>)));
         connect(reply, SIGNAL(finished()), this, SLOT(calendarsFinishedHandler()));
+
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request calendars"
@@ -442,6 +444,7 @@ void GoogleCalendarSyncAdaptor::calendarsFinishedHandler()
 
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     // parse the calendars' metadata from the response.
     bool fetchingNextPage = false;
@@ -625,6 +628,8 @@ void GoogleCalendarSyncAdaptor::requestEvents(int accountId, const QString &acce
         TRACE(SOCIALD_DEBUG,
               QString(QLatin1String("Requesting calendar events for Google account: %1: %2"))
               .arg(accountId).arg(url.toString()));
+
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request events for calendar %1"
@@ -647,6 +652,7 @@ void GoogleCalendarSyncAdaptor::eventsFinishedHandler()
 
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool fetchingNextPage = false;
     bool ok = false;
@@ -916,6 +922,8 @@ void GoogleCalendarSyncAdaptor::upsyncChanges(int accountId, const QString &acce
                 this, SLOT(sslErrorsHandler(QList<QSslError>)));
         connect(reply, SIGNAL(finished()), this, SLOT(upsyncFinishedHandler()));
 
+        setupReplyTimeout(accountId, reply);
+
         TRACE(SOCIALD_DEBUG,
                 QString(QLatin1String("Upsyncing change: %1 to calendarId: %2 of account %3:\n%4\n%5\n"))
                 .arg(upsyncTypeStr).arg(calendarId).arg(accountId).arg(request.url().toString()).arg(QString::fromUtf8(eventData)));
@@ -933,7 +941,6 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
-    QString accessToken = reply->property("accessToken").toString();
     QString kcalEventId = reply->property("kcalEventId").toString();
     QString calendarId = reply->property("calendarId").toString();
     int upsyncType = reply->property("upsyncType").toInt();
@@ -948,6 +955,7 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
 
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     // parse the calendars' metadata from the response.
     if (isError) {

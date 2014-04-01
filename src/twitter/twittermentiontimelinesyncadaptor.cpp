@@ -79,6 +79,7 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request mention timeline notifications from Twitter account with id %1"))
@@ -99,6 +100,7 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonArray tweets = parseJsonArrayReplyData(replyData, &ok);

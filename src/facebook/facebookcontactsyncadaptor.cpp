@@ -205,6 +205,7 @@ void FacebookContactSyncAdaptor::requestData(int accountId, const QString &acces
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request %1 from Facebook account with id %2"))
@@ -223,6 +224,7 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);

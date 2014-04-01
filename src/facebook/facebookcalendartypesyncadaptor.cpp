@@ -134,6 +134,7 @@ void FacebookCalendarTypeSyncAdaptor::requestEvents(int accountId, const QString
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request events "\
@@ -150,6 +151,7 @@ void FacebookCalendarTypeSyncAdaptor::finishedHandler()
 
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);

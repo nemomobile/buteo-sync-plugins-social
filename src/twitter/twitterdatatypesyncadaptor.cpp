@@ -196,8 +196,14 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     QByteArray replyData = reply->readAll();
-    disconnect(reply);
-    reply->deleteLater();
+    int accountId = reply->property("accountId").toInt();
+
+    TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
+            .arg(SyncService::dataType(dataType)).arg(accountId).arg(err));
+    // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
+    reply->setProperty("isError", QVariant::fromValue<bool>(true));
+    // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
@@ -208,7 +214,6 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         foreach (QJsonValue data, dataList) {
             QJsonObject dataMap = data.toObject();
             if (dataMap.value("code").toDouble() == 32) {
-                int accountId = sender()->property("accountId").toInt();
                 Account *account = accountManager->account(accountId);
                 if (account->status() == Account::Initialized) {
                     setCredentialsNeedUpdate(account);
@@ -219,11 +224,6 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
             }
         }
     }
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
-            .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(err));
-    // the error is an incomprehensible enum value, but that doesn't matter to users.
-    setStatus(SocialNetworkSyncAdaptor::Error);
 }
 
 void TwitterDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
@@ -238,6 +238,9 @@ void TwitterDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
             .arg(SyncService::dataType(dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
+    // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
+    sender()->setProperty("isError", QVariant::fromValue<bool>(true));
+    // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 }
 
 // This function taken from http://qt-project.org/wiki/HMAC-SHA1 which is in the public domain

@@ -12,12 +12,14 @@
 #include "trace.h"
 
 #include <QtCore/QJsonDocument>
+#include <QtCore/QTimer>
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 #include <QtSql/QSqlRecord>
 
 #include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkReply>
 
 // sailfish-components-accounts-qt5
 #include <accountmanager.h>
@@ -299,6 +301,49 @@ void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
             setFinishedInactive(); // Finished!
         }
     }
+}
+
+void SocialNetworkSyncAdaptor::timeoutReply()
+{
+    QTimer *timer = qobject_cast<QTimer*>(sender());
+    QNetworkReply *reply = timer->property("networkReply").value<QNetworkReply*>();
+    int accountId = timer->property("accountId").toInt();
+
+    m_networkReplyTimeouts[accountId].remove(reply);
+    reply->setProperty("isError", QVariant::fromValue<bool>(true)); // just in case it finishes.
+    reply->disconnect();
+    reply->deleteLater();
+
+    TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("network request timed out while performing sync with account %1"))
+            .arg(accountId));
+
+    decrementSemaphore(accountId);
+}
+
+void SocialNetworkSyncAdaptor::setupReplyTimeout(int accountId, QNetworkReply *reply)
+{
+    // this function should be called whenever a new network request is performed.
+    QTimer *timer = new QTimer(this);
+    timer->setSingleShot(true);
+    timer->setInterval(60000);
+    timer->setProperty("accountId", accountId);
+    timer->setProperty("networkReply", QVariant::fromValue<QNetworkReply*>(reply));
+    connect(timer, SIGNAL(timeout()), this, SLOT(timeoutReply()));
+    timer->start();
+    m_networkReplyTimeouts[accountId].insert(reply, timer);
+}
+
+void SocialNetworkSyncAdaptor::removeReplyTimeout(int accountId, QNetworkReply *reply)
+{
+    // this function should be called by the finished() handler for the reply.
+    QTimer *timer = m_networkReplyTimeouts[accountId].value(reply);
+    if (!reply) {
+        return;
+    }
+
+    delete timer;
+    m_networkReplyTimeouts[accountId].remove(reply);
 }
 
 QJsonObject SocialNetworkSyncAdaptor::parseJsonObjectReplyData(const QByteArray &replyData, bool *ok)

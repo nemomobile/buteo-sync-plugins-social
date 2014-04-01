@@ -77,6 +77,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request notifications from Facebook account with id %1"))
@@ -92,6 +93,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
 

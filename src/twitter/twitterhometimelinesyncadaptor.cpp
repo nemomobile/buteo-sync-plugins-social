@@ -73,6 +73,7 @@ void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oau
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request user verification from Twitter account with id %1"))
@@ -115,6 +116,7 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply);
     } else {
         TRACE(SOCIALD_ERROR,
                 QString(QLatin1String("error: unable to request user timeline posts from Twitter account with id %1"))
@@ -137,6 +139,7 @@ void TwitterHomeTimelineSyncAdaptor::finishedMeHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
@@ -177,6 +180,7 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonArray tweets = parseJsonArrayReplyData(replyData, &ok);
