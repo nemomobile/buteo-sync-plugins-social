@@ -142,17 +142,53 @@ SilicaFlickable {
             Repeater {
                 id: repeater
 
-                SocialComment {
+                ListItem {
+                    id: listItem
+
+                    property bool likePending
+                    property bool liked: model.contentItem.liked
+
+                    contentHeight: comment.height
                     width: view.width
-                    avatar: "http://graph.facebook.com/"+ model.contentItem.from.objectIdentifier + "/picture"
-                    message: model.contentItem.message
-                    footer: model.contentItem.from.objectName + " \u2022 "
-                            + Format.formatDate(new Date(model.contentItem.createdTime).toISOString(), Formatter.DurationElapsed)
-                    extraVisible: model.contentItem.likeCount > 0
-                    //: Number of Facebook likes for a comment
-                    //% "%n like(s)"
-                    extra: qsTrId("lipstick-jolla-home-facebook-la-number_of_likes_for_comment", model.contentItem.likeCount)
-                    connectedToNetwork: view.connectedToNetwork
+                    menu: Component {
+                        ContextMenu {
+                            MenuItem {
+                                enabled: !listItem.likePending && view.connectedToNetwork
+                                text: listItem.liked ? qsTrId("lipstick-jolla-home-facebook-la-unlike")
+                                                       //% "Like"
+                                                       : qsTrId("lipstick-jolla-home-facebook-la-like")
+                                onClicked: {
+                                    listItem.likePending = true
+                                    if (listItem.liked) {
+                                        model.contentItem.unlike()
+                                    } else {
+                                        model.contentItem.like()
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    onLikedChanged: {
+                        if (likePending) {
+                            likePending = false
+                            model.contentItem.reload()
+                        }
+                    }
+
+                    SocialComment {
+                        id: comment
+                        width: view.width
+                        avatar: "http://graph.facebook.com/"+ model.contentItem.from.objectIdentifier + "/picture"
+                        message: model.contentItem.message
+                        footer: model.contentItem.from.objectName + " \u2022 "
+                                + Format.formatDate(new Date(model.contentItem.createdTime).toISOString(), Formatter.DurationElapsed)
+                        extraVisible: model.contentItem.likeCount > 0
+                        //: Number of Facebook likes for a comment
+                        //% "%n like(s)"
+                        extra: qsTrId("lipstick-jolla-home-facebook-la-number_of_likes_for_comment", model.contentItem.likeCount)
+                        connectedToNetwork: view.connectedToNetwork
+                    }
                 }
             }
         }
