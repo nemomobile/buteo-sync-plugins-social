@@ -57,9 +57,12 @@ FacebookNotificationPage {
             if (!facebookLikes.node)
                 return
 
-            if (facebookLikes.node.status == SocialNetwork.Idle
-                  && facebookLikes.reloadingStatus === "commenting") {
-                facebookComments.loadNext()
+            if (facebookLikes.node.status == SocialNetwork.Idle) {
+                if (facebookLikes.reloadingStatus === "commenting") {
+                    facebookComments.loadNext()
+                } else if (facebookLikes.reloadingStatus === "liking") {
+                    facebookLikes.repopulate()
+                }
                 facebookLikes.reloadingStatus = ""
             } else if (facebookLikes.node.status === SocialNetwork.Error) {
                 // We simply display an error in the status, but
@@ -150,7 +153,7 @@ FacebookNotificationPage {
             if (!liked) {
                 facebookLikes.node.like()
             } else {
-                facebookLikes.unlike()
+                facebookLikes.node.unlike()
             }
         }
     }
