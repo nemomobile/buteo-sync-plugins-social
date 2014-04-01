@@ -18,13 +18,13 @@ FacebookNotificationPage {
 
     Component.onCompleted: {
         if (readyToPopulate) {
-            facebookEvent.load()
+            facebookEvent.load(container.nodeIdentifier)
         }
     }
 
     onReadyToPopulateChanged: {
         if (readyToPopulate) {
-            facebookEvent.load()
+            facebookEvent.load(container.nodeIdentifier)
         }
     }
 
@@ -41,7 +41,6 @@ FacebookNotificationPage {
     FacebookEvent {
         id: facebookEvent
         accessToken: container.facebook.accessToken
-        eventId: container.nodeIdentifier
         onLoaded: {
             container.facebookUser.nodeIdentifier = ownerId
             if (container.facebookMe.node) {

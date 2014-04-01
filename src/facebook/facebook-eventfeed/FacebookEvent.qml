@@ -29,10 +29,11 @@ QtObject {
 
     onUserIdChanged: checkRsvpStatus("attending")
 
-    function load() {
-        if (accessToken === "")
+    function load(identifier) {
+        if (accessToken === "" || identifier === eventId)
             return
 
+        eventId = identifier
         var doc = new XMLHttpRequest()
         doc.onreadystatechange = function() {
             if (doc.readyState === XMLHttpRequest.DONE) {
