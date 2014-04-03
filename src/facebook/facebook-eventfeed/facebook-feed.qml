@@ -33,13 +33,17 @@ SocialMediaFeedPage {
         onClicked: {
             page.clientId = model.clientId
 
+            if (model.object === "") {
+                openGenericNotification(model, subviewModel)
+                return
+            }
+
              switch (model.appId) {
                  case "Feed Comments":
                  case "Likes":
                  case "Wall":
                      var ids = model.object.split("_")
-                     if ((ids.length <= 1 && model.appId !== "Likes")
-                          || model.object === "") {
+                     if (ids.length <= 1 && model.appId !== "Likes") {
                          // Object is not given or this is combined notification
                          // (eg. "He, she and three others posted to your wall...")
                          // Open generic page instead
