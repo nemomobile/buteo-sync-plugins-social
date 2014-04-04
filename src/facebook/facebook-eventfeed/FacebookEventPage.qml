@@ -86,7 +86,7 @@ FacebookNotificationPage {
                 SocialToggleButton {
                     id: attendButton
                     width: parent.width / 3
-                    enabled: facebookEvent.rsvpStatus.length > 0
+                    enabled: facebookEvent.rsvpStatus.length > 0 && container.connectedToNetwork
                     locked: facebookEvent.rsvpStatus === "attending"
                     //: Press button to attend a Facebook event
                     //% "Attend"
@@ -96,7 +96,7 @@ FacebookNotificationPage {
 
                 SocialToggleButton {
                     width: parent.width / 3
-                    enabled: facebookEvent.rsvpStatus.length > 0
+                    enabled: facebookEvent.rsvpStatus.length > 0 && container.connectedToNetwork
                     anchors.horizontalCenter: parent.horizontalCenter
                     locked: facebookEvent.rsvpStatus === "maybe"
                     //: Press button to maybe attend a facebook event
@@ -107,7 +107,7 @@ FacebookNotificationPage {
 
                 SocialToggleButton {
                     width: parent.width / 3
-                    enabled: facebookEvent.rsvpStatus.length > 0
+                    enabled: facebookEvent.rsvpStatus.length > 0 && container.connectedToNetwork
                     anchors.right: parent.right
                     locked: facebookEvent.rsvpStatus === "declined"
                     //: Press button to decline Facebook event
