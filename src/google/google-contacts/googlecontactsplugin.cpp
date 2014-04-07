@@ -11,6 +11,7 @@
 
 #include "googlecontactsplugin.h"
 #include "googlecontactsyncadaptor.h"
+#include "googletwowaycontactsyncadaptor.h"
 #include "socialnetworksyncadaptor.h"
 
 extern "C" GoogleContactsPlugin* createPlugin(const QString& pluginName,
@@ -40,5 +41,5 @@ GoogleContactsPlugin::~GoogleContactsPlugin()
 
 SocialNetworkSyncAdaptor *GoogleContactsPlugin::createSocialNetworkSyncAdaptor()
 {
-    return new GoogleContactSyncAdaptor(this);
+    return new GoogleTwoWayContactSyncAdaptor(this);
 }

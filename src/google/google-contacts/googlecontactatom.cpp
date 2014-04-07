@@ -12,6 +12,11 @@
 #include "googlecontactatom.h"
 #include <LogMacros.h>
 
+GoogleContactAtom::BatchOperationResponse::BatchOperationResponse()
+    : isError(false)
+{
+}
+
 GoogleContactAtom::GoogleContactAtom()
 {
 }
@@ -56,10 +61,20 @@ QString GoogleContactAtom::updated() const
     return mUpdated;
 }
 
-void GoogleContactAtom::setCategory (const QString &schema, const QString &term)
+void GoogleContactAtom::setCategory(const QString &schema, const QString &term)
 {
-    Q_UNUSED(schema)
-    Q_UNUSED(term)
+    mCategorySchema = schema;
+    mCategoryTerm = term;
+}
+
+QString GoogleContactAtom::categorySchema() const
+{
+    return mCategorySchema;
+}
+
+QString GoogleContactAtom::categoryTerm() const
+{
+    return mCategoryTerm;
 }
 
 void GoogleContactAtom::setTitle(const QString &title)
@@ -79,7 +94,7 @@ void GoogleContactAtom::setGenerator(const QString &name, const QString &version
     mGeneratorUri = uri;
 }
 
-void GoogleContactAtom::setContent (const QString &note, const QString &type)
+void GoogleContactAtom::setContent(const QString &note, const QString &type)
 {
     Q_UNUSED(note)
     Q_UNUSED(type)
@@ -130,14 +145,44 @@ int GoogleContactAtom::itemsPerPage() const
     return mItemsPerPage;
 }
 
-void GoogleContactAtom::addEntryContact(const QContact &entryContact)
+void GoogleContactAtom::addBatchOperationResponse(const QString &operationId, GoogleContactAtom::BatchOperationResponse response)
 {
-    mContactList.append(entryContact);
+    mBatchOperationResponses.insert(operationId, response);
 }
 
-QList<QContact> GoogleContactAtom::entryContacts() const
+QMap<QString, GoogleContactAtom::BatchOperationResponse> GoogleContactAtom::batchOperationResponses() const
+{
+    return mBatchOperationResponses;
+}
+
+void GoogleContactAtom::addEntryContact(const QContact &entryContact, const QStringList &unsupportedElements)
+{
+    mContactList.append(qMakePair(entryContact, unsupportedElements));
+}
+
+QList<QPair<QContact, QStringList> > GoogleContactAtom::entryContacts() const
 {
     return mContactList;
+}
+
+void GoogleContactAtom::addDeletedEntryContact(const QContact &deletedContact)
+{
+    mDeletedContactList.append(deletedContact);
+}
+
+QList<QContact> GoogleContactAtom::deletedEntryContacts() const
+{
+    return mDeletedContactList;
+}
+
+void GoogleContactAtom::addEntrySystemGroup(const QString &systemGroupId, const QString &systemGroupAtomId)
+{
+    mSystemGroupAtomIds.insert(systemGroupId, systemGroupAtomId);
+}
+
+QMap<QString, QString> GoogleContactAtom::entrySystemGroups() const
+{
+    return mSystemGroupAtomIds;
 }
 
 void GoogleContactAtom::setNextEntriesUrl(const QString &nextUrl)
