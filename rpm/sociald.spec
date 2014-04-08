@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.86
+Version:    0.0.87
 Release:    1
 Group:      System/Libraries
 License:    TBD
@@ -15,7 +15,7 @@ BuildRequires:  pkgconfig(mlite5)
 BuildRequires:  pkgconfig(buteosyncfw5)
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(sailfishaccounts) >= 0.0.45
-BuildRequires:  pkgconfig(socialcache) >= 0.0.17
+BuildRequires:  pkgconfig(socialcache) >= 0.0.19
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  qt5-qttools-linguist
 Requires: buteo-syncfw-qt5-msyncd
@@ -219,7 +219,7 @@ Summary:    Provides contact synchronisation with Google
 License:    TBD
 Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
-BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions) >= 0.1.54
 Requires: %{name} = %{version}-%{release}
 
 %description google-contacts
