@@ -22,6 +22,7 @@
 #include <QtSql/QSqlError>
 
 #include <QtContacts/QContactManager>
+#include <QtContacts/QContactFetchHint>
 #include <QtContacts/QContactDetailFilter>
 #include <QtContacts/QContactIntersectionFilter>
 #include <QtContacts/QContact>
@@ -52,6 +53,41 @@ static const char *WHICH_FIELDS = "name,first_name,middle_name,last_name,link,we
 static const char *IDENTIFIER_KEY = "identifier";
 static const char *ACCOUNT_ID_KEY = "account_id";
 static const char *TYPE_KEY = "type";
+
+namespace {
+    bool saveNonexportableContacts(QContactManager *manager, QList<QContact> *contacts) {
+        // ensure that every detail has the non-exportable flag set.
+        for (int i = 0; i < contacts->size(); ++i) {
+            QContact &c((*contacts)[i]);
+            QList<QContactDetail> cdets = c.details();
+            for (int j = 0; j < cdets.size(); ++j) {
+                QContactDetail &d(cdets[j]);
+                d.setValue(QContactDetail__FieldNonexportable, QVariant::fromValue<bool>(true));
+                c.saveDetail(&d);
+            }
+            contacts->replace(i, c);
+        }
+        return manager->saveContacts(contacts);
+    }
+
+    void ensureDataIsNonexportable(QContactManager *manager) {
+        QContactDetailFilter syncTargetFilter;
+        syncTargetFilter.setDetailType(QContactDetail::TypeSyncTarget, QContactSyncTarget::FieldSyncTarget);
+        syncTargetFilter.setValue(SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET);
+        QContactFetchHint onlyFetchGuids;
+        onlyFetchGuids.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactDetail::TypeGuid);
+        QList<QContact> allFacebookContacts = manager->contacts(syncTargetFilter, QList<QContactSortOrder>(), onlyFetchGuids);
+        for (int i = 0; i < allFacebookContacts.size(); ++i) {
+            if (!allFacebookContacts[i].detail<QContactGuid>().value(QContactDetail__FieldNonexportable).toBool()) {
+                // At least one Facebook contact is not yet marked non-exportable.
+                // Refetch all details of all contacts.
+                allFacebookContacts = manager->contacts(syncTargetFilter);
+                saveNonexportableContacts(manager, &allFacebookContacts);
+                return;
+            }
+        }
+    }
+}
 
 static QContactManager *aggregatingContactManager(QObject *parent)
 {
@@ -141,6 +177,9 @@ QString FacebookContactSyncAdaptor::syncServiceName() const
 
 void FacebookContactSyncAdaptor::sync(const QString &dataTypeString, int accountId)
 {
+    // first, ensure that the non-exportable flag is set for all data currently cached in our device db.
+    ensureDataIsNonexportable(m_contactManager);
+
     // call superclass impl.
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
@@ -335,6 +374,12 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
         *needsSaving = false;
         bool isNewContact = false;
         QContact newOrExisting = newOrExistingContact(fbuid, &isNewContact);
+        if (isNewContact || newOrExisting.details().size() == 0
+                || !newOrExisting.detail<QContactGuid>().value(QContactDetail__FieldNonexportable).toBool()) {
+            // we definitely need to save this contact if it is new, or
+            // if we haven't yet tagged it as non-exportable.
+            *needsSaving = true;
+        }
 
         // sync target is unique
         QContactSyncTarget contactSyncTarget = newOrExisting.detail<QContactSyncTarget>();
@@ -839,7 +884,7 @@ bool FacebookContactSyncAdaptor::storeToLocal(const QString &accessToken, int ac
     // now write the changes to the database.
     bool success = true;
     if (remoteToSave.size()) {
-        success = m_contactManager->saveContacts(&remoteToSave);
+        success = saveNonexportableContacts(m_contactManager, &remoteToSave);
         if (!success) {
             TRACE(SOCIALD_ERROR,
                   QString(QLatin1String("Failed to save contacts: %1 - with account %2"))
@@ -915,7 +960,7 @@ void FacebookContactSyncAdaptor::purgeAccount(int pid)
     // now write the changes to the database.
     bool success = true;
     if (contactsToUpdate.size()) {
-        success = m_contactManager->saveContacts(&contactsToUpdate);
+        success = saveNonexportableContacts(m_contactManager, &contactsToUpdate);
         if (!success) {
             TRACE(SOCIALD_ERROR,
                   QString(QLatin1String("Failed to update contacts: %1 - during purge of account %2"))
