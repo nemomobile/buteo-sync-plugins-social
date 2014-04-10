@@ -22,6 +22,8 @@
 #include <Accounts/Account>
 #include <Accounts/Service>
 
+#include <accountsyncmanager.h>
+
 SocialdButeoPlugin::SocialdButeoPlugin(const QString& pluginName,
                                        const Buteo::SyncProfile& profile,
                                        Buteo::PluginCbInterface *callbackInterface,
@@ -170,6 +172,7 @@ void SocialdButeoPlugin::updateResults(const Buteo::SyncResults &results)
 // The caller takes ownership of the list.
 QList<Buteo::SyncProfile*> SocialdButeoPlugin::ensurePerAccountSyncProfilesExist()
 {
+    AccountSyncManager sm;
     Accounts::Manager am;
     Accounts::AccountIdList accountIds = am.accountList();
     QList<Buteo::SyncProfile*> syncProfiles = m_profileManager.allSyncProfiles();
@@ -206,9 +209,20 @@ QList<Buteo::SyncProfile*> SocialdButeoPlugin::ensurePerAccountSyncProfilesExist
 
         if (!foundProfile) {
             // it should have been generated for the account when the account was added.
-            TRACE(SOCIALD_ERROR,
+            TRACE(SOCIALD_INFORMATION,
                     QString(QLatin1String("no per-account %1 sync profile exists for account: %2"))
                     .arg(profile().name()).arg(currAccount->id()));
+
+            // create the per-account profile... we shouldn't need to do this...
+            QString profileName = sm.createProfile(profile().name(), currAccount, dataTypeSyncService, true);
+            Buteo::SyncProfile *newProfile = m_profileManager.syncProfile(profileName);
+            if (!newProfile) {
+                TRACE(SOCIALD_ERROR,
+                        QString(QLatin1String("unable to create per-account %1 sync profile for account: %2"))
+                        .arg(profile().name()).arg(currAccount->id()));
+            } else {
+                perAccountProfiles.insert(currAccount, newProfile);
+            }
         }
     }
 
