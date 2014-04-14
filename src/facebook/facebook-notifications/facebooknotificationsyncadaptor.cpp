@@ -60,7 +60,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     Q_UNUSED(pagingToken);
 
     QList<QPair<QString, QString> > queryItems;
-    queryItems.append(QPair<QString, QString>(QString(QLatin1String("include_read")), QString(QLatin1String("false"))));
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("include_read")), QString(QLatin1String("true"))));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     QUrl url(QLatin1String("https://graph.facebook.com/me/notifications"));
     QUrlQuery query(url);
@@ -122,6 +122,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                                          object.value(QLatin1String("link")).toString(),
                                          application.value(QLatin1String("name")).toString(),
                                          notificationObject.value(QLatin1String("id")).toString(),
+                                         object.value(QLatin1String("unread")).toDouble() != 0,
                                          accountId,
                                          clientId());
         }

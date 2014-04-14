@@ -61,6 +61,7 @@ ApplicationWindow {
             compare(feedPage.updating, false)
             compare(feedPage.syncNotifications, false)
             verify(typeof feedPage.connectedToNetwork !== "undefined")
+            verify(typeof feedPage.lastSeenTime !== "undefined")
             compare(feedPage.refreshTimeCount, 2)  // Status change increases this by one
             compare(window.modelWasRefreshed, true)
             compare(feedPage.dataType, SocialSync.Posts)

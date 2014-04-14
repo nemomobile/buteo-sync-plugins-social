@@ -23,6 +23,7 @@ Page {
     property int refreshTimeCount: 1 // Increment this to trigger feed items to refresh times.
     property bool _needToSync
     property alias dataType: syncHelper.dataType
+    property alias lastSeenTime: _lastSeenTime.value
     allowedOrientations: Lipstick.compositor.eventsWindowOrientation
 
     onConnectedToNetworkChanged: {
