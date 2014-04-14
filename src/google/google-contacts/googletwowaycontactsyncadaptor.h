@@ -43,10 +43,14 @@ protected:
                             const QList<QContact> &locallyDeleted,
                             const QString &accountId);
 
-protected: // implementing GoogleDataTypeSyncAdaptor interface
+protected:
+    // implementing GoogleDataTypeSyncAdaptor interface
     void purgeDataForOldAccounts(const QList<int> &oldIds);
     void beginSync(int accountId, const QString &accessToken);
+    void finalize(int accountId);
     void finalCleanup();
+    // implementing TWCSA interface
+    bool testAccountProvenance(const QContact &contact, const QString &accountId);
 
 private:
     void requestData(int accountId,
@@ -69,6 +73,8 @@ private:
     void storeToRemote(int accountId,
                        const QString &accessToken,
                        const QByteArray &encodedContactUpdates);
+    void queueOutstandingAvatars(int accountId, const QString &accessToken);
+    bool queueAvatarForDownload(int accountId, const QString &accessToken, const QString &contactGuid, const QString &imageUrl);
     void transformContactAvatars(QList<QContact> &remoteContacts, int accountId, const QString &accessToken);
     void downloadContactAvatarImage(int accountId, const QString &accessToken, const QUrl &imageUrl, const QString &filename);
     bool readExtraStateData(int accountId);
@@ -90,7 +96,13 @@ private:
     QMap<int, QMap<QString, QStringList> > m_unsupportedXmlElements; // contact guid -> elements
     QMap<int, QMap<QString, QString> > m_contactEtags; // contact guid -> contact etag
     QMap<int, QMap<QString, QString> > m_contactIds; // contact guid -> contact id
+    QMap<int, QMap<QString, QString> > m_contactAvatars; // contact guid -> remote avatar path
     QMap<int, QList<QPair<QContact, GoogleContactStream::UpdateType> > > m_localChanges;
+
+    // the following are not preserved across sync runs via OOB.
+    QMap<int, int> m_apiRequestsRemaining;
+    QMap<int, QMap<QString, QString> > m_queuedAvatarsForDownload; // contact guid -> remote avatar path
+    QMap<int, QMap<QString, QString> > m_downloadedContactAvatars; // contact guid -> local file path
 };
 
 #endif // GOOGLETWOWAYCONTACTSYNCADAPTOR_H
