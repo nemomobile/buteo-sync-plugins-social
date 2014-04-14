@@ -42,8 +42,8 @@ QtObject {
                     facebookEvent.ownerId = event.owner.id
                     facebookEvent.ownerName = event.owner.name
                     facebookEvent.name = event.name
-                    facebookEvent.description = event.description
                     facebookEvent.startTime = event.start_time
+                    facebookEvent.description = typeof event.description !== "undefined" ? event.description : ""
                     facebookEvent.endTime = typeof event.end_time !== "undefined" ? event.end_time : ""
                     facebookEvent.location = typeof event.location !== "undefined" ? event.location : ""
                     if (typeof event.picture !== "undefined" && !event.picture.data.is_silhouette) {
