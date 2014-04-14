@@ -1,6 +1,6 @@
 Name:       sociald
 Summary:    Syncs device data from social services
-Version:    0.0.88
+Version:    0.0.89
 Release:    1
 Group:      System/Libraries
 License:    TBD
@@ -15,7 +15,7 @@ BuildRequires:  pkgconfig(mlite5)
 BuildRequires:  pkgconfig(buteosyncfw5)
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(sailfishaccounts) >= 0.0.65
-BuildRequires:  pkgconfig(socialcache) >= 0.0.19
+BuildRequires:  pkgconfig(socialcache) >= 0.0.22
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  qt5-qttools-linguist
 Requires: buteo-syncfw-qt5-msyncd
