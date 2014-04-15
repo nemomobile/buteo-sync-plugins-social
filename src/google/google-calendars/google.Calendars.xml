@@ -10,6 +10,6 @@
     <schedule enabled="false" interval="" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="05:00:00" />
 
     <profile name="google-calendars" type="client" >
-        <key name="Sync Direction" value="from-remote" />
+        <key name="Sync Direction" value="two-way" />
     </profile>
 </profile>

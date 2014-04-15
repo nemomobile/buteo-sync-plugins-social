@@ -836,43 +836,49 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
           .arg(googleNotebook->name()).arg(accountId)
           .arg(remoteAdded).arg(remoteModified).arg(remoteRemoved));
 
-    // only upsync changes if we're doing a delta sync.
-    if (since.isValid()) {
-        // And push our changes up to the server.  XXX TODO: Request Batching!
-        int localAdded = 0, localModified = 0, localRemoved = 0;
+    // only upsync changes if we're doing a delta sync, and upsync is enabled
+    if (!m_accountSyncProfile || m_accountSyncProfile->syncDirection() != Buteo::SyncProfile::SYNC_DIRECTION_FROM_REMOTE) {
+        if (since.isValid()) {
+            // And push our changes up to the server.  XXX TODO: Request Batching!
+            int localAdded = 0, localModified = 0, localRemoved = 0;
 
-        // first, push up deletions.
-        Q_FOREACH (const QString &deletedGcalId, deletedMap.keys()) {
-            QString incidenceUid = deletedMap.value(deletedGcalId);
-            localRemoved++;
-            upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncDelete,
-                          incidenceUid, calendarId, deletedGcalId, QByteArray());
-        }
-
-        // second, push up modifications.
-        Q_FOREACH (const QString &updatedGcalId, updatedMap.keys()) {
-            KCalCore::Event::Ptr event = updatedMap.value(updatedGcalId);
-            if (event) {
-                localModified++;
-                upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncModify,
-                              event->uid(), calendarId, updatedGcalId, QJsonDocument(kCalToJson(event, m_icalFormat)).toJson());
+            // first, push up deletions.
+            Q_FOREACH (const QString &deletedGcalId, deletedMap.keys()) {
+                QString incidenceUid = deletedMap.value(deletedGcalId);
+                localRemoved++;
+                upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncDelete,
+                              incidenceUid, calendarId, deletedGcalId, QByteArray());
             }
-        }
 
-        // finally, push up insertions.
-        Q_FOREACH (KCalCore::Incidence::Ptr incidence, addedList) {
-            KCalCore::Event::Ptr event = m_calendar->event(incidence->uid());
-            if (event) {
-                localAdded++;
-                upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncInsert,
-                              event->uid(), calendarId, QString(), QJsonDocument(kCalToJson(event, m_icalFormat)).toJson());
+            // second, push up modifications.
+            Q_FOREACH (const QString &updatedGcalId, updatedMap.keys()) {
+                KCalCore::Event::Ptr event = updatedMap.value(updatedGcalId);
+                if (event) {
+                    localModified++;
+                    upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncModify,
+                                  event->uid(), calendarId, updatedGcalId, QJsonDocument(kCalToJson(event, m_icalFormat)).toJson());
+                }
             }
-        }
 
+            // finally, push up insertions.
+            Q_FOREACH (KCalCore::Incidence::Ptr incidence, addedList) {
+                KCalCore::Event::Ptr event = m_calendar->event(incidence->uid());
+                if (event) {
+                    localAdded++;
+                    upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncInsert,
+                                  event->uid(), calendarId, QString(), QJsonDocument(kCalToJson(event, m_icalFormat)).toJson());
+                }
+            }
+
+            TRACE(SOCIALD_INFORMATION,
+                  QString(QLatin1String("Delta sync with Google calendar %1 for account %2: local A/M/R: %3 / %4 / %5"))
+                  .arg(googleNotebook->name()).arg(accountId)
+                  .arg(localAdded).arg(localModified).arg(localRemoved));
+        }
+    } else {
         TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("Delta sync with Google calendar %1 for account %2: local A/M/R: %3 / %4 / %5"))
-              .arg(googleNotebook->name()).arg(accountId)
-              .arg(localAdded).arg(localModified).arg(localRemoved));
+              QString(QLatin1String("skipping upload of local calendar changes due to profile direction setting for account %1"))
+              .arg(accountId));
     }
 }
 
