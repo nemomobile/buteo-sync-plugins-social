@@ -253,4 +253,24 @@ SocialMediaFeedPage {
             console.log(error)
         }
     }
+
+    function listUpdated() {
+        if (!visible) {
+            var result = 0
+            var lastTimestamp = lastSeenTime
+            for (var i = 0; i < listModel.count; i++) {
+                var rawTimestamp = listModel.getField(i, timestampRole).toString()
+                var timestamp = new Date(rawTimestamp).getTime()
+                if (timestamp <= lastTimestamp) {
+                    break
+                }
+                if (listModel.getField(i, FacebookNotificationsModel.Unread)) {
+                    result++
+                }
+            }
+            page.unseenPostCount = result
+        } else if (status === PageStatus.Active) {
+            setLastSeenTime()
+        }
+    }
 }
