@@ -493,32 +493,39 @@ bool GoogleTwoWayContactSyncAdaptor::testAccountProvenance(const QContact &conta
 void GoogleTwoWayContactSyncAdaptor::upsyncLocalChangesList(int accountId)
 {
     bool postedData = false;
-    QMultiMap<GoogleContactStream::UpdateType, QPair<QContact, QStringList> > batch;
-    for (int i = m_localChanges[accountId].size() - 1; i >= 0; --i) {
-        QPair<QContact, GoogleContactStream::UpdateType> entry = m_localChanges[accountId].takeAt(i);
-        QStringList extraXmlElements = m_unsupportedXmlElements[accountId].value(entry.first.detail<QContactGuid>().guid());
-        if (entry.second == GoogleContactStream::Add) {
-            // new contacts need to be inserted into the My Contacts group
-            QString myContactsGroupAtomId = m_myContactsGroupAtomIds[accountId];
-            if (myContactsGroupAtomId.isEmpty()) {
-                TRACE(SOCIALD_INFORMATION,
-                      QString(QLatin1String("skipping upload of locally added contact %1 to account %2 due to unknown My Contacts group atom id"))
-                      .arg(entry.first.id().toString()).arg(accountId));
+    if (!m_accountSyncProfile || m_accountSyncProfile->syncDirection() != Buteo::SyncProfile::SYNC_DIRECTION_FROM_REMOTE) {
+        // two-way sync is the default setting.  Upsync the changes.
+        QMultiMap<GoogleContactStream::UpdateType, QPair<QContact, QStringList> > batch;
+        for (int i = m_localChanges[accountId].size() - 1; i >= 0; --i) {
+            QPair<QContact, GoogleContactStream::UpdateType> entry = m_localChanges[accountId].takeAt(i);
+            QStringList extraXmlElements = m_unsupportedXmlElements[accountId].value(entry.first.detail<QContactGuid>().guid());
+            if (entry.second == GoogleContactStream::Add) {
+                // new contacts need to be inserted into the My Contacts group
+                QString myContactsGroupAtomId = m_myContactsGroupAtomIds[accountId];
+                if (myContactsGroupAtomId.isEmpty()) {
+                    TRACE(SOCIALD_INFORMATION,
+                          QString(QLatin1String("skipping upload of locally added contact %1 to account %2 due to unknown My Contacts group atom id"))
+                          .arg(entry.first.id().toString()).arg(accountId));
+                } else {
+                    extraXmlElements.append(QStringLiteral("<gContact:groupMembershipInfo deleted=\"false\" href=\"%1\"></gContact:groupMembershipInfo>").arg(myContactsGroupAtomId));
+                    batch.insertMulti(entry.second, qMakePair(entry.first, extraXmlElements));
+                }
             } else {
-                extraXmlElements.append(QStringLiteral("<gContact:groupMembershipInfo deleted=\"false\" href=\"%1\"></gContact:groupMembershipInfo>").arg(myContactsGroupAtomId));
                 batch.insertMulti(entry.second, qMakePair(entry.first, extraXmlElements));
             }
-        } else {
-            batch.insertMulti(entry.second, qMakePair(entry.first, extraXmlElements));
-        }
 
-        if (batch.size() == SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS || i == 0) {
-            GoogleContactStream encoder(false, accountId, m_emailAddresses[accountId]);
-            QByteArray encodedContactUpdates = encoder.encode(batch);
-            storeToRemote(accountId, m_accessTokens[accountId], encodedContactUpdates);
-            postedData = true;
-            break;
+            if (batch.size() == SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS || i == 0) {
+                GoogleContactStream encoder(false, accountId, m_emailAddresses[accountId]);
+                QByteArray encodedContactUpdates = encoder.encode(batch);
+                storeToRemote(accountId, m_accessTokens[accountId], encodedContactUpdates);
+                postedData = true;
+                break;
+            }
         }
+    } else {
+        TRACE(SOCIALD_INFORMATION,
+              QString(QLatin1String("skipping upload of local contacts changes due to profile direction setting for account %1"))
+              .arg(accountId));
     }
 
     if (!postedData) {
