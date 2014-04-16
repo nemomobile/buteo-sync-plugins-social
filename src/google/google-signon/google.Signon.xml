@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<profile name="google.Signon" type="sync" >
+    <key name="category" value="signon" />
+    <key name="enabled" value="true" />
+    <key name="use_accounts" value="false" />
+    <key name="destinationtype" value="online" />
+    <key name="hidden" value="true" />
+    <key name="displayname" value="Google Signon"/>
+
+    <schedule enabled="false" interval="90" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="" />
+
+    <profile name="google-signon" type="client" >
+        <key name="Sync Direction" value="from-remote" />
+    </profile>
+</profile>
