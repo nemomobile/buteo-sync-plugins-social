@@ -254,20 +254,17 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
 
             // We always purge, so even if we've synced it in the past, we need it.
             // Check to see if we need to post it to the events feed
-            //if (lastSync.isValid() && eventTimestamp < lastSync) {
-            //    TRACE(SOCIALD_DEBUG,
-            //            QString(QLatin1String("event for account %1 came after last sync:"))
-            //            .arg(accountId) << "    " << eventTimestamp << ":" << body);
-            //    break;                 // all subsequent events will be even older.
-            //} else if (eventTimestamp.daysTo(QDateTime::currentDateTime()) > 7) {
-            //    TRACE(SOCIALD_DEBUG,
-            //            QString(QLatin1String("event for account %1 is more than a week old:\n"))
-            //            .arg(accountId) << "    " << eventTimestamp << ":" << body);
-            //    break;                 // all subsequent events will be even older.
-            //} else {
+            int sinceSpan = m_accountSyncProfile
+                          ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
+                          : 7;
+            if (eventTimestamp.daysTo(QDateTime::currentDateTime()) > sinceSpan) {
+                TRACE(SOCIALD_DEBUG,
+                        QString(QLatin1String("tweet for account %1 is more than %2 days old:\n    %3 - %4"))
+                        .arg(accountId).arg(sinceSpan).arg(eventTimestamp.toString(Qt::ISODate)).arg(body));
+            } else {
                 m_db.addTwitterPost(postId, name, body, eventTimestamp, icon, imageList,
                                     screenName, retweeter, consumerKey(), consumerSecret(), accountId);
-            //}
+            }
         }
     } else {
         // error occurred during request.

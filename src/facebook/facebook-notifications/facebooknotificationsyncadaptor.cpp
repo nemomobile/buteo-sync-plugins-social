@@ -96,7 +96,9 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
     removeReplyTimeout(accountId, reply);
 
     bool ok = false;
-
+    int sinceSpan = m_accountSyncProfile
+                  ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
+                  : 7;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!isError && ok && parsed.contains(QLatin1String("summary"))) {
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
@@ -107,6 +109,18 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
             createdTime.setTimeSpec(Qt::UTC);
             QDateTime updatedTime = QDateTime::fromString(object.value(QLatin1String("updated_time")).toString(), Qt::ISODate);
             updatedTime.setTimeSpec(Qt::UTC);
+
+            if (createdTime.daysTo(QDateTime::currentDateTime()) > sinceSpan
+                    && updatedTime.daysTo(QDateTime::currentDateTime()) > sinceSpan) {
+                TRACE(SOCIALD_DEBUG,
+                        QString(QLatin1String("notification for account %1 is more than %2 days old:\n    %3 - %4 - %5"))
+                        .arg(accountId)
+                        .arg(sinceSpan)
+                        .arg(createdTime.toString(Qt::ISODate))
+                        .arg(updatedTime.toString(Qt::ISODate))
+                        .arg(object.value(QLatin1String("title")).toString()));
+                continue;
+            }
 
             QJsonObject sender = object.value(QLatin1String("from")).toObject();
             QJsonObject receiver = object.value(QLatin1String("to")).toObject();
