@@ -221,6 +221,12 @@ QList<Buteo::SyncProfile*> SocialdButeoPlugin::ensurePerAccountSyncProfilesExist
                         QString(QLatin1String("unable to create per-account %1 sync profile for account: %2"))
                         .arg(profile().name()).arg(currAccount->id()));
             } else {
+                // enable the sync schedule for the profile.
+                Buteo::SyncSchedule schedule = newProfile->syncSchedule();
+                schedule.setScheduleEnabled(true);
+                newProfile->setSyncSchedule(schedule);
+                m_profileManager.updateProfile(*newProfile);
+                // and return the profile in the map.
                 perAccountProfiles.insert(currAccount, newProfile);
             }
         }
