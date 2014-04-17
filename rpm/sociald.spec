@@ -12,10 +12,10 @@ BuildRequires:  pkgconfig(Qt5DBus)
 BuildRequires:  pkgconfig(Qt5Sql)
 BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(mlite5)
-BuildRequires:  pkgconfig(buteosyncfw5)
+BuildRequires:  pkgconfig(buteosyncfw5) >= 0.6.33
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(sailfishaccounts) >= 0.0.65
-BuildRequires:  pkgconfig(socialcache) >= 0.0.22
+BuildRequires:  pkgconfig(socialcache) >= 0.0.23
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  qt5-qttools-linguist
 Requires: buteo-syncfw-qt5-msyncd

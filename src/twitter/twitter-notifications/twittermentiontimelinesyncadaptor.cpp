@@ -132,16 +132,18 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
             link = QLatin1String("https://mobile.twitter.com/") + userScreenName + QLatin1String("/status/") + mentionId;
 
             // check to see if we need to post it to the notifications feed
+            int sinceSpan = m_accountSyncProfile
+                          ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
+                          : 7;
             if (lastSync.isValid() && createdTime < lastSync) {
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("notification for account %1 came after last sync:"))
                         .arg(accountId) << "    " << createdTime << ":" << text);
                 break;                 // all subsequent notifications will be even older.
-            } else if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > 7) {
+            } else if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > sinceSpan) {
                 TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("notification for account %1 is more than a week old:\n"))
-                        .arg(accountId) << "    " << createdTime << ":" << text);
-                break;                 // all subsequent notifications will be even older.
+                        QString(QLatin1String("mention for account %1 is more than %2 days old:\n    %3 - %4"))
+                        .arg(accountId).arg(sinceSpan).arg(createdTime.toString(Qt::ISODate)).arg(text));
             } else {
                 body = userName;
                 summary = text;
