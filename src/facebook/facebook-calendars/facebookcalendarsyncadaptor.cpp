@@ -114,7 +114,7 @@ void FacebookCalendarSyncAdaptor::requestEvents(int accountId, const QString &ac
     QString fql = QString(QLatin1String("SELECT eid, name, description, is_date_only, location, "\
                                         "start_time, end_time, timezone, host FROM event WHERE "\
                                         "eid IN (SELECT eid FROM event_member WHERE uid = me() "\
-                                        "AND start_time > 0)"));
+                                        "AND rsvp_status != 'declined' AND start_time > 0)"));
     // We need support for some paging system
     // maybe by adding v ?
     // QDateTime limitTime = QDateTime::currentDateTime().addMonths(-1);
@@ -266,8 +266,13 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
             QString eventId = dataMap.value(QLatin1String("eid")).toVariant().toString();
             QString startTimeString = dataMap.value(QLatin1String("start_time")).toString();
             QString endTimeString = dataMap.value(QLatin1String("end_time")).toString();
+            if (endTimeString.isEmpty()) {
+                // workaround for empty ET events
+                endTimeString = startTimeString;
+            }
             bool isDateOnly = dataMap.value(QLatin1String("is_date_only")).toBool();
             KDateTime startTime, endTime;
+            bool endExists = true;
             if (!isDateOnly) {
                 KDateTime parsedStartTime = KDateTime::fromString(startTimeString);
                 KDateTime parsedEndTime = KDateTime::fromString(endTimeString);
@@ -286,10 +291,15 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
                 startTime = parsedStartTime.toLocalZone();
                 endTime = parsedEndTime.toLocalZone();
             } else {
-                startTime = KDateTime::fromString(startTimeString, QLatin1String("%Y-%m-%d"));
-                startTime.setTime(QTime(0, 0));
-                endTime = KDateTime::fromString(endTimeString, QLatin1String("%Y-%m-%d"));
-                endTime.setTime(QTime(0, 0));
+                // mkcal date-only event semantics:
+                // if a date-only event lasts only one day, set isAllDay to true, but don't set an end date.
+                // if a date-only event lasts multiple days, set isAllDay to true, and set an end date.
+                // Use ClockTime format, so that it doesn't get offset according to timezone.
+                startTime = KDateTime(QDate::fromString(startTimeString, "yyyy-MM-dd"), QTime(), KDateTime::ClockTime);
+                endTime   = KDateTime(QDate::fromString(endTimeString,   "yyyy-MM-dd"), QTime(), KDateTime::ClockTime);
+                if (endTime == startTime) {
+                    endExists = false; // single-day all day event; don't set endDt.
+                }
             }
             QString summary = dataMap.value(QLatin1String("name")).toString();
             QString description = dataMap.value(QLatin1String("description")).toString();
@@ -315,10 +325,14 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
             event->setSummary(summary);
             event->setDescription(description);
             event->setDtStart(startTime);
+            if (endExists) {
+                event->setDtEnd(endTime);
+                event->setHasEndDate(true);
+            } else {
+                event->setHasEndDate(false);
+            }
             if (isDateOnly) {
                 event->setAllDay(true);
-            } else {
-                event->setDtEnd(endTime);
             }
             event->setReadOnly(true);
 
