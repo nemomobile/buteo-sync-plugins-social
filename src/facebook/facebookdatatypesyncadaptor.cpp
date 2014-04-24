@@ -142,10 +142,11 @@ void FacebookDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
 {
     Account *account = qobject_cast<Account*>(sender());
     int accountId = account->identifier();
+
+    // if we couldn't sign in, we can't sync with this account.
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
             .arg(accountId) << err);
-    setStatus(SocialNetworkSyncAdaptor::Error);
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
@@ -153,9 +154,10 @@ void FacebookDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
         setCredentialsNeedUpdate(account);
     } else {
         account->disconnect(this);
+        account->deleteLater();
     }
 
-    // if we couldn't sign in, we can't sync with this account.
+    setStatus(SocialNetworkSyncAdaptor::Error);
     decrementSemaphore(accountId);
 }
 
@@ -176,6 +178,8 @@ void FacebookDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
     }
 
     account->disconnect(this);
+    account->deleteLater();
+
     if (!accessToken.isEmpty()) {
         beginSync(accountId, accessToken); // call the derived-class sync entrypoint.
     }

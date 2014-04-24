@@ -190,6 +190,30 @@ rm -f /home/nemo/.cache/msyncd/sync/facebook.Posts.xml
 systemctl-user restart msyncd.service || :
 
 
+%package facebook-signon
+Summary:    Provides signon credentials refreshing with Facebook
+License:    TBD
+Group:      System/Libraries
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description facebook-signon
+Provides signon credentials refreshing with Facebook
+
+%files facebook-signon
+/usr/lib/buteo-plugins-qt5/libfacebook-signon-client.so
+%config %{_sysconfdir}/buteo/profiles/client/facebook-signon.xml
+%config %{_sysconfdir}/buteo/profiles/sync/facebook.Signon.xml
+
+%pre facebook-signon
+rm -f /home/nemo/.cache/msyncd/sync/client/facebook-signon.xml
+rm -f /home/nemo/.cache/msyncd/sync/facebook.Signon.xml
+
+%post facebook-signon
+systemctl-user restart msyncd.service || :
+
+
+
 %package google-calendars
 Summary:    Provides calendar synchronisation with Google
 License:    TBD
@@ -235,6 +259,29 @@ rm -f /home/nemo/.cache/msyncd/sync/client/google-contacts.xml
 rm -f /home/nemo/.cache/msyncd/sync/google.Contacts.xml
 
 %post google-contacts
+systemctl-user restart msyncd.service || :
+
+
+%package google-signon
+Summary:    Provides signon credentials refreshing with Google
+License:    TBD
+Group:      System/Libraries
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description google-signon
+Provides signon credentials refreshing with Google
+
+%files google-signon
+/usr/lib/buteo-plugins-qt5/libgoogle-signon-client.so
+%config %{_sysconfdir}/buteo/profiles/client/google-signon.xml
+%config %{_sysconfdir}/buteo/profiles/sync/google.Signon.xml
+
+%pre google-signon
+rm -f /home/nemo/.cache/msyncd/sync/client/google-signon.xml
+rm -f /home/nemo/.cache/msyncd/sync/google.Signon.xml
+
+%post google-signon
 systemctl-user restart msyncd.service || :
 
 

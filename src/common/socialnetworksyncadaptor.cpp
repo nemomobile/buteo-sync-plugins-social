@@ -60,7 +60,8 @@ namespace {
                 << QStringLiteral("Videos")
                 << QStringLiteral("Posts")
                 << QStringLiteral("Messages")
-                << QStringLiteral("Emails");
+                << QStringLiteral("Emails")
+                << QStringLiteral("Signon");
     }
 }
 
@@ -448,6 +449,7 @@ QString SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::DataTyp
         case SocialNetworkSyncAdaptor::Posts:         return QStringLiteral("Posts");
         case SocialNetworkSyncAdaptor::Messages:      return QStringLiteral("Messages");
         case SocialNetworkSyncAdaptor::Emails:        return QStringLiteral("Emails");
+        case SocialNetworkSyncAdaptor::Signon:        return QStringLiteral("Signon");
         default: break;
     }
 

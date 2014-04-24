@@ -1,6 +1,7 @@
 TEMPLATE = subdirs
 SUBDIRS = \
     $$PWD/facebook-eventfeed \
+    $$PWD/facebook-signon \
     $$PWD/facebook-calendars \
     $$PWD/facebook-contacts \
     $$PWD/facebook-images \
