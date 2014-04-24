@@ -39,11 +39,11 @@ SocialMediaFeedPage {
             }
 
              switch (model.appId) {
-                 case "Feed Comments":
-                 case "Likes":
-                 case "Wall":
+                 case "19675640871":     // Feed Comments
+                 case "2409997254":      // Likes
+                 case "2719290516":      // Wall
                      var ids = model.object.split("_")
-                     if (ids.length <= 1 && model.appId !== "Likes") {
+                     if (ids.length <= 1 && model.appId !== "2409997254") {
                          // Object is not given or this is combined notification
                          // (eg. "He, she and three others posted to your wall...")
                          // Open generic page instead
@@ -52,10 +52,10 @@ SocialMediaFeedPage {
                          openPost(model, subviewModel, ids[0])
                      }
                      break
-                 case "Events":
+                 case "141157392619610": // Events
                      openEvent(model, subviewModel)
                      break
-                 case "Photos":
+                 case "2305272732":      // Photos
                      openPhoto(model, subviewModel)
                      break
                  default:
