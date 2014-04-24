@@ -129,7 +129,6 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
             QJsonObject user = tweet.value(QLatin1String("user")).toObject();
             QString userName = user.value(QLatin1String("name")).toString();
             QString userScreenName = user.value(QLatin1String("screen_name")).toString();
-            link = QLatin1String("https://mobile.twitter.com/") + userScreenName + QLatin1String("/status/") + mentionId;
 
             // check to see if we need to post it to the notifications feed
             int sinceSpan = m_accountSyncProfile
@@ -148,6 +147,7 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                 body = userName;
                 summary = text;
                 timestamp = createdTime;
+                link = QLatin1String("https://mobile.twitter.com/") + userScreenName + QLatin1String("/status/") + mentionId;
                 mentionsCount ++;
             }
         }
