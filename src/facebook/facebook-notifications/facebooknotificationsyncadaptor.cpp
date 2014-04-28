@@ -62,6 +62,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("include_read")), QString(QLatin1String("true"))));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("locale")), QLocale::system().name()));
     QUrl url(QLatin1String("https://graph.facebook.com/me/notifications"));
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
@@ -134,7 +135,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                                          updatedTime,
                                          object.value(QLatin1String("title")).toString(),
                                          object.value(QLatin1String("link")).toString(),
-                                         application.value(QLatin1String("name")).toString(),
+                                         application.value(QLatin1String("id")).toString(),
                                          notificationObject.value(QLatin1String("id")).toString(),
                                          object.value(QLatin1String("unread")).toDouble() != 0,
                                          accountId,
