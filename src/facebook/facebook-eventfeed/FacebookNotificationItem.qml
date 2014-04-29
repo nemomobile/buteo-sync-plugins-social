@@ -21,7 +21,7 @@ SocialMediaFeedItem {
             maximumLineCount: 3
             elide: Text.ElideRight
             wrapMode: Text.Wrap
-            color: Theme.primaryColor
+            color: highlighted ? Theme.highlightColor : Theme.primaryColor
             font.pixelSize: Theme.fontSizeSmall
             plainText: model.title
             shortenUrl: true
