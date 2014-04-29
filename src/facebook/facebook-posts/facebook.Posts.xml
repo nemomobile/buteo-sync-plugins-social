@@ -7,7 +7,7 @@
     <key name="hidden" value="true" />
     <key name="displayname" value="Facebook Posts"/>
 
-    <schedule enabled="true" interval="30" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="" />
+    <schedule enabled="false" interval="15" days="1,2,3,4,5,6,7" syncconfiguredtime="" time="" />
 
     <profile name="facebook-posts" type="client" >
         <key name="Sync Direction" value="from-remote" />
