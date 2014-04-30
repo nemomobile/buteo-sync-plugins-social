@@ -364,16 +364,14 @@ void SocialNetworkSyncAdaptor::timeoutReply()
     QNetworkReply *reply = timer->property("networkReply").value<QNetworkReply*>();
     int accountId = timer->property("accountId").toInt();
 
-    m_networkReplyTimeouts[accountId].remove(reply);
-    reply->setProperty("isError", QVariant::fromValue<bool>(true)); // just in case it finishes.
-    reply->disconnect();
-    reply->deleteLater();
-
     TRACE(SOCIALD_ERROR,
             QString(QLatin1String("network request timed out while performing sync with account %1"))
             .arg(accountId));
 
-    decrementSemaphore(accountId);
+    m_networkReplyTimeouts[accountId].remove(reply);
+    reply->setProperty("isError", QVariant::fromValue<bool>(true));
+    reply->finished(); // invoke finished, so that the error handling there decrements the semaphore etc.
+    reply->disconnect();
 }
 
 void SocialNetworkSyncAdaptor::setupReplyTimeout(int accountId, QNetworkReply *reply)
