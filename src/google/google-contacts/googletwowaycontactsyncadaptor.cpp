@@ -795,7 +795,9 @@ void GoogleTwoWayContactSyncAdaptor::purgeAccount(int pid)
     QStringList purgeKeys;
     // purge the "build-in" OOB keys
     purgeKeys << QStringLiteral("prevRemote") << QStringLiteral("exportedIds")
-              << QStringLiteral("remoteSince") << QStringLiteral("localSince");
+              << QStringLiteral("remoteSince") << QStringLiteral("localSince")
+              << QStringLiteral("possiblyUploadedAdditions")
+              << QStringLiteral("definitelyDownloadedAdditions");
     // purge the extra OOB keys
     purgeKeys << QStringLiteral("myContactsGroupAtomId")
               << QStringLiteral("unsupportedElements")
@@ -883,7 +885,6 @@ void GoogleTwoWayContactSyncAdaptor::finalize(int accountId)
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("unable to finalize sync of Google contacts with account %1"))
               .arg(accountId));
-
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
     }

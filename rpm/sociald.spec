@@ -243,7 +243,7 @@ Summary:    Provides contact synchronisation with Google
 License:    TBD
 Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
-BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions) >= 0.1.54
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions) >= 0.1.58
 Requires: %{name} = %{version}-%{release}
 
 %description google-contacts
