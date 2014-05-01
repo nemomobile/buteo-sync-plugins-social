@@ -315,8 +315,6 @@ rm -f /home/nemo/.cache/msyncd/sync/twitter.Posts.xml
 systemctl-user try-restart msyncd.service || :
 
 
-
-
 %package onedrive-signon
 Summary:    Provides signon credentials refreshing with OneDrive
 License:    LGPLv2.1
@@ -343,6 +341,34 @@ rm -f /home/nemo/.cache/msyncd/sync/onedrive.Signon.xml
 systemctl-user try-restart msyncd.service || :
 
 
+%package vk-posts
+Summary:    Provides post synchronisation with VK
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  pkgconfig(Qt5Contacts)
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description vk-posts
+Provides post synchronisation with VK
+
+%files vk-posts
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.vk.statuspost.conf
+#%{_datadir}/translations/lipstick-jolla-home-vk_eng_en.qm
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-posts-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-posts-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-posts.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Posts.xml
+
+%pre vk-posts
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-posts.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Posts.xml
+
+%post vk-posts
+systemctl-user restart msyncd.service || :
 
 
 %package ts-devel

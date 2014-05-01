@@ -99,6 +99,7 @@ bool SocialdPlugin::startSync()
         //startSyncParams << "facebook.Posts";
         startSyncParams << "twitter.Notifications";
         startSyncParams << "twitter.Posts";
+        startSyncParams << "vk.Posts";
     }
 
     foreach (const QString &param, startSyncParams) {

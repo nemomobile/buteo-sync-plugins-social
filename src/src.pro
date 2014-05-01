@@ -4,4 +4,5 @@ SUBDIRS = \
     google \
     facebook \
     twitter \
-    onedrive
+    onedrive \
+    vk
