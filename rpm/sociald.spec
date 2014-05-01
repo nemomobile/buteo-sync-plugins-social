@@ -347,6 +347,60 @@ rm -f /home/nemo/.cache/msyncd/sync/twitter.Posts.xml
 systemctl-user restart msyncd.service || :
 
 
+%package vk-notifications
+Summary:    Provides notification synchronisation with VK
+License:    TBD
+Group:      System/Libraries
+BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
+BuildRequires:  libmeegotouchevents-qt5-devel
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description vk-notifications
+Provides notification synchronisation with VK
+
+%files vk-notifications
+/usr/lib/buteo-plugins-qt5/libvk-notifications-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-notifications.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Notifications.xml
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.vk.notification.conf
+
+%pre vk-notifications
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-notifications.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Notifications.xml
+
+%post vk-notifications
+systemctl-user restart msyncd.service || :
+
+
+%package vk-posts
+Summary:    Provides post synchronisation with VK
+License:    TBD
+Group:      System/Libraries
+Requires:   %{name}-eventfeed-shared = %{version}-%{release}
+BuildRequires:  pkgconfig(Qt5Contacts)
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description vk-posts
+Provides post synchronisation with VK
+
+%files vk-posts
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.vk.statuspost.conf
+#%{_datadir}/translations/lipstick-jolla-home-vk_eng_en.qm
+/usr/lib/buteo-plugins-qt5/libvk-posts-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-posts.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Posts.xml
+
+%pre vk-posts
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-posts.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Posts.xml
+
+%post vk-posts
+systemctl-user restart msyncd.service || :
+
+
 %package ts-devel
 Summary:    Translation source for sociald
 License:    TBD
