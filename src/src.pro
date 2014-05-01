@@ -5,4 +5,5 @@ SUBDIRS = \
     facebook \
     twitter \
     onedrive \
-    dropbox
+    dropbox \
+    vk
