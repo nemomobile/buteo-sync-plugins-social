@@ -529,6 +529,32 @@ rm -f /home/nemo/.cache/msyncd/sync/vk.Calendars.xml
 systemctl-user restart msyncd.service || :
 
 
+%package vk-contacts
+Summary:    Provides contact synchronisation with VK
+License:    TBD
+Group:      System/Libraries
+BuildRequires:  pkgconfig(Qt5Contacts)
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
+Requires: %{name} = %{version}-%{release}
+
+%description vk-contacts
+Provides contact synchronisation with VK
+
+%files vk-contacts
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-contacts-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-contacts-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-contacts.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Contacts.xml
+
+%pre vk-contacts
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-contacts.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Contacts.xml
+
+%post vk-contacts
+systemctl-user restart msyncd.service || :
+
 
 %package ts-devel
 Summary:    Translation source for sociald
