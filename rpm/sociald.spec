@@ -399,6 +399,34 @@ rm -f /home/nemo/.cache/msyncd/sync/vk.Notifications.xml
 systemctl-user restart msyncd.service || :
 
 
+%package vk-calendars
+Summary:    Provides calendar synchronisation with VK
+License:    TBD
+Group:      System/Libraries
+BuildRequires:  pkgconfig(libmkcal-qt5)
+BuildRequires:  pkgconfig(libkcalcoren-qt5)
+Requires: %{name} = %{version}-%{release}
+
+%description vk-calendars
+Provides calendar synchronisation with VK
+
+%files vk-calendars
+#out-of-proces-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-calendars-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-calendars-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-calendars.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Calendars.xml
+
+%pre vk-calendars
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-calendars.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Calendars.xml
+
+%post vk-calendars
+systemctl-user restart msyncd.service || :
+
+
+
 %package ts-devel
 Summary:    Translation source for sociald
 License:    LGPLv2.1
