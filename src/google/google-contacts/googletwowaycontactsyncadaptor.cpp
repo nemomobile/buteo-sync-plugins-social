@@ -904,7 +904,7 @@ void GoogleTwoWayContactSyncAdaptor::finalCleanup()
         Account *act = accountManager->account(currId);
         if (act) {
             if (act->providerName() == QString(QLatin1String("google")) && act->enabled()
-                    && act->isEnabledWithService(QString(QLatin1String("google-sync")))) {
+                    && act->isEnabledWithService(syncServiceName())) {
                 googleAccountIds.append(currId);
             }
             act->deleteLater();

@@ -419,6 +419,7 @@ void TwitterDataTypeSyncAdaptor::signIn(Account *account)
         TRACE(SOCIALD_INFORMATION,
               QString(QLatin1String("account with id %1 is not enabled with service %2"))
               .arg(account->identifier()).arg(syncServiceName()));
+        decrementSemaphore(account->identifier());
         return;
     }
 
@@ -426,6 +427,7 @@ void TwitterDataTypeSyncAdaptor::signIn(Account *account)
     QString key = consumerKey();
     QString secret = consumerSecret();
     if (key.isEmpty() || secret.isEmpty()) {
+        decrementSemaphore(account->identifier());
         return;
     }
 
