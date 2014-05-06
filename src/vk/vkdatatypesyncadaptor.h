@@ -57,6 +57,9 @@ protected:
     virtual void updateDataForAccounts(const QList<int> &accountIds);
     virtual void beginSync(int accountId, const QString &accessToken) = 0;
 
+    static QDateTime parseVKDateTime(const QJsonValue &v);
+    static UserProfile findProfile(const QList<UserProfile> &profiles, int uid);
+
 protected Q_SLOTS:
     virtual void errorHandler(QNetworkReply::NetworkError err);
     virtual void sslErrorsHandler(const QList<QSslError> &errs);

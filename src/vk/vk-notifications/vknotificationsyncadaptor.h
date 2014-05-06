@@ -32,6 +32,7 @@ private:
     void requestNotifications(int accountId, const QString &accessToken,
                               const QString &until = QString(),
                               const QString &pagingToken = QString());
+    void saveVKNotificationFromObject(int accountId, const QJsonObject &notif, const QList<UserProfile> &userProfiles);
 
 private Q_SLOTS:
     void finishedHandler();

@@ -4,5 +4,5 @@ SUBDIRS = \
     google \
     facebook \
     twitter \
-    eventfeed \
-    vk
+    vk \
+    eventfeed

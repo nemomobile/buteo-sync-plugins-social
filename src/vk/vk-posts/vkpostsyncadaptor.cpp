@@ -69,6 +69,8 @@ void VKPostSyncAdaptor::finalize(int accountId)
 void VKPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
 {
     QList<QPair<QString, QString> > queryItems;
+
+    // XXXXXXXXXXXXXX need to update version!
     queryItems.append(QPair<QString, QString>(QString(QStringLiteral("access_token")), accessToken));
     queryItems.append(QPair<QString, QString>(QString(QStringLiteral("extended")), QStringLiteral("1")));
 
@@ -125,8 +127,7 @@ void VKPostSyncAdaptor::finishedPostsHandler()
         QJsonArray profileValues = responseObj.value(QStringLiteral("profiles")).toArray();
         QList<UserProfile> userProfiles;
         foreach (const QJsonValue &entry, profileValues) {
-            UserProfile profile = UserProfile::fromJsonObject(entry.toObject());
-            userProfiles << profile;
+            userProfiles << UserProfile::fromJsonObject(entry.toObject());
 //            qWarning() << "+++++++++++++++ adding user" << user.uid << user.firstName << user.lastName << user.image;
         }
 
@@ -142,15 +143,6 @@ void VKPostSyncAdaptor::finishedPostsHandler()
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
-}
-
-QDateTime VKPostSyncAdaptor::parseVKDateTime(const QJsonValue &v)
-{
-    if (v.type() != QJsonValue::Double) {
-        return QDateTime();
-    }
-    int t = int(v.toDouble());
-    return QDateTime::fromTime_t(t);
 }
 
 void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles)
@@ -228,21 +220,12 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
     copyPost.text = post.value(QStringLiteral("copy_text")).toString();
     newPost.copyPost = copyPost;
 
-    QString personName;
-    QString personIcon;
-    Q_FOREACH (const UserProfile &user, userProfiles) {
-        if (user.uid == newPost.fromId) {
-            personName = user.name();
-            personIcon = user.icon;
-            break;
-        }
-    }
-
+    UserProfile user = findProfile(userProfiles, newPost.fromId);
     QString identifier = QString::number(post.value(QStringLiteral("id")).toDouble());
     QDateTime createdTime = parseVKDateTime(post.value(QStringLiteral("date")));
     QString body = post.value(QStringLiteral("text")).toString();
 
-    qWarning() << "+++++++++++++++ adding" << identifier << createdTime << accountId << personName << personIcon;
+    qWarning() << "+++++++++++++++ adding" << identifier << createdTime << accountId << user.name() << user.icon;
 
-    m_db.addVKPost(identifier, createdTime, body, newPost, images, personName, personIcon, accountId);
+    m_db.addVKPost(identifier, createdTime, body, newPost, images, user.name(), user.icon, accountId);
 }
