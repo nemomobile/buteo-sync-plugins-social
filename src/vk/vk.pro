@@ -1,3 +1,4 @@
 TEMPLATE = subdirs
 SUBDIRS = \
-    $$PWD/vk-posts
+    $$PWD/vk-posts \
+    $$PWD/vk-notifications
