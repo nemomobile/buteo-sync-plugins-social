@@ -42,7 +42,6 @@ private Q_SLOTS:
     void finishedPostsHandler();
 
 private:
-    QDateTime parseVKDateTime(const QJsonValue &v);
     void saveVKPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles);
     VKPostsDatabase m_db;
 };

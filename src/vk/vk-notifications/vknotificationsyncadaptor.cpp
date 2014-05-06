@@ -11,8 +11,6 @@
 #include <QUrlQuery>
 #include <QDebug>
 
-//static const int OLD_NOTIFICATION_LIMIT_IN_DAYS = 21;
-
 static QMap<QString,int> getNotificationTypes()
 {
     QMap<QString,int> types;
@@ -61,13 +59,13 @@ QString VKNotificationSyncAdaptor::syncServiceName() const
 void VKNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 {
     Q_UNUSED(purgeIds);
-//    if (purgeIds.size()) {
-//        foreach (int accountIdentifier, purgeIds) {
-//            m_db.removeNotifications(accountIdentifier);
-//        }
-//        m_db.sync();
-//        m_db.wait();
-//    }
+    if (purgeIds.size()) {
+        foreach (int accountIdentifier, purgeIds) {
+            m_db.removeNotifications(accountIdentifier);
+        }
+        m_db.sync();
+        m_db.wait();
+    }
 }
 
 void VKNotificationSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -79,21 +77,19 @@ void VKNotificationSyncAdaptor::finalize(int accountId)
 {
     Q_UNUSED(accountId);
 //    m_db.purgeOldNotifications(OLD_NOTIFICATION_LIMIT_IN_DAYS);
-//    m_db.sync();
-//    m_db.wait();
+    m_db.sync();
+    m_db.wait();
 }
 
 void VKNotificationSyncAdaptor::requestNotifications(int accountId, const QString &accessToken, const QString &until, const QString &pagingToken)
 {
-    Q_UNUSED(until);
-    Q_UNUSED(pagingToken);
-    // TODO: continuation requests need these two.  if exists, also set limit = 5000.
-    // if not set, set "since" to the timestamp value.
+    // TODO set paging?
     Q_UNUSED(until);
     Q_UNUSED(pagingToken);
 
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("v")), QStringLiteral("5.21")));    // version
 
     QUrl url(QStringLiteral("https://api.vk.com/method/notifications.get"));
     QUrlQuery query(url);
@@ -118,11 +114,6 @@ void VKNotificationSyncAdaptor::requestNotifications(int accountId, const QStrin
     }
 }
 
-//void VKNotificationSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles)
-//{
-
-//}
-
 void VKNotificationSyncAdaptor::finishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
@@ -134,68 +125,25 @@ void VKNotificationSyncAdaptor::finishedHandler()
     removeReplyTimeout(accountId, reply);
 
     bool ok = false;
-//    int sinceSpan = m_accountSyncProfile
-//                  ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
-//                  : 7;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
 
     qWarning() << "data:" << replyData.constData();
 
     if (!isError && ok && parsed.contains(QLatin1String("response"))) {
-        QJsonArray items = parsed.value(QLatin1String("items")).toArray();
+        QJsonObject responseObj = parsed.value(QStringLiteral("response")).toObject();
 
+        QJsonArray profileValues = responseObj.value(QStringLiteral("profiles")).toArray();
+        QList<UserProfile> userProfiles;
+        foreach (const QJsonValue &entry, profileValues) {
+            userProfiles << UserProfile::fromJsonObject(entry.toObject());
+        }
 
-        /*
-
-           {"response":
-                {"items": [1, {"type":"follow","date":1399264153,"feedback":[{"owner_id":"253028092"}]} ],
-                "profiles":[{"uid":253028092,"first_name":"Bea","last_name":"Lam","sex":1,"screen_name":"id253028092",
-"photo":"http:\/\/vk.com\/images\/camera_50.gif","photo_medium_rec":"http:\/\/vk.com\/images\/camera_100.gif","online":1}],
-"groups":[],"new_from":"#0","last_viewed":0,"new_offset":0}}
-         */
+        QJsonArray items = responseObj.value(QLatin1String("items")).toArray();
         foreach (const QJsonValue &entry, items) {
             QJsonObject object = entry.toObject();
-            qWarning() << "Parsed:" << object.toVariantMap();
-
             if (!object.isEmpty()) {
-
+                saveVKNotificationFromObject(accountId, object, userProfiles);
             }
-
-
-//            QDateTime createdTime = QDateTime::fromString(object.value(QLatin1String("created_time")).toString(), Qt::ISODate);
-//            createdTime.setTimeSpec(Qt::UTC);
-//            QDateTime updatedTime = QDateTime::fromString(object.value(QLatin1String("updated_time")).toString(), Qt::ISODate);
-//            updatedTime.setTimeSpec(Qt::UTC);
-
-//            if (createdTime.daysTo(QDateTime::currentDateTime()) > sinceSpan
-//                    && updatedTime.daysTo(QDateTime::currentDateTime()) > sinceSpan) {
-//                TRACE(SOCIALD_DEBUG,
-//                        QString(QLatin1String("notification for account %1 is more than %2 days old:\n    %3 - %4 - %5"))
-//                        .arg(accountId)
-//                        .arg(sinceSpan)
-//                        .arg(createdTime.toString(Qt::ISODate))
-//                        .arg(updatedTime.toString(Qt::ISODate))
-//                        .arg(object.value(QLatin1String("title")).toString()));
-//                continue;
-//            }
-
-//            QJsonObject sender = object.value(QLatin1String("from")).toObject();
-//            QJsonObject receiver = object.value(QLatin1String("to")).toObject();
-//            QJsonObject application = object.value(QLatin1String("application")).toObject();
-//            QJsonObject notificationObject = object.value(QLatin1String("object")).toObject();
-
-//            m_db.addVKNotification(object.value(QLatin1String("id")).toString(),
-//                                         sender.value(QLatin1String("id")).toString(),
-//                                         receiver.value(QLatin1String("id")).toString(),
-//                                         createdTime,
-//                                         updatedTime,
-//                                         object.value(QLatin1String("title")).toString(),
-//                                         object.value(QLatin1String("link")).toString(),
-//                                         application.value(QLatin1String("id")).toString(),
-//                                         notificationObject.value(QLatin1String("id")).toString(),
-//                                         object.value(QLatin1String("unread")).toDouble() != 0,
-//                                         accountId,
-//                                         clientId());
         }
     } else {
         // error occurred during request.
@@ -206,4 +154,32 @@ void VKNotificationSyncAdaptor::finishedHandler()
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
+}
+
+void VKNotificationSyncAdaptor::saveVKNotificationFromObject(int accountId, const QJsonObject &notif, const QList<UserProfile> &userProfiles)
+{
+    QString typeString = notif.value("type").toString();
+    if (!notificationTypes.contains(typeString)) {
+        qWarning() << "Unrecognized VK notification type, not parsing:" << typeString;
+        return;
+    }
+
+    VKNotification::Type type = VKNotification::Type(notificationTypes[typeString]);
+
+    QDateTime timestamp = parseVKDateTime(notif.value(QStringLiteral("date")));
+    QJsonObject feedback = notif.value(QStringLiteral("feedback")).toObject();//.value(QStringLiteral("items")).toArray();
+
+    // feedback is 'user[]' type
+    Q_FOREACH (const QJsonValue &feedbackItem, feedback.value(QStringLiteral("items")).toArray()) {
+        QJsonObject feedbackItemObj = feedbackItem.toObject();
+        int fromId = int(feedbackItemObj.value(QStringLiteral("from_id")).toDouble());
+        int toId = int(feedbackItemObj.value(QStringLiteral("to_id")).toDouble());
+        UserProfile profile = findProfile(userProfiles, fromId);
+        qWarning() << "add:" << accountId << type << fromId << toId << timestamp << profile.icon;
+        if (profile.uid != 0) {
+            m_db.addVKNotification(accountId, type, QString::number(fromId), profile.name(), profile.icon, QString::number(toId), timestamp);
+        } else {
+            qWarning() << "No user profile found for owner:" << fromId;
+        }
+    }
 }

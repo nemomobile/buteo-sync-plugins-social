@@ -53,7 +53,10 @@ VKDataTypeSyncAdaptor::UserProfile &VKDataTypeSyncAdaptor::UserProfile::operator
 VKDataTypeSyncAdaptor::UserProfile VKDataTypeSyncAdaptor::UserProfile::fromJsonObject(const QJsonObject &object)
 {
     UserProfile user;
-    user.uid = int(object.value(QStringLiteral("uid")).toDouble());
+    user.uid = int(object.value(QStringLiteral("id")).toDouble());
+    if (user.uid == 0) {
+        user.uid = int(object.value(QStringLiteral("uid")).toDouble());
+    }
     user.firstName = object.value(QStringLiteral("first_name")).toString();
     user.lastName = object.value(QStringLiteral("last_name")).toString();
     user.icon = object.value(QStringLiteral("photo")).toString();
@@ -336,4 +339,23 @@ void VKDataTypeSyncAdaptor::signIn(Account *account)
     connect(account, SIGNAL(signInError(QString,int)), this, SLOT(signOnError(QString,int)));
     connect(account, SIGNAL(signInResponse(QVariantMap)), this, SLOT(signOnResponse(QVariantMap)));
     account->signIn("Jolla", "Jolla", sip);
+}
+
+QDateTime VKDataTypeSyncAdaptor::parseVKDateTime(const QJsonValue &v)
+{
+    if (v.type() != QJsonValue::Double) {
+        return QDateTime();
+    }
+    int t = int(v.toDouble());
+    return QDateTime::fromTime_t(t);
+}
+
+VKDataTypeSyncAdaptor::UserProfile VKDataTypeSyncAdaptor::findProfile(const QList<UserProfile> &profiles, int uid)
+{
+    Q_FOREACH (const UserProfile &user, profiles) {
+        if (user.uid == uid) {
+            return user;
+        }
+    }
+    return UserProfile();
 }
