@@ -54,12 +54,9 @@ VKDataTypeSyncAdaptor::UserProfile VKDataTypeSyncAdaptor::UserProfile::fromJsonO
 {
     UserProfile user;
     user.uid = int(object.value(QStringLiteral("id")).toDouble());
-    if (user.uid == 0) {
-        user.uid = int(object.value(QStringLiteral("uid")).toDouble());
-    }
     user.firstName = object.value(QStringLiteral("first_name")).toString();
     user.lastName = object.value(QStringLiteral("last_name")).toString();
-    user.icon = object.value(QStringLiteral("photo")).toString();
+    user.icon = object.value(QStringLiteral("photo_50")).toString();
     return user;
 }
 

@@ -54,7 +54,6 @@ void VKPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
 
 void VKPostSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
-    qWarning() << "+++++++++++ " << Q_FUNC_INFO;
     m_db.removePosts(accountId); // always purge all posts for the account, prior to syncing most recent.
     requestPosts(accountId, accessToken);
 }
@@ -70,9 +69,9 @@ void VKPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
 {
     QList<QPair<QString, QString> > queryItems;
 
-    // XXXXXXXXXXXXXX need to update version!
     queryItems.append(QPair<QString, QString>(QString(QStringLiteral("access_token")), accessToken));
     queryItems.append(QPair<QString, QString>(QString(QStringLiteral("extended")), QStringLiteral("1")));
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("v")), QStringLiteral("5.21")));    // version
 
     QUrl url(QStringLiteral("https://api.vk.com/method/wall.get"));
     QUrlQuery query(url);
@@ -115,8 +114,8 @@ void VKPostSyncAdaptor::finishedPostsHandler()
 
     if (!isError && ok && parsed.contains(QStringLiteral("response"))) {
         QJsonObject responseObj = parsed.value(QStringLiteral("response")).toObject();
-        QJsonArray wallValues = responseObj.value(QStringLiteral("wall")).toArray();
-        if (!wallValues.size()) {
+        QJsonArray items = responseObj.value(QLatin1String("items")).toArray();
+        if (!items.size()) {
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("no feed posts received for account %1"))
                     .arg(accountId));
@@ -128,11 +127,13 @@ void VKPostSyncAdaptor::finishedPostsHandler()
         QList<UserProfile> userProfiles;
         foreach (const QJsonValue &entry, profileValues) {
             userProfiles << UserProfile::fromJsonObject(entry.toObject());
-//            qWarning() << "+++++++++++++++ adding user" << user.uid << user.firstName << user.lastName << user.image;
         }
 
-        foreach (const QJsonValue &entry, wallValues) {
-            saveVKPostFromObject(accountId, entry.toObject(), userProfiles);
+        foreach (const QJsonValue &entry, items) {
+            QJsonObject object = entry.toObject();
+            if (!object.isEmpty()) {
+                saveVKPostFromObject(accountId, object, userProfiles);
+            }
         }
     } else {
         // error occurred during request.
@@ -192,7 +193,7 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
         if (type == QStringLiteral("photo")
                 || type == QStringLiteral("posted_photo")
                 || type == QStringLiteral("graffiti")) {
-            QString src = attValue.value(QStringLiteral("src")).toString();
+            QString src = attValue.value(QStringLiteral("photo_75")).toString();
             if (!src.isEmpty()) {
                 images.append(qMakePair(src, SocialPostImage::Photo));
             }
@@ -225,7 +226,7 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
     QDateTime createdTime = parseVKDateTime(post.value(QStringLiteral("date")));
     QString body = post.value(QStringLiteral("text")).toString();
 
-    qWarning() << "+++++++++++++++ adding" << identifier << createdTime << accountId << user.name() << user.icon;
+    qWarning() << "+++++++++++++++ adding" << identifier << createdTime << body << accountId << user.name() << user.icon;
 
     m_db.addVKPost(identifier, createdTime, body, newPost, images, user.name(), user.icon, accountId);
 }
