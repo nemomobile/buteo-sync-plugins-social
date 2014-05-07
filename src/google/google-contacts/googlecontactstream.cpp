@@ -804,7 +804,7 @@ void GoogleContactStream::encodeUpdatedTimestamp(const QContact &qContact)
         updatedTimestamp = QDateTime::currentDateTimeUtc();
     }
 
-    QString updatedStr = updatedTimestamp.toString(Qt::ISODate);
+    QString updatedStr = updatedTimestamp.toString(QStringLiteral("yyyy-MM-ddThh:mm:ss.zzzZ"));
     mXmlWriter->writeTextElement("updated", updatedStr);
 }
 
