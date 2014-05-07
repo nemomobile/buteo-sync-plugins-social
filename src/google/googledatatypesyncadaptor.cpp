@@ -309,6 +309,7 @@ void GoogleDataTypeSyncAdaptor::signIn(Account *account)
         TRACE(SOCIALD_INFORMATION,
               QString(QLatin1String("account with id %1 is not enabled with service %2"))
               .arg(account->identifier()).arg(syncServiceName()));
+        decrementSemaphore(account->identifier());
         return;
     }
 
