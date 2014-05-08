@@ -24,6 +24,7 @@ Page {
     property bool _needToSync
     property alias dataType: syncHelper.dataType
     property alias lastSeenTime: _lastSeenTime.value
+    property string sectionProperty
     allowedOrientations: Lipstick.compositor.eventsWindowOrientation
 
     onConnectedToNetworkChanged: {
@@ -114,6 +115,25 @@ Page {
         }
 
         VerticalScrollDecorator {}
+
+        section.property: page.sectionProperty
+        section.delegate: page.sectionProperty !== "" ? sectionHeader : null
+    }
+
+    Component {
+        id: sectionHeader
+        Item {
+            width: _listView.width
+            height: sectionLabel.height + Theme.paddingLarge
+
+            Label {
+                id: sectionLabel
+                x: Theme.paddingMedium
+                text: page.sectionHeader(section)
+                font.pixelSize: Theme.fontSizeLarge
+                color: Theme.highlightColor
+            }
+        }
     }
 
     function sync() {
@@ -163,5 +183,9 @@ Page {
             var date = new Date()
             _lastSeenTime.value = date.getTime()
         }
+    }
+
+    function sectionHeader(section) {
+        return ""
     }
 }

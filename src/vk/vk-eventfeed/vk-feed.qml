@@ -15,36 +15,59 @@ SocialMediaFeedPage {
     property string currentUserUid
 
     configKey: "/sailfish/events_view/vkontakte"
-    timestampRole: VKPostsModel.Timestamp
-    listModel: VKPostsModel {
-        id: vkPostsModel
-    }
+    timestampRole: VKFeedModel.Timestamp
+    listModel: VKFeedModel {}
+    sectionProperty: "type"
 
     //: VK service name
     //% "VK"
     headerTitle: qsTrId("lipstick-jolla-home-la-vk_service_name")
 
     listDelegate: VKFeedItem {
-        id: feedItem
+        id: feedItem        
+        body: model.type === "post" ? model.body : notificationString(model.notificationType)
         connectedToNetwork: page.connectedToNetwork
         width: page.width
         imageList: model.images
         avatarSource: model.icon
         Component.onCompleted: feedItem.refreshTimeCount = Qt.binding(function() { return page.refreshTimeCount })
         onClicked: {
-            var rv = null
-            try {
-                rv = pageStack.push(Qt.resolvedUrl("VKPostPage.qml"), {
-                                        "model": model,
-                                        "subviewModel": subviewModel,
-                                        "account": account,
-                                        "accessToken": Qt.binding(function() { return page.accessToken }),
-                                        "currentUserAvatar": Qt.binding(function() { return page.currentUserAvatar}),
-                                        "currentUserUid": Qt.binding(function() { return page.currentUserUid}),
-                                        "connectedToNetwork": Qt.binding(function() { return page.connectedToNetwork })
-                                    }, false)
-            } catch (error) {
-                console.log(error)
+            if (model.type === "notification") {
+                var parentObj = JSON.parse(model.parent)
+                if (parentObj.post_type !== "undefined" && parentObj.post_type === "post") {
+                    console.log("HERE WE ARE")
+                    var rv = null
+                    try {
+                        rv = pageStack.push(Qt.resolvedUrl("VKPostPage.qml"), {
+                                                "vkId": parentObj.id,
+                                                "model": model,
+                                                "subviewModel": subviewModel,
+                                                "account": account,
+                                                "accessToken": Qt.binding(function() { return page.accessToken }),
+                                                "currentUserAvatar": Qt.binding(function() { return page.currentUserAvatar}),
+                                                "currentUserUid": Qt.binding(function() { return page.currentUserUid}),
+                                                "connectedToNetwork": Qt.binding(function() { return page.connectedToNetwork })
+                                            }, false)
+                    } catch (error) {
+                        console.log(error)
+                    }
+                }
+            } else {
+                var rv = null
+                try {
+                    rv = pageStack.push(Qt.resolvedUrl("VKPostPage.qml"), {
+                                            "vkId": model.vkId,
+                                            "model": model,
+                                            "subviewModel": subviewModel,
+                                            "account": account,
+                                            "accessToken": Qt.binding(function() { return page.accessToken }),
+                                            "currentUserAvatar": Qt.binding(function() { return page.currentUserAvatar}),
+                                            "currentUserUid": Qt.binding(function() { return page.currentUserUid}),
+                                            "connectedToNetwork": Qt.binding(function() { return page.connectedToNetwork })
+                                        }, false)
+                } catch (error) {
+                    console.log(error)
+                }
             }
         }
     }
@@ -138,5 +161,73 @@ SocialMediaFeedPage {
         doc.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded')
         doc.setRequestHeader('Content-Length', postData.length)
         doc.send(postData)
+    }
+
+    function notificationString(type) {
+        switch (type) {
+        case "follow":
+            //% "follows you"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_follow")
+        case "friend_accepted":
+            //% "is now your friend"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_friend_accepted")
+        case "mention":
+            //% "mentioned you"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_mention")
+        case "mention_comments":
+            //% "mentioned you"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_mention_comments")
+        case "wall":
+            //% "posted to your wall"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_wall")
+        case "comment_post":
+            //% "commented your post"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_comment_post")
+        case "comment_photo":
+            //% "commented your photo"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_comment_photo")
+        case "comment_video":
+            //% "commented your video"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_comment_video")
+        case "reply_comment":
+        case "reply_comment_photo":
+        case "reply_comment_video":
+            //% "replied to your comment"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_reply_comment")
+        case "reply_topic":
+            return ""
+        case "like_post":
+            //% "likes your post"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_like_post")
+        case "like_comment":
+            //% "likes your comment"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_like_comment")
+        case "like_photo":
+            //% "likes your photo"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_like_photo")
+        case "like_video":
+            //% "likes your video"
+            return qsTrId("lipstick-jolla-home-vk-la-notif_like_video")
+        case "like_comment_photo":
+        case "like_comment_video":
+        case "like_comment_topic":
+        case "copy_post":
+        case "copy_photo":
+        case "copy_video":
+        default:
+           return ""
+        }
+    }
+
+    function sectionHeader(section) {
+        if (section === "post") {
+            //% "Posts"
+            return qsTrId("lipstick-jolla-home-vk-la-section_posts")
+        } else if (section === "notification") {
+            //% "Notifications"
+            return qsTrId("lipstick-jolla-home-vk-la-section_notifications")
+        }
+
+        return ""
     }
 }

@@ -9,6 +9,7 @@
 #include "trace.h"
 
 #include <QUrlQuery>
+#include <QJsonDocument>
 #include <QDebug>
 
 VKNotificationSyncAdaptor::VKNotificationSyncAdaptor(QObject *parent)
@@ -131,15 +132,20 @@ void VKNotificationSyncAdaptor::saveVKNotificationFromObject(int accountId, cons
     QString type = notif.value("type").toString();
     QDateTime timestamp = parseVKDateTime(notif.value(QStringLiteral("date")));
     QJsonObject feedback = notif.value(QStringLiteral("feedback")).toObject();
+    QJsonObject parent = notif.value(QStringLiteral("parent")).toObject();
+    QString parentString = QString(QJsonDocument(parent).toJson());
+
+    qDebug() << "PARENT AS JSON: " << parentString;
 
     Q_FOREACH (const QJsonValue &feedbackItem, feedback.value(QStringLiteral("items")).toArray()) {
         QJsonObject feedbackItemObj = feedbackItem.toObject();
         int fromId = int(feedbackItemObj.value(QStringLiteral("from_id")).toDouble());
         int toId = int(feedbackItemObj.value(QStringLiteral("to_id")).toDouble());
+
         UserProfile profile = findProfile(userProfiles, fromId);
         qWarning() << "add:" << accountId << type << fromId << toId << timestamp << profile.icon;
         if (profile.uid != 0) {
-            m_db.addVKNotification(accountId, type, QString::number(fromId), profile.name(), profile.icon, QString::number(toId), timestamp);
+            m_db.addVKNotification(accountId, type, QString::number(fromId), profile.name(), profile.icon, QString::number(toId), timestamp, parentString);
         } else {
             qWarning() << "No user profile found for owner:" << fromId;
         }

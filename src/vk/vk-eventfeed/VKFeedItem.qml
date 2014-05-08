@@ -9,6 +9,7 @@ SocialMediaFeedItem {
     width: parent.width
 
     property variant imageList
+    property alias body: bodyLabel.plainText
 
     Column {
         id: content
@@ -31,6 +32,7 @@ SocialMediaFeedItem {
         }
 
         LinkedText {
+            id: bodyLabel
             width: parent.width
             maximumLineCount: 4
             elide: Text.ElideRight
@@ -38,7 +40,6 @@ SocialMediaFeedItem {
             font.pixelSize: Theme.fontSizeSmall
             shortenUrl: true
             color: item.pressed ? Theme.highlightColor : Theme.primaryColor
-            plainText: model.body
             visible: plainText !== ""
         }
 

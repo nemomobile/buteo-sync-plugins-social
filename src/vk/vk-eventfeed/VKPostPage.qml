@@ -8,6 +8,7 @@ import "shared"
 Page {
     id: container
 
+    property string vkId
     property Item subviewModel
     property variant model
     property bool connectedToNetwork
@@ -29,7 +30,7 @@ Page {
 
         function loadIfReady() {
             if (accessToken !== "" && viewerId !== "") {
-                load(model.vkId)
+                load(container.vkId)
             }
         }
     }
