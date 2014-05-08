@@ -11,36 +11,6 @@
 #include <QUrlQuery>
 #include <QDebug>
 
-static QMap<QString,int> getNotificationTypes()
-{
-    QMap<QString,int> types;
-    types[QStringLiteral("follow")] = int(VKNotification::Follow);
-    types[QStringLiteral("friend_accepted")] = int(VKNotification::FriendRequestAccepted);
-    types[QStringLiteral("mention")] = int(VKNotification::Mention);
-    types[QStringLiteral("mention_comments")] = int(VKNotification::MentionComments);
-    types[QStringLiteral("wall")] = int(VKNotification::WallPost);
-    types[QStringLiteral("comment_post")] = int(VKNotification::CommentPost);
-    types[QStringLiteral("comment_photo")] = int(VKNotification::CommentPhoto);
-    types[QStringLiteral("comment_video")] = int(VKNotification::CommentVideo);
-    types[QStringLiteral("reply_comment")] = int(VKNotification::ReplyComment);
-    types[QStringLiteral("reply_comment_photo")] = int(VKNotification::ReplyCommentPhoto);
-    types[QStringLiteral("reply_comment_video")] = int(VKNotification::ReplyCommentVideo);
-    types[QStringLiteral("reply_topic")] = int(VKNotification::ReplyTopic);
-    types[QStringLiteral("like_post")] = int(VKNotification::LikePost);
-    types[QStringLiteral("like_omment")] = int(VKNotification::LikeComment);
-    types[QStringLiteral("like_photo")] = int(VKNotification::LikePhoto);
-    types[QStringLiteral("like_video")] = int(VKNotification::LikeVideo);
-    types[QStringLiteral("like_comment_photo")] = int(VKNotification::LikeCommentPhoto);
-    types[QStringLiteral("like_comment_video")] = int(VKNotification::LikeCommentVideo);
-    types[QStringLiteral("like_comment_topic")] = int(VKNotification::LikeCommentTopic);
-    types[QStringLiteral("copy_post")] = int(VKNotification::CopyPost);
-    types[QStringLiteral("copy_photo")] = int(VKNotification::CopyPhoto);
-    types[QStringLiteral("copy_video")] = int(VKNotification::CopyVideo);
-    return types;
-}
-
-static QMap<QString,int> notificationTypes = getNotificationTypes();
-
 VKNotificationSyncAdaptor::VKNotificationSyncAdaptor(QObject *parent)
     : VKDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Notifications, parent)
 {
@@ -158,14 +128,7 @@ void VKNotificationSyncAdaptor::finishedHandler()
 
 void VKNotificationSyncAdaptor::saveVKNotificationFromObject(int accountId, const QJsonObject &notif, const QList<UserProfile> &userProfiles)
 {
-    QString typeString = notif.value("type").toString();
-    if (!notificationTypes.contains(typeString)) {
-        qWarning() << "Unrecognized VK notification type, not parsing:" << typeString;
-        return;
-    }
-
-    VKNotification::Type type = VKNotification::Type(notificationTypes[typeString]);
-
+    QString type = notif.value("type").toString();
     QDateTime timestamp = parseVKDateTime(notif.value(QStringLiteral("date")));
     QJsonObject feedback = notif.value(QStringLiteral("feedback")).toObject();
 
