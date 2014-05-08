@@ -305,6 +305,7 @@ Provides notification synchronisation with Twitter
 %config %{_sysconfdir}/buteo/profiles/client/twitter-notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Notifications.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.mention.conf
+%{_datadir}/translations/lipstick-jolla-home-twitter-notif_eng_en.qm
 
 %pre twitter-notifications
 rm -f /home/nemo/.cache/msyncd/sync/client/twitter-notifications.xml
@@ -360,6 +361,7 @@ Translation source for sociald
 %{_datadir}/translations/source/sociald.ts
 %{_datadir}/translations/source/lipstick-jolla-home-facebook.ts
 %{_datadir}/translations/source/lipstick-jolla-home-twitter.ts
+%{_datadir}/translations/source/lipstick-jolla-home-twitter-notif.ts
 
 %package tests
 Summary:    Automatable tests for sociald
