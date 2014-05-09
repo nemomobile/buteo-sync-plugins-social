@@ -12,6 +12,7 @@
 #include <QDebug>
 
 static const int OLD_NOTIFICATION_LIMIT_IN_DAYS = 21;
+static const int NOTIFICATIONS_LIMIT = 30;
 
 FacebookNotificationSyncAdaptor::FacebookNotificationSyncAdaptor(QObject *parent)
     : FacebookDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Notifications, parent)
@@ -54,16 +55,27 @@ void FacebookNotificationSyncAdaptor::finalize(int accountId)
 
 void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const QString &accessToken, const QString &until, const QString &pagingToken)
 {
-    // TODO: continuation requests need these two.  if exists, also set limit = 5000.
+    // continuation requests require until+paging token.
     // if not set, set "since" to the timestamp value.
-    Q_UNUSED(until);
-    Q_UNUSED(pagingToken);
 
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("include_read")), QString(QLatin1String("true"))));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("locale")), QLocale::system().name()));
     QUrl url(QLatin1String("https://graph.facebook.com/me/notifications"));
+    if (pagingToken.isEmpty()) {
+        int sinceSpan = m_accountSyncProfile
+                      ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
+                      : 7;
+        queryItems.append(QPair<QString, QString>(QString(QLatin1String("since")),
+                          QString::number(QDateTime::currentDateTime().addDays(-1 * sinceSpan).toTime_t())));
+        queryItems.append(QPair<QString, QString>(QString(QLatin1String("limit")), QString::number(NOTIFICATIONS_LIMIT)));
+    } else {
+        queryItems.append(QPair<QString, QString>(QString(QLatin1String("limit")), QString::number(NOTIFICATIONS_LIMIT)));
+        queryItems.append(QPair<QString, QString>(QString(QLatin1String("until")), until));
+        queryItems.append(QPair<QString, QString>(QString(QLatin1String("__paging_token")), pagingToken));
+    }
+
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
@@ -91,6 +103,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     bool isError = reply->property("isError").toBool();
     int accountId = reply->property("accountId").toInt();
+    QString accessToken = reply->property("accessToken").toString();
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
@@ -104,6 +117,8 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
     if (!isError && ok && parsed.contains(QLatin1String("summary"))) {
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
+        bool needNextPage = false;
+        bool seenOldNotification = false;
         foreach (const QJsonValue &entry, data) {
             QJsonObject object = entry.toObject();
             QDateTime createdTime = QDateTime::fromString(object.value(QLatin1String("created_time")).toString(), Qt::ISODate);
@@ -120,6 +135,8 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                         .arg(createdTime.toString(Qt::ISODate))
                         .arg(updatedTime.toString(Qt::ISODate))
                         .arg(object.value(QLatin1String("title")).toString()));
+                seenOldNotification = true;
+                needNextPage = false;
                 continue;
             }
 
@@ -140,6 +157,34 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                                          object.value(QLatin1String("unread")).toDouble() != 0,
                                          accountId,
                                          clientId());
+
+            if (!seenOldNotification) {
+                needNextPage = true;
+            }
+        }
+
+        if (needNextPage && parsed.contains(QLatin1String("paging"))) {
+            // we don't actually request the next page of results
+            // since the sync schedule has such a small interval,
+            // 30 notifications at a time should be plenty,
+            // and we want to avoid performing spurious network activity.
+            Q_UNUSED(accessToken)
+            /*
+            QString nextPage = parsed.value(QLatin1String("paging")).toObject().value(QLatin1String("next")).toString();
+            QUrl nextPageUrl(nextPage);
+
+            // instead of doing this, we could just pass the nextPageUrl directly to the requestNotifications function
+            QUrlQuery npuQuery(nextPageUrl.query());
+            QString until = npuQuery.queryItemValue(QStringLiteral("until"));
+            QString pagingToken = npuQuery.queryItemValue(QStringLiteral("__paging_token"));
+
+            if (!nextPage.isEmpty() && !until.isEmpty() && !pagingToken.isEmpty()) {
+                TRACE(SOCIALD_DEBUG,
+                        QString(QLatin1String("another page of notifications exists for account %1: %2"))
+                        .arg(accountId).arg(nextPage));
+                requestNotifications(accountId, accessToken, until, pagingToken);
+            }
+            */
         }
     } else {
         // error occurred during request.
