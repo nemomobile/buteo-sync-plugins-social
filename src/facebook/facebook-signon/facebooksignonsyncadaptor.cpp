@@ -101,8 +101,11 @@ void FacebookSignonSyncAdaptor::requestFinishedHandler()
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!isError && ok && parsed.contains(QStringLiteral("id"))) {
-        // request was successful.  the token expiry will be refreshed server-side.
-        lowerCredentialsNeedUpdateFlag(accountId);
+        // Request was successful.  the token expiry will be refreshed server-side.
+        // We need to manually extend the device-side expiry time.
+        // We don't know how long it'll be extended server-side for,
+        // and they don't tell us, so let's assume it's 7 days.
+        forceTokenExpiry(7 * 86400, accountId, accessToken); // 7 days
     } else if (isError && ok) {
         if (parsed.contains("error")) {
             QJsonObject errorObj = parsed.value(QStringLiteral("error")).toObject();
@@ -116,7 +119,7 @@ void FacebookSignonSyncAdaptor::requestFinishedHandler()
                     || errorCode == 10
                     || (errorCode >= 200 && errorCode <= 299)) {
                 // the account is in a state which requires user intervention
-                forceTokenExpiry(accountId, accessToken);
+                forceTokenExpiry(0, accountId, accessToken);
                 TRACE(SOCIALD_DEBUG,
                         QString(QLatin1String("access token has expired for Facebook account %1: %2: %3: %4"))
                         .arg(accountId).arg(errorCode).arg(errorType).arg(errorMessage));
@@ -193,7 +196,7 @@ void FacebookSignonSyncAdaptor::lowerCredentialsNeedUpdateFlag(int accountId)
     }
 }
 
-void FacebookSignonSyncAdaptor::forceTokenExpiry(int accountId, const QString &accessToken)
+void FacebookSignonSyncAdaptor::forceTokenExpiry(int seconds, int accountId, const QString &accessToken)
 {
     Accounts::Account *acc = loadAccount(accountId);
     if (acc) {
@@ -232,7 +235,7 @@ void FacebookSignonSyncAdaptor::forceTokenExpiry(int accountId, const QString &a
         QVariantMap providedTokens;
         providedTokens.insert("AccessToken", accessToken);
         providedTokens.insert("RefreshToken", QString());
-        providedTokens.insert("ExpiresIn", 0);
+        providedTokens.insert("ExpiresIn", seconds);
 
         QVariantMap signonSessionData = accSrv->authData().parameters();
         signonSessionData.insert("ClientId", clientId());
@@ -248,6 +251,7 @@ void FacebookSignonSyncAdaptor::forceTokenExpiry(int accountId, const QString &a
 
         incrementSemaphore(accountId);
         session->setProperty("accountId", accountId);
+        session->setProperty("seconds", seconds);
         session->process(SignOn::SessionData(signonSessionData), mechanism);
     }
 }
@@ -256,6 +260,7 @@ void FacebookSignonSyncAdaptor::forceTokenExpiryResponse(const SignOn::SessionDa
 {
     SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession*>(sender());
     int accountId = session->property("accountId").toInt();
+    int seconds = session->property("seconds").toInt();
 
     QVariantMap vmrd;
     foreach (const QString &key, responseData.propertyNames()) {
@@ -263,10 +268,16 @@ void FacebookSignonSyncAdaptor::forceTokenExpiryResponse(const SignOn::SessionDa
     }
 
     TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("forcibly expired cache for Facebook account %1, ExpiresIn now: %2"))
-            .arg(accountId).arg(vmrd.value("ExpiresIn").toInt()));
+            QString(QLatin1String("forcibly updated cache for Facebook account %1, ExpiresIn now: %2, expected %3"))
+            .arg(accountId).arg(vmrd.value("ExpiresIn").toInt()).arg(seconds));
 
-    raiseCredentialsNeedUpdateFlag(accountId);
+    if (seconds == 0) {
+        // successfully forced expiry
+        raiseCredentialsNeedUpdateFlag(accountId);
+    } else {
+        // successfully forced new ExpiresIn value
+        lowerCredentialsNeedUpdateFlag(accountId);
+    }
     decrementSemaphore(accountId);
 }
 
@@ -274,13 +285,19 @@ void FacebookSignonSyncAdaptor::forceTokenExpiryError(const SignOn::Error &error
 {
     SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession*>(sender());
     int accountId = session->property("accountId").toInt();
+    int seconds = session->property("seconds").toInt();
 
     TRACE(SOCIALD_INFORMATION,
             QString(QLatin1String("got signon error when performing force-expire for Facebook account %1: %2: %3"))
             .arg(accountId).arg(error.type()).arg(error.message()));
 
-    // we treat the error as if it was a success, since we need to update the credentials anyway.
-    raiseCredentialsNeedUpdateFlag(accountId);
+    if (seconds == 0) {
+        // we treat the error as if it was a success, since we need to update the credentials anyway.
+        raiseCredentialsNeedUpdateFlag(accountId);
+    } else {
+        // don't raise or lower the flag.  If was previously not raised,
+        // presumably it's because ExpiresIn hadn't reached zero.
+    }
     decrementSemaphore(accountId);
 }
 
