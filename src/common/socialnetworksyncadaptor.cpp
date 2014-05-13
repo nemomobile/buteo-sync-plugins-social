@@ -21,9 +21,10 @@
 
 #include "buteosyncfw_p.h"
 
-// sailfish-components-accounts-qt5
-#include <accountmanager.h>
-#include <account.h>
+// libaccounts-qt5
+#include <Accounts/Manager>
+#include <Accounts/Account>
+#include <Accounts/Service>
 
 // libsocialcache
 #include <socialnetworksyncdatabase.h>
@@ -70,7 +71,7 @@ SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(const QString &serviceName,
                                                    QObject *parent)
     : QObject(parent)
     , dataType(dataType)
-    , accountManager(new AccountManager(this))
+    , accountManager(new Accounts::Manager(this))
     , networkAccessManager(new SocialdNetworkAccessManager(this))
     , m_accountSyncProfile(NULL)
     , m_syncDb(new SocialNetworkSyncDatabase())
@@ -125,14 +126,18 @@ void SocialNetworkSyncAdaptor::sync(const QString &dataType, int accountId)
 void SocialNetworkSyncAdaptor::checkAccounts(SocialNetworkSyncAdaptor::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds)
 {
     QList<int> knownIds = syncedAccounts(SocialNetworkSyncAdaptor::dataTypeName(dataType));
-    QList<int> currentIds = accountManager->accountIdentifiers();
+    QList<uint> currentAUIds = accountManager->accountList();
+    QList<int> currentIds;
+    foreach (uint auid, currentAUIds) {
+        currentIds.append(static_cast<int>(auid));
+    }
     TRACE(SOCIALD_DEBUG,
             QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
             .arg(currentIds.size()));
 
     foreach (int currId, currentIds) {
-        Account *act = accountManager->account(currId);
-        if (!act || act->supportedServiceNames().size() <= 0 || act->providerName() != m_serviceName) {
+        Accounts::Account *act = accountManager->account(currId);
+        if (!act || act->services().size() <= 0 || act->providerName() != m_serviceName) {
             TRACE(SOCIALD_DEBUG,
                     QString(QLatin1String("account %1 does not support service %2, ignoring"))
                     .arg(currId).arg(m_serviceName));
@@ -177,9 +182,20 @@ void SocialNetworkSyncAdaptor::checkAccounts(SocialNetworkSyncAdaptor::DataType 
  * The default implementation checks that the account is enabled
  * with the accounts&sso service associated with this sync adaptor.
  */
-bool SocialNetworkSyncAdaptor::checkAccount(Account *account)
+bool SocialNetworkSyncAdaptor::checkAccount(Accounts::Account *account)
 {
-    return account->enabled() && account->isEnabledWithService(syncServiceName());
+    bool globallyEnabled = account->enabled();
+    Accounts::Service srv(accountManager->service(syncServiceName()));
+    if (!srv.isValid()) {
+        TRACE(SOCIALD_INFORMATION,
+                QString(QLatin1String("invalid service %1 specified, account %2 will be disabled for %2 %3 sync"))
+                .arg(syncServiceName()).arg(account->id()).arg(m_serviceName).arg(dataTypeName(dataType)));
+        return false;
+    }
+    account->selectService(srv);
+    bool serviceEnabled = account->enabled();
+    account->selectService(Accounts::Service());
+    return globallyEnabled && serviceEnabled;
 }
 
 /*!

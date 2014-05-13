@@ -24,12 +24,15 @@
 //libsailfishkeyprovider
 #include <sailfishkeyprovider.h>
 
-// sailfish-components-accounts-qt5
-#include <accountmanager.h>
-#include <account.h>
-#include <signinparameters.h>
+// libaccounts-qt5
+#include <Accounts/Manager>
+#include <Accounts/Account>
+#include <Accounts/Service>
+#include <Accounts/AccountService>
 
 //libsignon-qt: SignOn::NoUserInteractionPolicy
+#include <SignOn/Identity>
+#include <SignOn/AuthSession>
 #include <SignOn/SessionData>
 
 TwitterDataTypeSyncAdaptor::TwitterDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::DataType dataType, QObject *parent)
@@ -109,7 +112,7 @@ void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &account
     }
 
     foreach (int accountId, accountIds) {
-        Account *account = accountManager->account(accountId);
+        Accounts::Account *account = accountManager->account(accountId);
         if (!account) {
             TRACE(SOCIALD_ERROR,
                     QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
@@ -118,84 +121,10 @@ void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &account
             decrementSemaphore(accountId);
             continue;
         }
-        if (account->status() == Account::Initialized || account->status() == Account::Synced) {
-            signIn(account);
-        } else {
-            connect(account, SIGNAL(statusChanged()), this, SLOT(accountStatusChangeHandler()));
-        }
-    }
-}
-
-void TwitterDataTypeSyncAdaptor::accountCredentialsChangeHandler()
-{
-    Account *account = qobject_cast<Account*>(sender());
-    if (account->status() == Account::Initialized) {
-        setCredentialsNeedUpdate(account);
-    }
-}
-
-void TwitterDataTypeSyncAdaptor::accountStatusChangeHandler()
-{
-    Account *account = qobject_cast<Account*>(sender());
-    if (account->status() == Account::Initialized || account->status() == Account::Synced)
-    {
-        // Not anymore interested about status changes of this account instance
-        account->disconnect(this);
         signIn(account);
     }
 }
 
-void TwitterDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
-{
-    Account *account = qobject_cast<Account*>(sender());
-    int accountId = account->identifier();
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
-          .arg(accountId) << err);
-    setStatus(SocialNetworkSyncAdaptor::Error);
-
-    // if the error is because credentials have expired, we
-    // set the CredentialsNeedUpdate key.
-    if (errorType == Account::SignInCredentialsExpiredError) {
-        setCredentialsNeedUpdate(account);
-    } else {
-        account->disconnect(this);
-   }
-
-    // if we couldn't sign in, we can't sync with this account.
-    decrementSemaphore(accountId);
-}
-
-void TwitterDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
-{
-    QString oauthToken;
-    QString oauthTokenSecret;
-    Account *account = qobject_cast<Account*>(sender());
-    int accountId = account->identifier();
-
-    if (data.contains(QLatin1String("AccessToken"))) {
-        oauthToken = data.value(QLatin1String("AccessToken")).toString();
-    } else {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("signon response for account with id %1 contained no oauth token"))
-                .arg(accountId));
-    }
-
-    if (data.contains(QLatin1String("TokenSecret"))) {
-        oauthTokenSecret = data.value(QLatin1String("TokenSecret")).toString();
-    } else {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("signon response for account with id %1 contained no oauth token secret"))
-                .arg(accountId));
-    }
-
-    account->disconnect(this);
-    if (!oauthToken.isEmpty() && !oauthTokenSecret.isEmpty()) {
-        beginSync(accountId, oauthToken, oauthTokenSecret); // call the derived-class sync entrypoint.
-    }
-
-    decrementSemaphore(accountId);
-}
 
 QString TwitterDataTypeSyncAdaptor::consumerKey()
 {
@@ -235,13 +164,10 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         foreach (QJsonValue data, dataList) {
             QJsonObject dataMap = data.toObject();
             if (dataMap.value("code").toDouble() == 32) {
-                Account *account = accountManager->account(accountId);
-                if (account->status() == Account::Initialized) {
+                Accounts::Account *account = accountManager->account(accountId);
+                if (account) {
                     setCredentialsNeedUpdate(account);
-                } else {
-                    connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
                 }
-                return;
             }
         }
     }
@@ -402,41 +328,134 @@ void TwitterDataTypeSyncAdaptor::loadConsumerKeyAndSecret()
     free(cConsumerSecret);
 }
 
-void TwitterDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
+void TwitterDataTypeSyncAdaptor::setCredentialsNeedUpdate(Accounts::Account *account)
 {
-    // Not anymore interested about status changes of this account instance
-    account->disconnect(this);
-    qWarning() << "sociald:Twitter: setting CredentialsNeedUpdate to true for account:" << account->identifier();
-    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
-    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
-    account->sync();
+    qWarning() << "sociald:Twitter: setting CredentialsNeedUpdate to true for account:" << account->id();
+    Accounts::Service srv(accountManager->service(syncServiceName()));
+    account->selectService(srv);
+    account->setValue(QStringLiteral("CredentialsNeedUpdate"), QVariant::fromValue<bool>(true));
+    account->setValue(QStringLiteral("CredentialsNeedUpdateFrom"), QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
+    account->selectService(Accounts::Service());
+    account->syncAndBlock();
 }
 
-void TwitterDataTypeSyncAdaptor::signIn(Account *account)
+void TwitterDataTypeSyncAdaptor::signIn(Accounts::Account *account)
 {
-    // grab out a valid identity for the sync service.
-    if (!account->isEnabledWithService(syncServiceName())) {
-        TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("account with id %1 is not enabled with service %2"))
-              .arg(account->identifier()).arg(syncServiceName()));
-        decrementSemaphore(account->identifier());
-        return;
-    }
-
     // Fetch consumer key and secret from keyprovider
     QString key = consumerKey();
     QString secret = consumerSecret();
-    if (key.isEmpty() || secret.isEmpty()) {
-        decrementSemaphore(account->identifier());
+    int accountId = account->id();
+    if (!checkAccount(account) || key.isEmpty() || secret.isEmpty()) {
+        decrementSemaphore(accountId);
         return;
     }
 
-    SignInParameters *sip = account->signInParameters(syncServiceName());
-    sip->setParameter(QLatin1String("ConsumerKey"), key);
-    sip->setParameter(QLatin1String("ConsumerSecret"), secret);
-    sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
+    // grab out a valid identity for the sync service.
+    Accounts::Service srv(accountManager->service(syncServiceName()));
+    account->selectService(srv);
+    SignOn::Identity *identity = account->credentialsId() > 0 ? SignOn::Identity::existingIdentity(account->credentialsId()) : 0;
+    if (!identity) {
+        TRACE(SOCIALD_ERROR,
+                QString(QLatin1String("error: account %1 has no valid credentials, cannot sign in"))
+                .arg(accountId));
+        decrementSemaphore(accountId);
+        return;
+    }
 
-    connect(account, SIGNAL(signInError(QString,int)), this, SLOT(signOnError(QString,int)));
-    connect(account, SIGNAL(signInResponse(QVariantMap)), this, SLOT(signOnResponse(QVariantMap)));
-    account->signIn("Jolla", "Jolla", sip);
+    Accounts::AccountService accSrv(account, srv);
+    QString method = accSrv.authData().method();
+    QString mechanism = accSrv.authData().mechanism();
+    SignOn::AuthSession *session = identity->createSession(method);
+    if (!session) {
+        TRACE(SOCIALD_ERROR,
+                QString(QLatin1String("error: could not create signon session for account %1"))
+                .arg(accountId));
+        identity->deleteLater();
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    QVariantMap signonSessionData = accSrv.authData().parameters();
+    signonSessionData.insert("ConsumerKey", key);
+    signonSessionData.insert("ConsumerSecret", secret);
+    signonSessionData.insert("UiPolicy", SignOn::NoUserInteractionPolicy);
+
+    connect(session, SIGNAL(response(SignOn::SessionData)),
+            this, SLOT(signOnResponse(SignOn::SessionData)),
+            Qt::UniqueConnection);
+    connect(session, SIGNAL(error(SignOn::Error)),
+            this, SLOT(signOnError(SignOn::Error)),
+            Qt::UniqueConnection);
+
+    session->setProperty("account", QVariant::fromValue<Accounts::Account*>(account));
+    session->setProperty("identity", QVariant::fromValue<SignOn::Identity*>(identity));
+    session->process(SignOn::SessionData(signonSessionData), mechanism);
+}
+
+void TwitterDataTypeSyncAdaptor::signOnError(const SignOn::Error &error)
+{
+    SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession*>(sender());
+    Accounts::Account *account = session->property("account").value<Accounts::Account*>();
+    SignOn::Identity *identity = session->property("identity").value<SignOn::Identity*>();
+    int accountId = account->id();
+    TRACE(SOCIALD_ERROR,
+            QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved: %2: %3"))
+          .arg(accountId).arg(error.type()).arg(error.message()));
+
+    // if the error is because credentials have expired, we
+    // set the CredentialsNeedUpdate key.
+    if (error.type() == SignOn::AuthSession::UserInteractionError) {
+        setCredentialsNeedUpdate(account);
+    }
+
+    session->disconnect(this);
+    identity->destroySession(session);
+    identity->deleteLater();
+    account->deleteLater();
+
+    // if we couldn't sign in, we can't sync with this account.
+    setStatus(SocialNetworkSyncAdaptor::Error);
+    decrementSemaphore(accountId);
+}
+
+void TwitterDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &responseData)
+{
+    QVariantMap data;
+    foreach (const QString &key, responseData.propertyNames()) {
+        data.insert(key, responseData.getProperty(key));
+    }
+
+    QString oauthToken;
+    QString oauthTokenSecret;
+    SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession*>(sender());
+    Accounts::Account *account = session->property("account").value<Accounts::Account*>();
+    SignOn::Identity *identity = session->property("identity").value<SignOn::Identity*>();
+    int accountId = account->id();
+
+    if (data.contains(QLatin1String("AccessToken"))) {
+        oauthToken = data.value(QLatin1String("AccessToken")).toString();
+    } else {
+        TRACE(SOCIALD_INFORMATION,
+                QString(QLatin1String("signon response for account with id %1 contained no oauth token"))
+                .arg(accountId));
+    }
+
+    if (data.contains(QLatin1String("TokenSecret"))) {
+        oauthTokenSecret = data.value(QLatin1String("TokenSecret")).toString();
+    } else {
+        TRACE(SOCIALD_INFORMATION,
+                QString(QLatin1String("signon response for account with id %1 contained no oauth token secret"))
+                .arg(accountId));
+    }
+
+    session->disconnect(this);
+    identity->destroySession(session);
+    identity->deleteLater();
+    account->deleteLater();
+
+    if (!oauthToken.isEmpty() && !oauthTokenSecret.isEmpty()) {
+        beginSync(accountId, oauthToken, oauthTokenSecret); // call the derived-class sync entrypoint.
+    }
+
+    decrementSemaphore(accountId);
 }

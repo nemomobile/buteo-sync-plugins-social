@@ -38,9 +38,8 @@
 
 #include <socialcache/abstractimagedownloader.h>
 
-// sailfish-components-accounts-qt5
-#include <accountmanager.h>
-#include <account.h>
+#include <Accounts/Manager>
+#include <Accounts/Account>
 
 #define SOCIALD_FACEBOOK_CONTACTS_ID_PREFIX QLatin1String("facebook-contacts-")
 #define SOCIALD_FACEBOOK_CONTACTS_GROUPNAME QLatin1String("sociald-sync-facebook-contacts")
@@ -991,12 +990,15 @@ void FacebookContactSyncAdaptor::finalCleanup()
     // first, get a list of all existing, enabled Facebook account ids
     QList<int> facebookAccountIds;
     QList<int> purgeAccountIds;
-    QList<int> currentAccountIds = accountManager->accountIdentifiers();
+    QList<int> currentAccountIds;
+    QList<uint> uaids = accountManager->accountList();
+    foreach (uint uaid, uaids) {
+        currentAccountIds.append(static_cast<int>(uaid));
+    }
     foreach (int currId, currentAccountIds) {
-        Account *act = accountManager->account(currId);
+        Accounts::Account *act = accountManager->account(currId);
         if (act) {
-            if (act->providerName() == QString(QLatin1String("facebook")) && act->enabled()
-                    && act->isEnabledWithService(syncServiceName())) {
+            if (act->providerName() == QString(QLatin1String("facebook")) && checkAccount(act)) {
                 facebookAccountIds.append(currId);
             }
             act->deleteLater();
