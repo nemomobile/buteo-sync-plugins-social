@@ -1067,6 +1067,61 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
             QString(QLatin1String("have %1 outstanding contact avatars to sync from account %2"))
             .arg(guidToContactAvatar.size()).arg(accountId));
 
+    // Finally, if we're doing a "clean sync" we should pre-populate our prevRemote
+    // list with the current state of the local database.
+    // This is to avoid clean-syncs causing contact duplication.
+    if (!d->m_stateData[QString::number(accountId)].m_localSince.isValid()) {
+        QDateTime maxTimestamp;
+        QList<QContact> existingContacts;
+        QContactManager::Error error = QContactManager::NoError;
+        if (!d->m_engine->fetchSyncContacts(SOCIALD_GOOGLE_CONTACTS_SYNCTARGET,
+                                            QDateTime(),
+                                            QList<QContactId>(),
+                                            &existingContacts,
+                                            0,
+                                            0,
+                                            &maxTimestamp,
+                                            &error)) {
+            TRACE(SOCIALD_ERROR,
+                    QString(QLatin1String("failed to fetch pre-existing contacts for account %1"))
+                    .arg(accountId));
+            d->clear(QString::number(accountId));
+            return false;
+        }
+
+        // filter out any which don't come from this account.
+        QList<QContact> prevRemote;
+        QList<QContactId> exportedIds;
+        foreach (const QContact &c, existingContacts) {
+            if (c.detail<QContactGuid>().guid().startsWith(QStringLiteral("%1:").arg(accountId))) {
+                prevRemote.append(c);
+                exportedIds.append(c.id());
+                m_contactIds[accountId].insert(c.detail<QContactGuid>().guid(), c.id().toString());
+            } else {
+                // if any came from the one-way sync adaptor, they will need to mangled to the new form.
+                QStringList accountIds = c.detail<QContactOriginMetadata>().groupId().split(',');
+                if (c.detail<QContactSyncTarget>().syncTarget() == SOCIALD_GOOGLE_CONTACTS_SYNCTARGET
+                        && accountIds.contains(QString::number(accountId))
+                        && !c.detail<QContactGuid>().guid().isEmpty()) {
+                    // this actually belongs to this account, but was synced with the one-way adaptor.
+                    // we mangle the Guid to the "new" form (accountId:serverGuid) but we do not
+                    // change the QContactOriginMetadata.  This is so that when the contact is retrieved
+                    // from the server, it will be flagged as being modified (since the "new" version
+                    // will not have a QContactOriginMetadata detail) and thus it will be saved with the
+                    // new guid detail (and without the QCOM detail).
+                    QString newGuid(QStringLiteral("%1:%2").arg(accountId).arg(c.detail<QContactGuid>().guid()));
+                    prevRemote.append(c);
+                    exportedIds.append(c.id());
+                    m_contactIds[accountId].insert(newGuid, c.id().toString());
+                }
+            }
+        }
+
+        // set our state data.
+        d->m_stateData[QString::number(accountId)].m_prevRemote = prevRemote;
+        d->m_stateData[QString::number(accountId)].m_exportedIds = exportedIds;
+    }
+
     // done.
     return true;
 }
