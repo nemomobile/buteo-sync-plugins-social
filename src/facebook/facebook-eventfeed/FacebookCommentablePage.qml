@@ -59,7 +59,11 @@ FacebookNotificationPage {
 
             if (facebookLikes.node.status == SocialNetwork.Idle) {
                 if (facebookLikes.reloadingStatus === "commenting") {
-                    facebookComments.loadNext()
+                    if (facebookComments.count > 0) {
+                        facebookComments.loadNext()
+                    } else {
+                        facebookComments.repopulate()
+                    }
                 } else if (facebookLikes.reloadingStatus === "liking") {
                     facebookLikes.repopulate()
                 }
