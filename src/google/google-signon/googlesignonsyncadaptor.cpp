@@ -263,11 +263,16 @@ void GoogleSignonSyncAdaptor::signonError(const SignOn::Error &error)
         session->deleteLater();
     }
 
+    bool raiseFlag = error.type() == SignOn::AuthSession::UserInteractionError;
     TRACE(SOCIALD_INFORMATION,
-            QString(QLatin1String("got signon error when performing signon refresh for Google account %1: %2: %3"))
-            .arg(accountId).arg(error.type()).arg(error.message()));
+            QString(QLatin1String("got signon error when performing signon refresh for Google account %1: %2: %3.  Raising flag? %4"))
+            .arg(accountId).arg(error.type()).arg(error.message()).arg(raiseFlag));
 
-    raiseCredentialsNeedUpdateFlag(accountId);
+    if (raiseFlag) {
+        // UserInteractionError is returned if user interaction is required.
+        raiseCredentialsNeedUpdateFlag(accountId);
+    }
+
     decrementSemaphore(accountId);
 }
 
