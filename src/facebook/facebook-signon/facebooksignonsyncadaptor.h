@@ -51,7 +51,7 @@ private:
     Accounts::Account *loadAccount(int accountId);
     void raiseCredentialsNeedUpdateFlag(int accountId);
     void lowerCredentialsNeedUpdateFlag(int accountId);
-    void forceTokenExpiry(int accountId, const QString &accessToken);
+    void forceTokenExpiry(int seconds, int accountId, const QString &accessToken);
 
     Accounts::Manager m_accountManager;
     QMap<int, Accounts::Account *> m_accounts;
