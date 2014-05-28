@@ -820,6 +820,12 @@ void GoogleTwoWayContactSyncAdaptor::purgeAccount(int pid)
 
 void GoogleTwoWayContactSyncAdaptor::finalize(int accountId)
 {
+    if (m_accessTokens[accountId].isEmpty()) {
+        // account failure occurred before sync process was started.
+        // in this case we have nothing left to do.
+        return;
+    }
+
     // first, ensure we update any avatars required.
     if (m_downloadedContactAvatars[accountId].size()) {
         // find the contacts we need to update from our mutated prev remote list.
