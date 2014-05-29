@@ -10,7 +10,7 @@
 
 #include "socialdbuteoplugin.h"
 
-class GoogleContactsPlugin : public SocialdButeoPlugin
+class SOCIALDBUTEOPLUGIN_EXPORT GoogleContactsPlugin : public SocialdButeoPlugin
 {
     Q_OBJECT
 

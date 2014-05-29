@@ -1,15 +1,13 @@
-TEMPLATE = lib
-
 TARGET = google-contacts-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=GoogleContactsPlugin"
+DEFINES += CLASSNAME_H=\\\"googlecontactsplugin.h\\\"
 DEFINES += SOCIALD_USE_QTPIM
 include($$PWD/../../common.pri)
 include($$PWD/../google-common.pri)
 include($$PWD/google-contacts.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 google_contacts_sync_profile.path = /etc/buteo/profiles/sync
 google_contacts_sync_profile.files = $$PWD/google.Contacts.xml
 google_contacts_client_plugin_xml.path = /etc/buteo/profiles/client

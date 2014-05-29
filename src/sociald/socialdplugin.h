@@ -13,6 +13,12 @@
 
 #include "buteosyncfw_p.h"
 
+#if defined(OUT_OF_PROCESS_PLUGIN)
+#  define SOCIALDPLUGIN_EXPORT Q_DECL_EXPORT
+#else
+#  define SOCIALDPLUGIN_EXPORT Q_DECL_IMPORT
+#endif
+
 /*
    This plugin implementation provides a simple way
    to trigger syncs of all datatypes for all accounts,
@@ -35,7 +41,7 @@
    Note that it does not extend SocialdButeoPlugin
    (from common.pri) as it uses a different mechanism.
 */
-class SocialdPlugin : public Buteo::ClientPlugin
+class SOCIALDPLUGIN_EXPORT SocialdPlugin : public Buteo::ClientPlugin
 {
     Q_OBJECT
 

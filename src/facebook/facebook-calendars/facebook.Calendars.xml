@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <profile name="facebook.Calendars" type="sync" >
     <key name="category" value="facebook.Calendars" />
-    <key name="enabled" value="true" />
+    <key name="enabled" value="false" />
     <key name="use_accounts" value="false" />
     <key name="destinationtype" value="online" />
     <key name="hidden" value="true" />

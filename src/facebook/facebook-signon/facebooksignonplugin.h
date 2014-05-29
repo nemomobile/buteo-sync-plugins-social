@@ -9,9 +9,8 @@
 #define FACEBOOKSIGNONPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
-class FacebookSignonPlugin : public SocialdButeoPlugin
+class SOCIALDBUTEOPLUGIN_EXPORT FacebookSignonPlugin : public SocialdButeoPlugin
 {
     Q_OBJECT
 

@@ -9,9 +9,8 @@
 #define GOOGLESIGNONPLUGIN_H
 
 #include "socialdbuteoplugin.h"
-#include <ClientPlugin.h>
 
-class GoogleSignonPlugin : public SocialdButeoPlugin
+class SOCIALDBUTEOPLUGIN_EXPORT GoogleSignonPlugin : public SocialdButeoPlugin
 {
     Q_OBJECT
 

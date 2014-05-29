@@ -10,7 +10,7 @@
 
 #include "socialdbuteoplugin.h"
 
-class GoogleCalendarsPlugin : public SocialdButeoPlugin
+class SOCIALDBUTEOPLUGIN_EXPORT GoogleCalendarsPlugin : public SocialdButeoPlugin
 {
     Q_OBJECT
 

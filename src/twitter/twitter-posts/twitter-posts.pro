@@ -1,14 +1,12 @@
-TEMPLATE = lib
-
 TARGET = twitter-posts-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=TwitterPostsPlugin"
+DEFINES += CLASSNAME_H=\\\"twitterpostsplugin.h\\\"
 include($$PWD/../../common.pri)
 include($$PWD/../twitter-common.pri)
 include($$PWD/twitter-posts.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 twitter_posts_sync_profile.path = /etc/buteo/profiles/sync
 twitter_posts_sync_profile.files = $$PWD/twitter.Posts.xml
 twitter_posts_client_plugin_xml.path = /etc/buteo/profiles/client

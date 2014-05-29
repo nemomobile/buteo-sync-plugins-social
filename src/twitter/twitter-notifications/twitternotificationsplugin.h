@@ -10,7 +10,7 @@
 
 #include "socialdbuteoplugin.h"
 
-class TwitterNotificationsPlugin : public SocialdButeoPlugin
+class SOCIALDBUTEOPLUGIN_EXPORT TwitterNotificationsPlugin : public SocialdButeoPlugin
 {
     Q_OBJECT
 

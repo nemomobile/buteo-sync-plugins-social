@@ -1,15 +1,13 @@
-TEMPLATE = lib
-
 TARGET = facebook-posts-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=FacebookPostsPlugin"
+DEFINES += CLASSNAME_H=\\\"facebookpostsplugin.h\\\"
 DEFINES += SOCIALD_USE_QTPIM
 include($$PWD/../../common.pri)
 include($$PWD/../facebook-common.pri)
 include($$PWD/facebook-posts.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 facebook_posts_sync_profile.path = /etc/buteo/profiles/sync
 facebook_posts_sync_profile.files = $$PWD/facebook.Posts.xml
 facebook_posts_client_plugin_xml.path = /etc/buteo/profiles/client
