@@ -4,6 +4,7 @@ import org.nemomobile.lipstick 0.1
 import org.nemomobile.socialcache 1.0
 import org.nemomobile.configuration 1.0
 import org.nemomobile.connectivity 1.0
+import MeeGo.Connman 0.2
 
 Page {
     id: page
@@ -17,6 +18,7 @@ Page {
     property string headerTitle
     property SilicaListView listView: _listView
     property alias updating: syncHelper.loading
+    property bool needsConnectionServices
     property bool syncNotifications
     property bool connectedToNetwork // ALL other connectedToNetwork properties in other pages
                                      // are bound to this property, directly or indirectly.
@@ -32,10 +34,30 @@ Page {
             page.sync()
         }
     }
+    NetworkManagerFactory {
+        id: connMgr
+    }
+    Connections {
+        target: connMgr.instance
+        onDefaultRouteChanged: {
+            if (page.needsConnectionServices) {
+                if (connectionHelper.haveNetworkConnectivity()) {
+                    connectionHelper.attemptToConnectNetwork()
+                    page.needsConnectionServices = false
+                }
+            }
+        }
+    }
     ConnectionHelper {
         id: connectionHelper
-        onNetworkConnectivityEstablished: page.connectedToNetwork = true
-        onNetworkConnectivityUnavailable: page.connectedToNetwork = false
+        onNetworkConnectivityEstablished: {
+            page.needsConnectionServices = false
+            page.connectedToNetwork = true
+        }
+        onNetworkConnectivityUnavailable: {
+            page.needsConnectionServices = false
+            page.connectedToNetwork = false
+        }
     }
 
     Component.onCompleted: {
@@ -48,6 +70,9 @@ Page {
         // if we have an available connection, attempt to connect to it.
         if (connectionHelper.haveNetworkConnectivity()) {
             connectionHelper.attemptToConnectNetwork()
+        } else {
+            // tell lipstick we need connectivity services
+            page.needsConnectionServices = true
         }
     }
 
@@ -132,7 +157,12 @@ Page {
             // also attempt to connect to the network,
             // and queue a sync for when (if) it succeeds.
             page._needToSync = true
-            connectionHelper.attemptToConnectNetwork()
+            if (connectionHelper.haveNetworkConnectivity()) {
+                connectionHelper.attemptToConnectNetwork()
+            } else {
+                // tell lipstick we need connectivity services
+                page.needsConnectionServices = true
+            }
         }
     }
 
