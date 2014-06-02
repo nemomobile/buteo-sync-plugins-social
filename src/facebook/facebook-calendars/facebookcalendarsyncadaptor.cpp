@@ -108,18 +108,18 @@ void FacebookCalendarSyncAdaptor::requestEvents(int accountId, const QString &ac
     Q_UNUSED(until);
     Q_UNUSED(pagingToken);
 
-
+    int sinceSpan = m_accountSyncProfile
+            ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("30")).toInt()
+            : 30;
+    uint startTime = QDateTime::currentDateTimeUtc().addDays(sinceSpan * -1).toTime_t();
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     QString fql = QString(QLatin1String("SELECT eid, name, description, is_date_only, location, "\
                                         "start_time, end_time, timezone, host FROM event WHERE "\
                                         "eid IN (SELECT eid FROM event_member WHERE uid = me() "\
-                                        "AND rsvp_status != 'declined' AND start_time > 0)"));
+                                        "AND rsvp_status != 'declined' AND start_time > %1)")).arg(startTime);
     // We need support for some paging system
     // maybe by adding v ?
-    // QDateTime limitTime = QDateTime::currentDateTime().addMonths(-1);
-    // QString timestamp = QString::number(limitTime.toMSecsSinceEpoch() / 1000);
-    // AND start_time > %1)")).arg(timestamp);
     queryItems.append(qMakePair<QString, QString>(QString(QLatin1String("q")), fql));;
 
 
