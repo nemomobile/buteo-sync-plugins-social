@@ -595,8 +595,11 @@ void GoogleCalendarSyncAdaptor::requestEvents(int accountId, const QString &acce
         queryItems.append(QPair<QString, QString>(QString::fromLatin1("showDeleted"),
                                                   QString::fromLatin1("true")));
     }
+    int sinceSpan = m_accountSyncProfile
+            ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("30")).toInt()
+            : 30;
     queryItems.append(QPair<QString, QString>(QString::fromLatin1("timeMin"),
-                                              QDateTime::currentDateTimeUtc().addMonths(-3).toString(Qt::ISODate)));
+                                              QDateTime::currentDateTimeUtc().addDays(sinceSpan * -1).toString(Qt::ISODate)));
     queryItems.append(QPair<QString, QString>(QString::fromLatin1("timeMax"),
                                               QDateTime::currentDateTimeUtc().addMonths(12).toString(Qt::ISODate)));
     if (!pageToken.isEmpty()) { // continuation request
