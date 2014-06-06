@@ -3,5 +3,4 @@ SUBDIRS = \
     sociald \
     google \
     facebook \
-    twitter \
-    eventfeed
+    twitter

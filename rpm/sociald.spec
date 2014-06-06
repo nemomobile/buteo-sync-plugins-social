@@ -37,24 +37,6 @@ A Buteo plugin which provides data synchronization with various social services.
 %config %{_sysconfdir}/buteo/profiles/sync/sociald.All.xml
 
 
-%package eventfeed-shared
-Summary:    Provides shared components for the lipstick events feed
-License:    TBD
-Group:      System/Libraries
-Requires: %{name} = %{version}-%{release}
-Requires: sailfish-components-textlinking
-Requires: nemo-qml-plugin-notifications-qt5
-Requires: nemo-qml-plugin-social-qt5 >= 0.0.12
-Requires: nemo-qml-plugin-connectivity
-
-%description eventfeed-shared
-Provides shared components for the lipstick events feed
-
-%files eventfeed-shared
-%{_datadir}/lipstick/eventfeed/shared/*.qml
-%{_datadir}/translations/sociald_eventfeed_eng_en.qm
-
-
 %package facebook-calendars
 Summary:    Provides calendar synchronisation with Facebook
 License:    TBD
@@ -154,20 +136,6 @@ Provides notification synchronisation with Facebook
 %config %{_sysconfdir}/buteo/profiles/client/facebook-notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Notifications.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
-%{_datadir}/translations/lipstick-jolla-home-facebook_eng_en.qm
-%{_datadir}/lipstick/eventfeed/FacebookNotificationPage.qml
-%{_datadir}/lipstick/eventfeed/FacebookGenericNotificationPage.qml
-%{_datadir}/lipstick/eventfeed/FacebookCommentablePage.qml
-%{_datadir}/lipstick/eventfeed/FacebookAccountMenu.qml
-%{_datadir}/lipstick/eventfeed/FacebookListView.qml
-%{_datadir}/lipstick/eventfeed/FacebookPostPage.qml
-%{_datadir}/lipstick/eventfeed/FacebookEventPage.qml
-%{_datadir}/lipstick/eventfeed/FacebookPicturePage.qml
-%{_datadir}/lipstick/eventfeed/FacebookEvent.qml
-%{_datadir}/lipstick/eventfeed/facebook-update.qml
-%{_datadir}/lipstick/eventfeed/facebook-delegate.qml
-%{_datadir}/lipstick/eventfeed/FacebookNotificationItem.qml
-%{_datadir}/lipstick/eventfeed/facebook-feed.qml
 
 %pre facebook-notifications
 rm -f /home/nemo/.cache/msyncd/sync/client/facebook-notifications.xml
@@ -181,7 +149,6 @@ systemctl-user restart msyncd.service || :
 Summary:    Provides post synchronisation with Facebook
 License:    TBD
 Group:      System/Libraries
-Requires:   %{name}-eventfeed-shared = %{version}-%{release}
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
 BuildRequires:  qt5-qttools-linguist
@@ -192,7 +159,6 @@ Provides post synchronisation with Facebook
 
 %files facebook-posts
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.statuspost.conf
-%{_datadir}/translations/lipstick-jolla-home-facebook_eng_en.qm
 ####out-of-process-plugin form:
 ###/usr/lib/buteo-plugins-qt5/oopp/facebook-posts-client
 ####in-process-plugin form:
@@ -352,7 +318,6 @@ systemctl-user restart msyncd.service || :
 Summary:    Provides post synchronisation with Twitter
 License:    TBD
 Group:      System/Libraries
-Requires:   %{name}-eventfeed-shared = %{version}-%{release}
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
 BuildRequires:  qt5-qttools-linguist
@@ -369,12 +334,6 @@ Provides post synchronisation with Twitter
 %config %{_sysconfdir}/buteo/profiles/client/twitter-posts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Posts.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.tweet.conf
-%{_datadir}/lipstick/eventfeed/TwitterPostPage.qml
-%{_datadir}/lipstick/eventfeed/twitter-update.qml
-%{_datadir}/lipstick/eventfeed/twitter-delegate.qml
-%{_datadir}/lipstick/eventfeed/TwitterFeedItem.qml
-%{_datadir}/lipstick/eventfeed/twitter-feed.qml
-%{_datadir}/translations/lipstick-jolla-home-twitter_eng_en.qm
 
 %pre twitter-posts
 rm -f /home/nemo/.cache/msyncd/sync/client/twitter-posts.xml
@@ -394,9 +353,6 @@ Translation source for sociald
 
 %files ts-devel
 %defattr(-,root,root,-)
-%{_datadir}/translations/source/sociald.ts
-%{_datadir}/translations/source/lipstick-jolla-home-facebook.ts
-%{_datadir}/translations/source/lipstick-jolla-home-twitter.ts
 %{_datadir}/translations/source/lipstick-jolla-home-twitter-notif.ts
 
 %package tests
