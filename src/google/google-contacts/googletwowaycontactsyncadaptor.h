@@ -62,7 +62,6 @@ private:
     void purgeAccount(int pid);
 
 private Q_SLOTS:
-    void accountInitialized();
     void groupsFinishedHandler();
     void contactsFinishedHandler();
     void imageDownloaded(const QString &url, const QString &path, const QVariantMap &metadata);

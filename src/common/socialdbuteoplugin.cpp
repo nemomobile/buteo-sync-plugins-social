@@ -22,7 +22,77 @@
 #include <Accounts/Account>
 #include <Accounts/Service>
 
-#include <accountsyncmanager.h>
+namespace {
+    static const QString SyncProfileTemplatesKey = QStringLiteral("sync_profile_templates");
+    static QString SyncProfileIdKey(const QString &templateProfileName)
+    {
+        return QStringLiteral("%1/%2").arg(templateProfileName).arg(Buteo::KEY_PROFILE_ID);
+    }
+    QString createProfile(Buteo::ProfileManager *profileManager,
+                          const QString &templateProfileName,
+                          Accounts::Account *account,
+                          const Accounts::Service &srv,
+                          bool enableProfile,
+                          const QVariantMap &properties)
+    {
+        if (!account || !srv.isValid()) {
+            qWarning() << "Invalid account or service";
+            return QString();
+        }
+        if (templateProfileName.isEmpty()) {
+            qWarning() << "Invalid templateProfileName";
+            return QString();
+        }
+
+        Accounts::Service prevService = account->selectedService();
+        account->selectService(srv);
+
+        Buteo::SyncProfile *templateProfile = profileManager->syncProfile(templateProfileName);
+        if (!templateProfile) {
+            account->selectService(prevService);
+            qWarning() << "Unable to load template profile:" << templateProfileName;
+            return QString();
+        }
+
+        Buteo::SyncProfile *profile = templateProfile->clone();
+        if (!profile) {
+            delete templateProfile;
+            account->selectService(prevService);
+            qWarning() << "unable to clone template profile:" << templateProfileName;
+            return QString();
+        }
+
+        QString accountIdStr = QString::number(account->id());
+        profile->setName(templateProfileName + "-" + accountIdStr);
+        profile->setKey(Buteo::KEY_DISPLAY_NAME, templateProfileName + "-" + account->displayName().toHtmlEscaped());
+        profile->setKey(Buteo::KEY_ACCOUNT_ID, accountIdStr);
+        profile->setBoolKey(Buteo::KEY_USE_ACCOUNTS, true);
+        profile->setEnabled(enableProfile);
+
+        // enable the profile schedule
+        Buteo::SyncSchedule schedule = profile->syncSchedule();
+        schedule.setScheduleEnabled(true);
+        profile->setSyncSchedule(schedule);
+
+        // set custom properties; note this may override any properties already set
+        Q_FOREACH (const QString &key, properties.keys()) {
+            profile->setKey(key, properties[key].toString());
+        }
+
+        QString profileId = profileManager->updateProfile(*profile);
+        if (profileId.isEmpty()) {
+            qWarning() << "Unable to save sync profile" << templateProfile->name();
+        } else {
+            account->setValue(SyncProfileIdKey(templateProfile->name()), profile->name());
+        }
+
+        account->selectService(prevService);
+        delete profile;
+        delete templateProfile;
+
+        return profileId;
+    }
+}
 
 SocialdButeoPlugin::SocialdButeoPlugin(const QString& pluginName,
                                        const Buteo::SyncProfile& profile,
@@ -175,7 +245,6 @@ void SocialdButeoPlugin::updateResults(const Buteo::SyncResults &results)
 // The caller takes ownership of the list.
 QList<Buteo::SyncProfile*> SocialdButeoPlugin::ensurePerAccountSyncProfilesExist()
 {
-    AccountSyncManager sm;
     Accounts::Manager am;
     Accounts::AccountIdList accountIds = am.accountList();
     QList<Buteo::SyncProfile*> syncProfiles = m_profileManager.allSyncProfiles();
@@ -217,7 +286,7 @@ QList<Buteo::SyncProfile*> SocialdButeoPlugin::ensurePerAccountSyncProfilesExist
                     .arg(profile().name()).arg(currAccount->id()));
 
             // create the per-account profile... we shouldn't need to do this...
-            QString profileName = sm.createProfile(profile().name(), currAccount, dataTypeSyncService, true);
+            QString profileName = createProfile(&m_profileManager, profile().name(), currAccount, dataTypeSyncService, true, QVariantMap());
             Buteo::SyncProfile *newProfile = m_profileManager.syncProfile(profileName);
             if (!newProfile) {
                 TRACE(SOCIALD_ERROR,

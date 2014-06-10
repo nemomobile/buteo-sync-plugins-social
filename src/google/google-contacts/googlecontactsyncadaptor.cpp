@@ -36,9 +36,8 @@
 #include <socialcache/abstractimagedownloader.h>
 #include <socialcache/abstractimagedownloader_p.h>
 
-// sailfish-components-accounts-qt5
-#include <accountmanager.h>
-#include <account.h>
+#include <Accounts/Manager>
+#include <Accounts/Account>
 
 #define SOCIALD_GOOGLE_CONTACTS_SYNCTARGET QLatin1String("google")
 #define SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS 50
@@ -555,12 +554,15 @@ void GoogleContactSyncAdaptor::finalCleanup()
     // first, get a list of all existing, enabled google account ids
     QList<int> googleAccountIds;
     QList<int> purgeAccountIds;
-    QList<int> currentAccountIds = accountManager->accountIdentifiers();
+    QList<int> currentAccountIds;
+    QList<uint> uaids = accountManager->accountList();
+    foreach (uint uaid, uaids) {
+        currentAccountIds.append(static_cast<int>(uaid));
+    }
     foreach (int currId, currentAccountIds) {
-        Account *act = accountManager->account(currId);
+        Accounts::Account *act = accountManager->account(currId);
         if (act) {
-            if (act->providerName() == QString(QLatin1String("google")) && act->enabled()
-                    && act->isEnabledWithService(syncServiceName())) {
+            if (act->providerName() == QString(QLatin1String("google")) && checkAccount(act)) {
                 googleAccountIds.append(currId);
             }
             act->deleteLater();

@@ -17,8 +17,9 @@
 
 #include <extendedcalendar.h>
 #include <extendedstorage.h>
-#include <accountmanager.h>
-#include <account.h>
+
+#include <Accounts/Manager>
+#include <Accounts/Account>
 
 static const char *FACEBOOK = "Facebook";
 static const char *FACEBOOK_COLOR = "#3B5998";

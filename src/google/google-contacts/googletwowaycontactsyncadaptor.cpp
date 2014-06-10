@@ -40,9 +40,8 @@
 #include <QtContacts/QContactPhoneNumber>
 #include <QtContacts/QContactEmailAddress>
 
-// sailfish-components-accounts-qt5
-#include <accountmanager.h>
-#include <account.h>
+#include <Accounts/Manager>
+#include <Accounts/Account>
 
 #define SOCIALD_GOOGLE_CONTACTS_SYNCTARGET QLatin1String("google")
 #define SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS 50
@@ -90,7 +89,7 @@ void GoogleTwoWayContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &p
 
 void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
-    Account *account = accountManager->account(accountId);
+    Accounts::Account *account = accountManager->account(accountId);
     if (!account) {
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("unable to load Google account %1"))
@@ -99,32 +98,17 @@ void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &acc
         return;
     }
 
-    // we need to load account settings (asynchronously).
-    incrementSemaphore(accountId);
-
-    account->setProperty("accessToken", accessToken);
-    account->setProperty("accountId", accountId);
-    connect(account, SIGNAL(statusChanged()), this, SLOT(accountInitialized()));
-}
-
-void GoogleTwoWayContactSyncAdaptor::accountInitialized()
-{
-    Account *account = qobject_cast<Account*>(sender());
-    QString emailAddress = account->configurationValues(QString()).value("default_credentials_username").toString();
+    account->selectService(Accounts::Service());
+    QString emailAddress = account->valueAsString(QStringLiteral("default_credentials_username"));
     if (emailAddress.isEmpty()) {
-        emailAddress = account->configurationValues(QString()).value("name").toString();
+        emailAddress = account->valueAsString(QStringLiteral("name"));
     }
-    int accountId = account->property("accountId").toInt();
-    QString accessToken = account->property("accessToken").toString();
-    disconnect(account);
     account->deleteLater();
-
     if (emailAddress.isEmpty()) {
         TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("unable to determine email address, aborting sync of Google contacts with account %1"))
+              QString(QLatin1String("unable to determine email address for Google account %1"))
               .arg(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
-        decrementSemaphore(accountId);
         return;
     }
 
@@ -144,10 +128,10 @@ void GoogleTwoWayContactSyncAdaptor::accountInitialized()
               .arg(accountId));
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
-        decrementSemaphore(accountId);
         return;
     }
 
+    incrementSemaphore(accountId);
     if (m_myContactsGroupAtomIds[accountId].isEmpty()) {
         // we need to determine the atom id of the My Contacts group
         // because we upload newly added contacts to that group.
@@ -156,7 +140,6 @@ void GoogleTwoWayContactSyncAdaptor::accountInitialized()
         // we can just sync changes immediately
         determineRemoteChanges(remoteSince, QString::number(accountId));
     }
-
     decrementSemaphore(accountId);
 }
 
@@ -896,9 +879,13 @@ void GoogleTwoWayContactSyncAdaptor::finalCleanup()
     // first, get a list of all existing google account ids
     QList<int> googleAccountIds;
     QList<int> purgeAccountIds;
-    QList<int> currentAccountIds = accountManager->accountIdentifiers();
+    QList<int> currentAccountIds;
+    QList<uint> uaids = accountManager->accountList();
+    foreach (uint uaid, uaids) {
+        currentAccountIds.append(static_cast<int>(uaid));
+    }
     foreach (int currId, currentAccountIds) {
-        Account *act = accountManager->account(currId);
+        Accounts::Account *act = accountManager->account(currId);
         if (act) {
             if (act->providerName() == QString(QLatin1String("google"))) {
                 // this account still exists, no need to purge its content.

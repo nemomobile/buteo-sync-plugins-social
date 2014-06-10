@@ -22,9 +22,12 @@ class QSqlDatabase;
 class QNetworkAccessManager;
 class QTimer;
 class QNetworkReply;
-class Account;
-class AccountManager;
 class SocialNetworkSyncDatabase;
+
+namespace Accounts {
+    class Account;
+    class Manager;
+}
 
 class SocialNetworkSyncAdaptor : public QObject
 {
@@ -74,7 +77,7 @@ Q_SIGNALS:
     void enabledChanged();
 
 protected:
-    virtual bool checkAccount(Account *account);
+    virtual bool checkAccount(Accounts::Account *account);
     virtual void finalCleanup();
     virtual void finalize(int accountId);
     QDateTime lastSyncTimestamp(const QString &serviceName, const QString &dataType,
@@ -99,7 +102,7 @@ protected:
     static QJsonArray parseJsonArrayReplyData(const QByteArray &replyData, bool *ok);
 
     const SocialNetworkSyncAdaptor::DataType dataType;
-    AccountManager * const accountManager;
+    Accounts::Manager * const accountManager;
     QNetworkAccessManager * const networkAccessManager;
     Buteo::SyncProfile *m_accountSyncProfile;
 
