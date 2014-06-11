@@ -1,14 +1,12 @@
-TEMPLATE = lib
-
 TARGET = google-signon-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=GoogleSignonPlugin"
+DEFINES += CLASSNAME_H=\\\"googlesignonplugin.h\\\"
 include($$PWD/../../common.pri)
 include($$PWD/../google-common.pri)
 include($$PWD/google-signon.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 google_signon_sync_profile.path = /etc/buteo/profiles/sync
 google_signon_sync_profile.files = $$PWD/google.Signon.xml
 google_signon_client_plugin_xml.path = /etc/buteo/profiles/client

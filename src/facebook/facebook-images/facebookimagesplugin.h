@@ -10,7 +10,7 @@
 
 #include "socialdbuteoplugin.h"
 
-class FacebookImagesPlugin : public SocialdButeoPlugin
+class SOCIALDBUTEOPLUGIN_EXPORT FacebookImagesPlugin : public SocialdButeoPlugin
 {
     Q_OBJECT
 

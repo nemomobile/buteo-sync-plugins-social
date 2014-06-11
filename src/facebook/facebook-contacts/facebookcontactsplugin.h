@@ -10,7 +10,7 @@
 
 #include "socialdbuteoplugin.h"
 
-class FacebookContactsPlugin : public SocialdButeoPlugin
+class SOCIALDBUTEOPLUGIN_EXPORT FacebookContactsPlugin : public SocialdButeoPlugin
 {
     Q_OBJECT
 

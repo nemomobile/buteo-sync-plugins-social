@@ -12,10 +12,10 @@ BuildRequires:  pkgconfig(Qt5DBus)
 BuildRequires:  pkgconfig(Qt5Sql)
 BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(mlite5)
-BuildRequires:  pkgconfig(buteosyncfw5) >= 0.6.33
+BuildRequires:  pkgconfig(buteosyncfw5) >= 0.6.36
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(accounts-qt5)
-BuildRequires:  pkgconfig(socialcache) >= 0.0.23
+BuildRequires:  pkgconfig(socialcache) >= 0.0.24
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  qt5-qttools-linguist
 Requires: buteo-syncfw-qt5-msyncd
@@ -29,7 +29,10 @@ A Buteo plugin which provides data synchronization with various social services.
 
 %files
 %defattr(-,root,root,-)
-/usr/lib/buteo-plugins-qt5/libsociald-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/sociald-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libsociald-client.so
 %config %{_sysconfdir}/buteo/profiles/client/sociald.xml
 %config %{_sysconfdir}/buteo/profiles/sync/sociald.All.xml
 
@@ -64,7 +67,10 @@ Requires: %{name} = %{version}-%{release}
 Provides calendar synchronisation with Facebook
 
 %files facebook-calendars
-/usr/lib/buteo-plugins-qt5/libfacebook-calendars-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/facebook-calendars-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libfacebook-calendars-client.so
 %config %{_sysconfdir}/buteo/profiles/client/facebook-calendars.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Calendars.xml
 
@@ -88,7 +94,10 @@ Requires: %{name} = %{version}-%{release}
 Provides contact synchronisation with Facebook
 
 %files facebook-contacts
-/usr/lib/buteo-plugins-qt5/libfacebook-contacts-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/facebook-contacts-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libfacebook-contacts-client.so
 %config %{_sysconfdir}/buteo/profiles/client/facebook-contacts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Contacts.xml
 
@@ -110,7 +119,10 @@ Requires: %{name} = %{version}-%{release}
 Provides image synchronisation with Facebook
 
 %files facebook-images
-/usr/lib/buteo-plugins-qt5/libfacebook-images-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/facebook-images-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libfacebook-images-client.so
 %config %{_sysconfdir}/buteo/profiles/client/facebook-images.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Images.xml
 
@@ -135,7 +147,10 @@ Requires: %{name} = %{version}-%{release}
 Provides notification synchronisation with Facebook
 
 %files facebook-notifications
-/usr/lib/buteo-plugins-qt5/libfacebook-notifications-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/facebook-notifications-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libfacebook-notifications-client.so
 %config %{_sysconfdir}/buteo/profiles/client/facebook-notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Notifications.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.notification.conf
@@ -178,6 +193,9 @@ Provides post synchronisation with Facebook
 %files facebook-posts
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.statuspost.conf
 %{_datadir}/translations/lipstick-jolla-home-facebook_eng_en.qm
+####out-of-process-plugin form:
+###/usr/lib/buteo-plugins-qt5/oopp/facebook-posts-client
+####in-process-plugin form:
 ###/usr/lib/buteo-plugins-qt5/libfacebook-posts-client.so
 ###%config %{_sysconfdir}/buteo/profiles/client/facebook-posts.xml
 ###%config %{_sysconfdir}/buteo/profiles/sync/facebook.Posts.xml
@@ -201,7 +219,10 @@ Requires: %{name} = %{version}-%{release}
 Provides signon credentials refreshing with Facebook
 
 %files facebook-signon
-/usr/lib/buteo-plugins-qt5/libfacebook-signon-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/facebook-signon-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libfacebook-signon-client.so
 %config %{_sysconfdir}/buteo/profiles/client/facebook-signon.xml
 %config %{_sysconfdir}/buteo/profiles/sync/facebook.Signon.xml
 
@@ -226,7 +247,10 @@ Requires: %{name} = %{version}-%{release}
 Provides calendar synchronisation with Google
 
 %files google-calendars
-/usr/lib/buteo-plugins-qt5/libgoogle-calendars-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/google-calendars-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libgoogle-calendars-client.so
 %config %{_sysconfdir}/buteo/profiles/client/google-calendars.xml
 %config %{_sysconfdir}/buteo/profiles/sync/google.Calendars.xml
 
@@ -250,7 +274,10 @@ Requires: %{name} = %{version}-%{release}
 Provides contact synchronisation with Google
 
 %files google-contacts
-/usr/lib/buteo-plugins-qt5/libgoogle-contacts-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/google-contacts-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libgoogle-contacts-client.so
 %config %{_sysconfdir}/buteo/profiles/client/google-contacts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/google.Contacts.xml
 
@@ -273,7 +300,10 @@ Requires: %{name} = %{version}-%{release}
 Provides signon credentials refreshing with Google
 
 %files google-signon
-/usr/lib/buteo-plugins-qt5/libgoogle-signon-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/google-signon-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libgoogle-signon-client.so
 %config %{_sysconfdir}/buteo/profiles/client/google-signon.xml
 %config %{_sysconfdir}/buteo/profiles/sync/google.Signon.xml
 
@@ -301,7 +331,10 @@ Requires: %{name} = %{version}-%{release}
 Provides notification synchronisation with Twitter
 
 %files twitter-notifications
-/usr/lib/buteo-plugins-qt5/libtwitter-notifications-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/twitter-notifications-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libtwitter-notifications-client.so
 %config %{_sysconfdir}/buteo/profiles/client/twitter-notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Notifications.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.mention.conf
@@ -329,7 +362,10 @@ Requires: %{name} = %{version}-%{release}
 Provides post synchronisation with Twitter
 
 %files twitter-posts
-/usr/lib/buteo-plugins-qt5/libtwitter-posts-client.so
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/twitter-posts-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libtwitter-posts-client.so
 %config %{_sysconfdir}/buteo/profiles/client/twitter-posts.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Posts.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.tweet.conf
@@ -383,7 +419,7 @@ Automatable tests for sociald
 %setup -q -n %{name}-%{version}
 
 %build
-%qmake5
+%qmake5 "DEFINES+=OUT_OF_PROCESS_PLUGIN"
 make %{?jobs:-j%jobs}
 
 %pre

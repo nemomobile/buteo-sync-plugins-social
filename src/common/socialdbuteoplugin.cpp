@@ -186,7 +186,10 @@ void SocialdButeoPlugin::abortSync(Sync::SyncStatus)
 bool SocialdButeoPlugin::cleanUp()
 {
     m_profileAccountId = profile().key(Buteo::KEY_ACCOUNT_ID).toInt();
-    m_socialNetworkSyncAdaptor = createSocialNetworkSyncAdaptor();
+    if (!m_socialNetworkSyncAdaptor) {
+        // might have already been initialized by the OOP framework via init().
+        m_socialNetworkSyncAdaptor = createSocialNetworkSyncAdaptor();
+    }
 
     // TODO: ensure that this is ONLY called when the account is deleted,
     // not when the plugin is unloaded.

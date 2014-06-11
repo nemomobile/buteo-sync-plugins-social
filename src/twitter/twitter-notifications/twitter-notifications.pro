@@ -1,14 +1,12 @@
-TEMPLATE = lib
-
 TARGET = twitter-notifications-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=TwitterNotificationsPlugin"
+DEFINES += CLASSNAME_H=\\\"twitternotificationsplugin.h\\\"
 include($$PWD/../../common.pri)
 include($$PWD/../twitter-common.pri)
 include($$PWD/twitter-notifications.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 twitter_notifications_sync_profile.path = /etc/buteo/profiles/sync
 twitter_notifications_sync_profile.files = $$PWD/twitter.Notifications.xml
 twitter_notifications_client_plugin_xml.path = /etc/buteo/profiles/client

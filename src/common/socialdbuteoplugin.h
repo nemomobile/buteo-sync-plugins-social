@@ -8,7 +8,14 @@
 #ifndef SOCIALDBUTEOPLUGIN_H
 #define SOCIALDBUTEOPLUGIN_H
 
+#include <QtCore/qglobal.h>
 #include "buteosyncfw_p.h"
+
+#if defined(OUT_OF_PROCESS_PLUGIN)
+#  define SOCIALDBUTEOPLUGIN_EXPORT Q_DECL_EXPORT
+#else
+#  define SOCIALDBUTEOPLUGIN_EXPORT Q_DECL_IMPORT
+#endif
 
 /*
    Datatype-specific implementations of this class
@@ -16,7 +23,7 @@
 */
 
 class SocialNetworkSyncAdaptor;
-class SocialdButeoPlugin : public Buteo::ClientPlugin
+class SOCIALDBUTEOPLUGIN_EXPORT SocialdButeoPlugin : public Buteo::ClientPlugin
 {
     Q_OBJECT
 

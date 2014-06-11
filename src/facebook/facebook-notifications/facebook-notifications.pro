@@ -1,14 +1,12 @@
-TEMPLATE = lib
-
 TARGET = facebook-notifications-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=FacebookNotificationsPlugin"
+DEFINES += CLASSNAME_H=\\\"facebooknotificationsplugin.h\\\"
 include($$PWD/../../common.pri)
 include($$PWD/../facebook-common.pri)
 include($$PWD/facebook-notifications.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 facebook_notifications_sync_profile.path = /etc/buteo/profiles/sync
 facebook_notifications_sync_profile.files = $$PWD/facebook.Notifications.xml
 facebook_notifications_client_plugin_xml.path = /etc/buteo/profiles/client

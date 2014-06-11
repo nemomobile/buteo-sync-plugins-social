@@ -1,15 +1,13 @@
-TEMPLATE = lib
-
 TARGET = sociald-client
 VERSION = 0.0.81
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=SocialdPlugin"
+DEFINES += CLASSNAME_H=\\\"socialdplugin.h\\\"
 include($$PWD/../common.pri)
 
 HEADERS += socialdplugin.h
 SOURCES += socialdplugin.cpp
 
-target.path += /usr/lib/buteo-plugins-qt5
 sociald_sync_profile.path = /etc/buteo/profiles/sync
 sociald_sync_profile.files = $$PWD/sociald.All.xml
 sociald_client_plugin_xml.path = /etc/buteo/profiles/client

@@ -1,14 +1,12 @@
-TEMPLATE = lib
-
 TARGET = facebook-calendars-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=FacebookCalendarsPlugin"
+DEFINES += CLASSNAME_H=\\\"facebookcalendarsplugin.h\\\"
 include($$PWD/../../common.pri)
 include($$PWD/../facebook-common.pri)
 include($$PWD/facebook-calendars.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 facebook_calendars_sync_profile.path = /etc/buteo/profiles/sync
 facebook_calendars_sync_profile.files = $$PWD/facebook.Calendars.xml
 facebook_calendars_client_plugin_xml.path = /etc/buteo/profiles/client
