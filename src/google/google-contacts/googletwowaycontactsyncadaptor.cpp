@@ -787,7 +787,15 @@ void GoogleTwoWayContactSyncAdaptor::purgeAccount(int pid)
               << QStringLiteral("contactEtags")
               << QStringLiteral("contactIds")
               << QStringLiteral("contactAvatars");
-    if (!d->m_engine->removeOOB(d->m_stateData[QString::number(pid)].m_oobScope, purgeKeys)) {
+
+    // We can't rely on d->m_stateData[QString::number(pid)].m_oobScope containing the
+    // correct value, as the purge codepath can be called from cleanUp() on account
+    // removal, during which no cached state data exists.
+    // Also, it may be called for an account which was previously removed but for which
+    // artifacts still remain (eg, if msyncd wasn't running at the time that the account
+    // was removed, due to a crash, etc) - in which case the cached value would be wrong.
+    QString oobScope = QStringLiteral("%1-%2").arg(SOCIALD_GOOGLE_CONTACTS_SYNCTARGET).arg(pid);
+    if (!d->m_engine->removeOOB(oobScope, purgeKeys)) {
         success = false;
         TRACE(SOCIALD_ERROR,
               QString(QLatin1String("Error occurred while purging OOB data for removed Google account %1"))
