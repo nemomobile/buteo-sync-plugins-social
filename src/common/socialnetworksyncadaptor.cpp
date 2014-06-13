@@ -1,7 +1,21 @@
 /****************************************************************************
  **
- ** Copyright (C) 2013 Jolla Ltd.
+ ** Copyright (C) 2013-2014 Jolla Ltd.
  ** Contact: Chris Adams <chris.adams@jollamobile.com>
+ **
+ ** This program/library is free software; you can redistribute it and/or
+ ** modify it under the terms of the GNU Lesser General Public License
+ ** version 2.1 as published by the Free Software Foundation.
+ **
+ ** This program/library is distributed in the hope that it will be useful,
+ ** but WITHOUT ANY WARRANTY; without even the implied warranty of
+ ** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ ** Lesser General Public License for more details.
+ **
+ ** You should have received a copy of the GNU Lesser General Public
+ ** License along with this program/library; if not, write to the Free
+ ** Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ ** 02110-1301 USA
  **
  ****************************************************************************/
 
@@ -28,27 +42,6 @@
 
 // libsocialcache
 #include <socialnetworksyncdatabase.h>
-
-/*
-    Remarks on timestamps
-
-    The timezone issue is a pretty big one, as services might
-    provide time in different timezone, and that the user might
-    be in another timezone.
-
-    To make everything consistant, all time should be stored using
-    UTC time. It is because Qt might have some troubles storing
-    timezone in SQLITE databases. (Or is it SQLITE that have
-    some troubles with timezone ?)
-
-    Beware however, that all our APIs (eventfeed, notification)
-    uses local time. So you have to perform a conversion before
-    using date and time retrieved from the SQLITE database.
-
-    By convention, all methods in sociald returning QDateTime
-    object will return the UTC time, with their timeSpec set to
-    Qt::UTC. Be sure to perform conversion before using them.
-*/
 
 namespace {
     QStringList validDataTypesInitialiser()
