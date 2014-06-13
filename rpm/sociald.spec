@@ -3,7 +3,7 @@ Summary:    Syncs device data from social services
 Version:    0.0.108
 Release:    1
 Group:      System/Libraries
-License:    TBD
+License:    LGPLv2.1
 URL:        https://bitbucket.org/jolla/base-sociald
 Source0:    %{name}-%{version}.tar.bz2
 BuildRequires:  pkgconfig(Qt5Core)
@@ -39,7 +39,7 @@ A Buteo plugin which provides data synchronization with various social services.
 
 %package facebook-calendars
 Summary:    Provides calendar synchronisation with Facebook
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(libmkcal-qt5)
 BuildRequires:  pkgconfig(libkcalcoren-qt5)
@@ -66,7 +66,7 @@ systemctl-user restart msyncd.service || :
 
 %package facebook-contacts
 Summary:    Provides contact synchronisation with Facebook
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
@@ -93,7 +93,7 @@ systemctl-user restart msyncd.service || :
 
 %package facebook-images
 Summary:    Provides image synchronisation with Facebook
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 Requires: %{name} = %{version}-%{release}
 
@@ -118,7 +118,7 @@ systemctl-user restart msyncd.service || :
 
 %package facebook-notifications
 Summary:    Provides notification synchronisation with Facebook
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  libmeegotouchevents-qt5-devel
@@ -147,7 +147,7 @@ systemctl-user restart msyncd.service || :
 
 %package facebook-posts
 Summary:    Provides post synchronisation with Facebook
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
@@ -176,7 +176,7 @@ systemctl-user restart msyncd.service || :
 
 %package facebook-signon
 Summary:    Provides signon credentials refreshing with Facebook
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  qt5-qttools-linguist
 Requires: %{name} = %{version}-%{release}
@@ -203,7 +203,7 @@ systemctl-user restart msyncd.service || :
 
 %package google-calendars
 Summary:    Provides calendar synchronisation with Google
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(libmkcal-qt5)
 BuildRequires:  pkgconfig(libkcalcoren-qt5)
@@ -230,7 +230,7 @@ systemctl-user restart msyncd.service || :
 
 %package google-contacts
 Summary:    Provides contact synchronisation with Google
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions) >= 0.1.58
@@ -257,7 +257,7 @@ systemctl-user restart msyncd.service || :
 
 %package google-signon
 Summary:    Provides signon credentials refreshing with Google
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  qt5-qttools-linguist
 Requires: %{name} = %{version}-%{release}
@@ -284,7 +284,7 @@ systemctl-user restart msyncd.service || :
 
 %package twitter-notifications
 Summary:    Provides notification synchronisation with Twitter
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
@@ -316,7 +316,7 @@ systemctl-user restart msyncd.service || :
 
 %package twitter-posts
 Summary:    Provides post synchronisation with Twitter
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
@@ -345,7 +345,7 @@ systemctl-user restart msyncd.service || :
 
 %package ts-devel
 Summary:    Translation source for sociald
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Applications
 
 %description ts-devel
@@ -357,7 +357,7 @@ Translation source for sociald
 
 %package tests
 Summary:    Automatable tests for sociald
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Applications
 BuildRequires:  pkgconfig(Qt5Test)
 Requires:   qt5-qtdeclarative-devel-tools
