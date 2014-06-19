@@ -197,7 +197,7 @@ void FacebookContactSyncAdaptor::sync(const QString &dataTypeString, int account
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void FacebookContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void FacebookContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
 {
     foreach (int pid, purgeIds) {
         // first, purge all data from QtContacts and also our cache db.

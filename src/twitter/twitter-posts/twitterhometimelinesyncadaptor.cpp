@@ -36,7 +36,7 @@ TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
 {
 }
 
-void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
 {
     if (purgeIds.size()) {
         foreach (int accountIdentifier, purgeIds) {

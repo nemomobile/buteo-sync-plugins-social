@@ -94,7 +94,7 @@ void GoogleTwoWayContactSyncAdaptor::sync(const QString &dataTypeString, int acc
     GoogleDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void GoogleTwoWayContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void GoogleTwoWayContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode )
 {
     foreach (int pid, purgeIds) {
         purgeAccount(pid);

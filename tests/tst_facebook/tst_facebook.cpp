@@ -81,7 +81,7 @@ public:
     TestFacebookContactSyncAdaptor(QObject *parent)
         : FacebookContactSyncAdaptor(parent), m_doFinalCleanup(false) {}
     void doBeginSync(int accountId, const QString &accessToken) { beginSync(accountId, accessToken); }
-    void doPurge(int accountId) { purgeDataForOldAccounts(QList<int>() << accountId); }
+    void doPurge(int accountId) { purgeDataForOldAccounts(QList<int>() << accountId, SocialNetworkSyncAdaptor::SyncPurge); }
 protected:
     // override this to avoid auto purging the fake account contacts when sync finishes.
     void finalCleanup() { if (m_doFinalCleanup) FacebookContactSyncAdaptor::finalCleanup(); }

@@ -70,7 +70,7 @@ void FacebookImageSyncAdaptor::sync(const QString &dataTypeString, int accountId
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void FacebookImageSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void FacebookImageSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
 {
     foreach (int pid, purgeIds) {
         // first, purge the data from our database + our cache directory

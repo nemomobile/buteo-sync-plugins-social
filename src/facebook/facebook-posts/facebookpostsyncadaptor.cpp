@@ -113,7 +113,7 @@ void FacebookPostSyncAdaptor::sync(const QString &dataTypeString, int accountId)
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void FacebookPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void FacebookPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
 {
     if (purgeIds.size()) {
         foreach (int accountIdentifier, purgeIds) {

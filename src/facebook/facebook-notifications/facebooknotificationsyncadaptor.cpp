@@ -43,7 +43,7 @@ QString FacebookNotificationSyncAdaptor::syncServiceName() const
     return QStringLiteral("facebook-microblog");
 }
 
-void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
 {
     if (purgeIds.size()) {
         foreach (int accountIdentifier, purgeIds) {

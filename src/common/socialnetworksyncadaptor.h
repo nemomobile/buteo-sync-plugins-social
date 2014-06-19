@@ -58,6 +58,11 @@ public:
         Invalid
     };
 
+    enum PurgeMode {
+        SyncPurge = 0,
+        CleanUpPurge
+    };
+
     enum DataType {
         Contacts = 1,   // "Contacts"
         Calendars,      // "Calendars"
@@ -84,7 +89,7 @@ public:
     QString serviceName() const;
     void checkAccounts(SocialNetworkSyncAdaptor::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds);
     virtual void sync(const QString &dataType, int accountId = 0);
-    virtual void purgeDataForOldAccounts(const QList<int> &accountIds) = 0;
+    virtual void purgeDataForOldAccounts(const QList<int> &accountIds, PurgeMode mode = SyncPurge) = 0;
 
 Q_SIGNALS:
     void statusChanged();

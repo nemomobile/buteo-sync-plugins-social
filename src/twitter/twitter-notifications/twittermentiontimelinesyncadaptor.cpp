@@ -50,7 +50,7 @@ QString TwitterMentionTimelineSyncAdaptor::syncServiceName() const
     return QStringLiteral("twitter-microblog");
 }
 
-void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
 {
     foreach (int accountIdentifier, purgeIds) {
         Notification *notification = findNotification(accountIdentifier);
