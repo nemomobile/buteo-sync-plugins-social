@@ -365,11 +365,19 @@ void GoogleCalendarSyncAdaptor::finalCleanup()
             succeededAccounts.append(accountId);
         }
     }
-    setLastSyncSuccessful(succeededAccounts);
+    if (succeededAccounts.size()) {
+        setLastSyncSuccessful(succeededAccounts);
+    }
 }
 
-void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds)
+void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode)
 {
+    if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
+        // need to initialise the database
+        m_storageNeedsSave = false;
+        m_storage->open(); // we close it in finalCleanup()
+    }
+
     // We clean all the entries in the calendar
     foreach (int accountId, oldIds) {
         // Delete the notebooks from the storage
@@ -391,6 +399,11 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds
 
         // Delete ids from our local->remote id mapping
         m_idDb.removeEvents(accountId);
+    }
+
+    if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
+        // and commit any changes made.
+        finalCleanup();
     }
 }
 

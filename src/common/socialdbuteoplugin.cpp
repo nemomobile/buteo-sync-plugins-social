@@ -205,10 +205,9 @@ bool SocialdButeoPlugin::cleanUp()
         m_socialNetworkSyncAdaptor = createSocialNetworkSyncAdaptor();
     }
 
-    // TODO: ensure that this is ONLY called when the account is deleted,
-    // not when the plugin is unloaded.
     if (m_socialNetworkSyncAdaptor && m_profileAccountId > 0) {
-        m_socialNetworkSyncAdaptor->purgeDataForOldAccounts(QList<int>() << m_profileAccountId);
+        m_socialNetworkSyncAdaptor->purgeDataForOldAccounts(QList<int>() << m_profileAccountId,
+                                                            SocialNetworkSyncAdaptor::CleanUpPurge);
     }
 
     return true;

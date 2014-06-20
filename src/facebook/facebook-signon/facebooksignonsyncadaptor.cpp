@@ -50,7 +50,7 @@ void FacebookSignonSyncAdaptor::sync(const QString &dataTypeString, int accountI
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void FacebookSignonSyncAdaptor::purgeDataForOldAccounts(const QList<int> &)
+void FacebookSignonSyncAdaptor::purgeDataForOldAccounts(const QList<int> &, SocialNetworkSyncAdaptor::PurgeMode)
 {
     // Nothing to do.
 }

@@ -51,7 +51,7 @@ void GoogleSignonSyncAdaptor::sync(const QString &dataTypeString, int accountId)
     GoogleDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void GoogleSignonSyncAdaptor::purgeDataForOldAccounts(const QList<int> &)
+void GoogleSignonSyncAdaptor::purgeDataForOldAccounts(const QList<int> &, SocialNetworkSyncAdaptor::PurgeMode)
 {
     // Nothing to do.
 }

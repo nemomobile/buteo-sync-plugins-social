@@ -111,10 +111,9 @@ void GoogleContactSyncAdaptor::sync(const QString &dataTypeString, int accountId
     GoogleDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void GoogleContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void GoogleContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
 {
     foreach (int pid, purgeIds) {
-        // first, purge all data from QtContacts
         purgeAccount(pid);
     }
 }

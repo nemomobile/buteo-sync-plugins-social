@@ -72,8 +72,14 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
     m_storage->close();
 }
 
-void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds)
+void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode)
 {
+    if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
+        // we need to initialise the storage
+        m_storageNeedsSave = false;
+        m_storage->open(); // we close it in finalCleanup()
+    }
+
     // We clean all the entries in the calendar
     foreach (int accountId, oldIds) {
         QList<FacebookEvent::ConstPtr> events = m_db.events(accountId);
@@ -103,6 +109,11 @@ void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldI
         m_db.removeEvents(accountId);
         m_db.sync(accountId);
         m_db.wait();
+    }
+
+    if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
+        // and commit any changes made.
+        finalCleanup();
     }
 }
 
