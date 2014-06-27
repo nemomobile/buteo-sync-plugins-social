@@ -29,6 +29,8 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/QUrlQuery>
 
+#include <QNetworkRequest>
+
 FacebookSignonSyncAdaptor::FacebookSignonSyncAdaptor(QObject *parent)
     : FacebookDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Signon, parent)
 {
@@ -145,6 +147,16 @@ void FacebookSignonSyncAdaptor::requestFinishedHandler()
             // unknown response from server.  Probably a networking error or similar.
             // ignore this one.
         }
+    } else if (reply->error() == QNetworkReply::UnknownContentError
+            && reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 400) {
+        // for some strange reason Facebook will return this error
+        // if the token has been manually revoked.  There is no
+        // response data in this case.
+        // the account is in a state which requires user intervention
+        forceTokenExpiry(0, accountId, accessToken);
+        TRACE(SOCIALD_DEBUG,
+                QString(QLatin1String("access token has presumably expired for Facebook account %1"))
+                .arg(accountId));
     } else {
         // could have been a network error, or something.
         // we treat it as a sync error, but not a signon error.
