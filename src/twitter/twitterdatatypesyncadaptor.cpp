@@ -163,8 +163,9 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
     int accountId = reply->property("accountId").toInt();
 
     TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: %1 request with account %2 experienced error: %3"))
-            .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(accountId).arg(err));
+            QString(QLatin1String("error: %1 request with account %2 experienced error: %3 (%4)"))
+            .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(accountId).arg(err)
+            .arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()));
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     reply->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
@@ -177,7 +178,7 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         // are constantly updated: https://dev.twitter.com/docs/error-codes-responses
         foreach (QJsonValue data, dataList) {
             QJsonObject dataMap = data.toObject();
-            if (dataMap.value("code").toDouble() == 32) {
+            if (dataMap.value("code").toDouble() == 32 || dataMap.value("code").toDouble() == 89) {
                 Accounts::Account *account = accountManager->account(accountId);
                 if (account) {
                     setCredentialsNeedUpdate(account);
