@@ -82,24 +82,16 @@ void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldI
 
     // We clean all the entries in the calendar
     foreach (int accountId, oldIds) {
-        QList<FacebookEvent::ConstPtr> events = m_db.events(accountId);
-
-        // Delete events from the calendar
-        foreach (const FacebookEvent::ConstPtr &event, events) {
-            QString incidenceId = event->incidenceId();
-            m_storage->load(incidenceId);
-            KCalCore::Event::Ptr event = m_calendar->event(incidenceId);
-            if (!event.isNull()) {
-                m_calendar->deleteEvent(event);
-                m_storageNeedsSave = true;
-            }
-        }
-
-        // Delete the notebook from the storage
-        // (we even check if there are several of them, in case of an error)
         foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
             if (notebook->pluginName() == QLatin1String(FACEBOOK)
-                && notebook->account() == QString::number(accountId)) {
+                    && notebook->account() == QString::number(accountId)) {
+                notebook->setIsReadOnly(false);
+                m_storage->loadNotebookIncidences(notebook->uid());
+                KCalCore::Incidence::List allIncidences;
+                m_storage->allIncidences(&allIncidences, notebook->uid());
+                foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
+                    m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
+                }
                 m_storage->deleteNotebook(notebook);
                 m_storageNeedsSave = true;
             }
