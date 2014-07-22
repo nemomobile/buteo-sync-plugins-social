@@ -38,6 +38,28 @@
 static const char *FACEBOOK = "Facebook";
 static const char *FACEBOOK_COLOR = "#3B5998";
 
+namespace {
+    // returns true if the ghost-event cleanup sync has been performed.
+    bool ghostEventCleanupPerformed()
+    {
+        QString settingsFileName = QString::fromLatin1("%1/%2/fbcal.ini")
+                .arg(QString::fromLatin1(PRIVILEGED_DATA_DIR))
+                .arg(QString::fromLatin1(SYNC_DATABASE_DIR));
+        QSettings settingsFile(settingsFileName, QSettings::IniFormat);
+        return settingsFile.value(QString::fromLatin1("cleaned"), QVariant::fromValue<bool>(false)).toBool();
+    }
+
+    void setGhostEventCleanupPerformed()
+    {
+        QString settingsFileName = QString::fromLatin1("%1/%2/fbcal.ini")
+                .arg(QString::fromLatin1(PRIVILEGED_DATA_DIR))
+                .arg(QString::fromLatin1(SYNC_DATABASE_DIR));
+        QSettings settingsFile(settingsFileName, QSettings::IniFormat);
+        settingsFile.setValue(QString::fromLatin1("cleaned"), QVariant::fromValue<bool>(true));
+        settingsFile.sync();
+    }
+}
+
 FacebookCalendarSyncAdaptor::FacebookCalendarSyncAdaptor(QObject *parent)
     : FacebookDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Calendars, parent)
     , m_calendar(mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(QLatin1String("UTC"))))
@@ -68,7 +90,43 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
     // commit changes to db
     if (m_storageNeedsSave) {
         m_storage->save();
+        m_storageNeedsSave = false;
     }
+
+    if (!ghostEventCleanupPerformed()) {
+        // Delete any events which are not associated with a notebook.
+        // These events are ghost events, caused by a bug which previously
+        // existed in the purgeDataForOldAccounts code.
+        // The mkcal API doesn't allow us to determine which notebook a
+        // given incidence belongs to, so we have to instead load
+        // everything and then find the ones which are ophaned.
+        m_storage->load();
+        KCalCore::Incidence::List allIncidences = m_calendar->incidences();
+        mKCal::Notebook::List allNotebooks = m_storage->notebooks();
+        QSet<QString> notebookIncidenceUids;
+        foreach (mKCal::Notebook::Ptr notebook, allNotebooks) {
+            KCalCore::Incidence::List currNbIncidences;
+            m_storage->allIncidences(&currNbIncidences, notebook->uid());
+            foreach (KCalCore::Incidence::Ptr incidence, currNbIncidences) {
+                notebookIncidenceUids.insert(incidence->uid());
+            }
+        }
+        foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
+            if (!notebookIncidenceUids.contains(incidence->uid())) {
+                // orphan/ghost incidence.  must be deleted.
+                TRACE(SOCIALD_DEBUG,
+                    QString(QLatin1String("deleting orphan event %1")).arg(incidence->uid()));
+                m_calendar->deleteIncidence(incidence);
+                m_storageNeedsSave = true;
+            }
+        }
+        if (!m_storageNeedsSave || m_storage->save()) {
+            setGhostEventCleanupPerformed();
+        }
+
+    }
+
+    // done.
     m_storage->close();
 }
 
@@ -82,24 +140,16 @@ void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldI
 
     // We clean all the entries in the calendar
     foreach (int accountId, oldIds) {
-        QList<FacebookEvent::ConstPtr> events = m_db.events(accountId);
-
-        // Delete events from the calendar
-        foreach (const FacebookEvent::ConstPtr &event, events) {
-            QString incidenceId = event->incidenceId();
-            m_storage->load(incidenceId);
-            KCalCore::Event::Ptr event = m_calendar->event(incidenceId);
-            if (!event.isNull()) {
-                m_calendar->deleteEvent(event);
-                m_storageNeedsSave = true;
-            }
-        }
-
-        // Delete the notebook from the storage
-        // (we even check if there are several of them, in case of an error)
         foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
             if (notebook->pluginName() == QLatin1String(FACEBOOK)
-                && notebook->account() == QString::number(accountId)) {
+                    && notebook->account() == QString::number(accountId)) {
+                notebook->setIsReadOnly(false);
+                m_storage->loadNotebookIncidences(notebook->uid());
+                KCalCore::Incidence::List allIncidences;
+                m_storage->allIncidences(&allIncidences, notebook->uid());
+                foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
+                    m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
+                }
                 m_storage->deleteNotebook(notebook);
                 m_storageNeedsSave = true;
             }
