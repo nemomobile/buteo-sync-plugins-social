@@ -1,15 +1,13 @@
-TEMPLATE = lib
-
 TARGET = vk-posts-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=VKPostsPlugin"
+DEFINES += CLASSNAME_H=\\\"vkpostsplugin.h\\\"
 DEFINES += SOCIALD_USE_QTPIM
 include($$PWD/../../common.pri)
 include($$PWD/../vk-common.pri)
 include($$PWD/vk-posts.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 vk_posts_sync_profile.path = /etc/buteo/profiles/sync
 vk_posts_sync_profile.files = $$PWD/vk.Posts.xml
 vk_posts_client_plugin_xml.path = /etc/buteo/profiles/client

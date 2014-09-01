@@ -1,14 +1,12 @@
-TEMPLATE = lib
-
 TARGET = vk-notifications-client
 VERSION = 0.0.1
-CONFIG += plugin
 
+DEFINES += "CLASSNAME=VKNotificationsPlugin"
+DEFINES += CLASSNAME_H=\\\"vknotificationsplugin.h\\\"
 include($$PWD/../../common.pri)
 include($$PWD/../vk-common.pri)
 include($$PWD/vk-notifications.pri)
 
-target.path += /usr/lib/buteo-plugins-qt5
 vk_notifications_sync_profile.path = /etc/buteo/profiles/sync
 vk_notifications_sync_profile.files = $$PWD/vk.Notifications.xml
 vk_notifications_client_plugin_xml.path = /etc/buteo/profiles/client

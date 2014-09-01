@@ -24,7 +24,7 @@ public:
     QString syncServiceName() const;
 
 protected: // implementing VKDataTypeSyncAdaptor interface
-    void purgeDataForOldAccounts(const QList<int> &oldIds);
+    void purgeDataForOldAccounts(const QList<int> &accountIds, PurgeMode mode);
     void beginSync(int accountId, const QString &accessToken);
     void finalize(int accountId);
 

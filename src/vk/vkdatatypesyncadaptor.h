@@ -16,7 +16,13 @@
 #include <QtNetwork/QSslError>
 #include <QtCore/QJsonObject>
 
+namespace Accounts {
 class Account;
+}
+namespace SignOn {
+    class Error;
+    class SessionData;
+}
 class QJsonObject;
 
 /*
@@ -65,15 +71,13 @@ protected Q_SLOTS:
     virtual void sslErrorsHandler(const QList<QSslError> &errs);
 
 private Q_SLOTS:
-    void accountCredentialsChangeHandler();
-    void accountStatusChangeHandler();
-    void signOnError(const QString &message, int errorType);
-    void signOnResponse(const QVariantMap &data);
+    void signOnError(const SignOn::Error &error);
+    void signOnResponse(const SignOn::SessionData &responseData);
 
 private:
     void loadClientId();
-    void setCredentialsNeedUpdate(Account *account);
-    void signIn(Account *account);
+    void setCredentialsNeedUpdate(Accounts::Account *account);
+    void signIn(Accounts::Account *account);
     bool m_triedLoading; // Is true if we tried to load (even if we failed)
     QString m_clientId;
 };

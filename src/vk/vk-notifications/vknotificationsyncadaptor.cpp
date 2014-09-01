@@ -11,35 +11,35 @@
 #include <QUrlQuery>
 #include <QDebug>
 
-static QMap<QString,int> getNotificationTypes()
+static QStringList getNotificationTypes()
 {
-    QMap<QString,int> types;
-    types[QStringLiteral("follow")] = int(VKNotification::Follow);
-    types[QStringLiteral("friend_accepted")] = int(VKNotification::FriendRequestAccepted);
-    types[QStringLiteral("mention")] = int(VKNotification::Mention);
-    types[QStringLiteral("mention_comments")] = int(VKNotification::MentionComments);
-    types[QStringLiteral("wall")] = int(VKNotification::WallPost);
-    types[QStringLiteral("comment_post")] = int(VKNotification::CommentPost);
-    types[QStringLiteral("comment_photo")] = int(VKNotification::CommentPhoto);
-    types[QStringLiteral("comment_video")] = int(VKNotification::CommentVideo);
-    types[QStringLiteral("reply_comment")] = int(VKNotification::ReplyComment);
-    types[QStringLiteral("reply_comment_photo")] = int(VKNotification::ReplyCommentPhoto);
-    types[QStringLiteral("reply_comment_video")] = int(VKNotification::ReplyCommentVideo);
-    types[QStringLiteral("reply_topic")] = int(VKNotification::ReplyTopic);
-    types[QStringLiteral("like_post")] = int(VKNotification::LikePost);
-    types[QStringLiteral("like_omment")] = int(VKNotification::LikeComment);
-    types[QStringLiteral("like_photo")] = int(VKNotification::LikePhoto);
-    types[QStringLiteral("like_video")] = int(VKNotification::LikeVideo);
-    types[QStringLiteral("like_comment_photo")] = int(VKNotification::LikeCommentPhoto);
-    types[QStringLiteral("like_comment_video")] = int(VKNotification::LikeCommentVideo);
-    types[QStringLiteral("like_comment_topic")] = int(VKNotification::LikeCommentTopic);
-    types[QStringLiteral("copy_post")] = int(VKNotification::CopyPost);
-    types[QStringLiteral("copy_photo")] = int(VKNotification::CopyPhoto);
-    types[QStringLiteral("copy_video")] = int(VKNotification::CopyVideo);
+    QStringList types;
+    types << QStringLiteral("follow");
+    types << QStringLiteral("friend_accepted");
+    types << QStringLiteral("mention");
+    types << QStringLiteral("mention_comments");
+    types << QStringLiteral("wall");
+    types << QStringLiteral("comment_post");
+    types << QStringLiteral("comment_photo");
+    types << QStringLiteral("comment_video");
+    types << QStringLiteral("reply_comment");
+    types << QStringLiteral("reply_comment_photo");
+    types << QStringLiteral("reply_comment_video");
+    types << QStringLiteral("reply_topic");
+    types << QStringLiteral("like_post");
+    types << QStringLiteral("like_omment");
+    types << QStringLiteral("like_photo");
+    types << QStringLiteral("like_video");
+    types << QStringLiteral("like_comment_photo");
+    types << QStringLiteral("like_comment_video");
+    types << QStringLiteral("like_comment_topic");
+    types << QStringLiteral("copy_post");
+    types << QStringLiteral("copy_photo");
+    types << QStringLiteral("copy_video");
     return types;
 }
 
-static QMap<QString,int> notificationTypes = getNotificationTypes();
+static QStringList notificationTypes = getNotificationTypes();
 
 VKNotificationSyncAdaptor::VKNotificationSyncAdaptor(QObject *parent)
     : VKDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Notifications, parent)
@@ -56,11 +56,11 @@ QString VKNotificationSyncAdaptor::syncServiceName() const
     return QStringLiteral("vk-microblog");
 }
 
-void VKNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void VKNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &accountIds, PurgeMode mode)
 {
-    Q_UNUSED(purgeIds);
-    if (purgeIds.size()) {
-        foreach (int accountIdentifier, purgeIds) {
+    Q_UNUSED(mode);
+    if (accountIds.size()) {
+        foreach (int accountIdentifier, accountIds) {
             m_db.removeNotifications(accountIdentifier);
         }
         m_db.sync();
@@ -164,8 +164,6 @@ void VKNotificationSyncAdaptor::saveVKNotificationFromObject(int accountId, cons
         return;
     }
 
-    VKNotification::Type type = VKNotification::Type(notificationTypes[typeString]);
-
     QDateTime timestamp = parseVKDateTime(notif.value(QStringLiteral("date")));
     QJsonObject feedback = notif.value(QStringLiteral("feedback")).toObject();
 
@@ -174,9 +172,9 @@ void VKNotificationSyncAdaptor::saveVKNotificationFromObject(int accountId, cons
         int fromId = int(feedbackItemObj.value(QStringLiteral("from_id")).toDouble());
         int toId = int(feedbackItemObj.value(QStringLiteral("to_id")).toDouble());
         UserProfile profile = findProfile(userProfiles, fromId);
-        qWarning() << "add:" << accountId << type << fromId << toId << timestamp << profile.icon;
+        qWarning() << "add:" << accountId << typeString << fromId << toId << timestamp << profile.icon;
         if (profile.uid != 0) {
-            m_db.addVKNotification(accountId, type, QString::number(fromId), profile.name(), profile.icon, QString::number(toId), timestamp);
+            m_db.addVKNotification(accountId, typeString, QString::number(fromId), profile.name(), profile.icon, QString::number(toId), timestamp);
         } else {
             qWarning() << "No user profile found for owner:" << fromId;
         }

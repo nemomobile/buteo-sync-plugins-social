@@ -14,15 +14,18 @@
 #include <QtCore/QString>
 #include <QtCore/QByteArray>
 
-// sailfish-components-accounts-qt5
-#include <accountmanager.h>
-#include <account.h>
-#include <signinparameters.h>
-
 //libsailfishkeyprovider
 #include <sailfishkeyprovider.h>
 
+// libaccounts-qt5
+#include <Accounts/Manager>
+#include <Accounts/Account>
+#include <Accounts/Service>
+#include <Accounts/AccountService>
+
 //libsignon-qt: SignOn::NoUserInteractionPolicy
+#include <SignOn/Identity>
+#include <SignOn/AuthSession>
 #include <SignOn/SessionData>
 
 VKDataTypeSyncAdaptor::UserProfile::UserProfile()
@@ -154,7 +157,7 @@ void VKDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
     }
 
     foreach (int accountId, accountIds) {
-        Account *account = accountManager->account(accountId);
+        Accounts::Account *account = accountManager->account(accountId);
         if (!account) {
             TRACE(SOCIALD_ERROR,
                   QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
@@ -164,72 +167,109 @@ void VKDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
             continue;
         }
 
-        if (account->status() == Account::Initialized || account->status() == Account::Synced) {
-            signIn(account);
-        } else {
-            connect(account, SIGNAL(statusChanged()), this, SLOT(accountStatusChangeHandler()));
-        }
-    }
-}
-
-void VKDataTypeSyncAdaptor::accountCredentialsChangeHandler()
-{
-    Account *account = qobject_cast<Account*>(sender());
-    if (account->status() == Account::Initialized) {
-        setCredentialsNeedUpdate(account);
-    }
-}
-
-void VKDataTypeSyncAdaptor::accountStatusChangeHandler()
-{
-    Account *account = qobject_cast<Account*>(sender());
-    if (account->status() == Account::Initialized || account->status() == Account::Synced) {
-        // Not anymore interested about status changes of this account instance
-        account->disconnect(this);
         signIn(account);
     }
 }
 
-void VKDataTypeSyncAdaptor::signOnError(const QString &err, int errorType)
+void VKDataTypeSyncAdaptor::signIn(Accounts::Account *account)
 {
-    Account *account = qobject_cast<Account*>(sender());
-    int accountId = account->identifier();
+    // Fetch consumer key and secret from keyprovider
+    int accountId = account->id();
+    if (!checkAccount(account) || clientId().isEmpty()) {
+        decrementSemaphore(accountId);
+        return;
+    }
 
-    // if we couldn't sign in, we can't sync with this account.
+    // grab out a valid identity for the sync service.
+    Accounts::Service srv(accountManager->service(syncServiceName()));
+    account->selectService(srv);
+    SignOn::Identity *identity = account->credentialsId() > 0 ? SignOn::Identity::existingIdentity(account->credentialsId()) : 0;
+    if (!identity) {
+        TRACE(SOCIALD_ERROR,
+                QString(QLatin1String("error: account %1 has no valid credentials, cannot sign in"))
+                .arg(accountId));
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    Accounts::AccountService accSrv(account, srv);
+    QString method = accSrv.authData().method();
+    QString mechanism = accSrv.authData().mechanism();
+    SignOn::AuthSession *session = identity->createSession(method);
+    if (!session) {
+        TRACE(SOCIALD_ERROR,
+                QString(QLatin1String("error: could not create signon session for account %1"))
+                .arg(accountId));
+        identity->deleteLater();
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    QVariantMap signonSessionData = accSrv.authData().parameters();
+    signonSessionData.insert("ClientId", clientId());
+    signonSessionData.insert("UiPolicy", SignOn::NoUserInteractionPolicy);
+
+    connect(session, SIGNAL(response(SignOn::SessionData)),
+            this, SLOT(signOnResponse(SignOn::SessionData)),
+            Qt::UniqueConnection);
+    connect(session, SIGNAL(error(SignOn::Error)),
+            this, SLOT(signOnError(SignOn::Error)),
+            Qt::UniqueConnection);
+
+    session->setProperty("account", QVariant::fromValue<Accounts::Account*>(account));
+    session->setProperty("identity", QVariant::fromValue<SignOn::Identity*>(identity));
+    session->process(SignOn::SessionData(signonSessionData), mechanism);
+}
+
+void VKDataTypeSyncAdaptor::signOnError(const SignOn::Error &error)
+{
+    SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession*>(sender());
+    Accounts::Account *account = session->property("account").value<Accounts::Account*>();
+    SignOn::Identity *identity = session->property("identity").value<SignOn::Identity*>();
+    int accountId = account->id();
     TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved:"))
-            .arg(accountId) << err);
+            QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved: %2: %3"))
+          .arg(accountId).arg(error.type()).arg(error.message()));
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
-    if (errorType == Account::SignInCredentialsExpiredError) {
+    if (error.type() == SignOn::AuthSession::UserInteractionError) {
         setCredentialsNeedUpdate(account);
-    } else {
-        account->disconnect(this);
-        account->deleteLater();
     }
 
+    session->disconnect(this);
+    identity->destroySession(session);
+    identity->deleteLater();
+    account->deleteLater();
+
+    // if we couldn't sign in, we can't sync with this account.
     setStatus(SocialNetworkSyncAdaptor::Error);
     decrementSemaphore(accountId);
 }
 
-void VKDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
+void VKDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &responseData)
 {
+    QVariantMap data;
+    foreach (const QString &key, responseData.propertyNames()) {
+        data.insert(key, responseData.getProperty(key));
+    }
+
     QString accessToken;
-    Account *account = qobject_cast<Account*>(sender());
-    int accountId = account->identifier();
+    SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession*>(sender());
+    Accounts::Account *account = session->property("account").value<Accounts::Account*>();
+    SignOn::Identity *identity = session->property("identity").value<SignOn::Identity*>();
+    int accountId = account->id();
     if (data.contains(QLatin1String("AccessToken"))) {
         accessToken = data.value(QLatin1String("AccessToken")).toString();
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("signon response for account %1 contained access token %2"))
-                .arg(accountId).arg(accessToken));
     } else {
         TRACE(SOCIALD_INFORMATION,
                 QString(QLatin1String("signon response for account with id %1 contained no access token"))
                 .arg(accountId));
     }
 
-    account->disconnect(this);
+    session->disconnect(this);
+    identity->destroySession(session);
+    identity->deleteLater();
     account->deleteLater();
 
     if (!accessToken.isEmpty()) {
@@ -240,7 +280,7 @@ void VKDataTypeSyncAdaptor::signOnResponse(const QVariantMap &data)
 }
 
 void VKDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
-{
+{    
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     QByteArray replyData = reply->readAll();
     int accountId = reply->property("accountId").toInt();
@@ -260,11 +300,9 @@ void VKDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         if (errorReply.value("code").toDouble() == 190 &&
                 errorReply.value("error_subcode").toDouble() == 460) {
             int accountId = reply->property("accountId").toInt();
-            Account *account = accountManager->account(accountId);
-            if (account->status() == Account::Initialized) {
+            Accounts::Account *account = accountManager->account(accountId);
+            if (account) {
                 setCredentialsNeedUpdate(account);
-            } else {
-                connect(account, SIGNAL(statusChanged()), this, SLOT(accountCredentialsChangeHandler()));
             }
         }
     }
@@ -309,33 +347,15 @@ void VKDataTypeSyncAdaptor::loadClientId()
     return;
 }
 
-void VKDataTypeSyncAdaptor::setCredentialsNeedUpdate(Account *account)
+void VKDataTypeSyncAdaptor::setCredentialsNeedUpdate(Accounts::Account *account)
 {
-    // Not anymore interested about status changes of this account instance
-    account->disconnect(this);
-    qWarning() << "sociald:VK: setting CredentialsNeedUpdate to true for account:" << account->identifier();
-    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdate", QVariant::fromValue<bool>(true));
-    account->setConfigurationValue(syncServiceName(), "CredentialsNeedUpdateFrom", QVariant::fromValue<QString>(QString::fromLatin1("sociald-VK")));
-    account->sync();
-}
-
-void VKDataTypeSyncAdaptor::signIn(Account *account)
-{
-    // grab out a valid identity for the sync service.
-    if (!account->isEnabledWithService(syncServiceName())) {
-        TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("account with id %1 is not enabled with service %2"))
-              .arg(account->identifier()).arg(syncServiceName()));
-        return;
-    }
-
-    SignInParameters *sip = account->signInParameters(syncServiceName());
-    sip->setParameter(QLatin1String("ClientId"), clientId());
-    sip->setParameter(QLatin1String("UiPolicy"), SignInParameters::NoUserInteractionPolicy);
-
-    connect(account, SIGNAL(signInError(QString,int)), this, SLOT(signOnError(QString,int)));
-    connect(account, SIGNAL(signInResponse(QVariantMap)), this, SLOT(signOnResponse(QVariantMap)));
-    account->signIn("Jolla", "Jolla", sip);
+    qWarning() << "sociald:Facebook: setting CredentialsNeedUpdate to true for account:" << account->id();
+    Accounts::Service srv(accountManager->service(syncServiceName()));
+    account->selectService(srv);
+    account->setValue(QStringLiteral("CredentialsNeedUpdate"), QVariant::fromValue<bool>(true));
+    account->setValue(QStringLiteral("CredentialsNeedUpdateFrom"), QVariant::fromValue<QString>(QString::fromLatin1("sociald-VK")));
+    account->selectService(Accounts::Service());
+    account->syncAndBlock();
 }
 
 QDateTime VKDataTypeSyncAdaptor::parseVKDateTime(const QJsonValue &v)

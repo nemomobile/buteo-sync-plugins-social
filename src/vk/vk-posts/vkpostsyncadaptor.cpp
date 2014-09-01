@@ -40,11 +40,11 @@ void VKPostSyncAdaptor::sync(const QString &dataTypeString, int accountId)
     VKDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void VKPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds)
+void VKPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode)
 {
-    Q_UNUSED(purgeIds);
-    if (purgeIds.size()) {
-        foreach (int accountIdentifier, purgeIds) {
+    Q_UNUSED(mode);
+    if (oldIds.size()) {
+        foreach (int accountIdentifier, oldIds) {
             m_db.removePosts(accountIdentifier);
         }
         m_db.commit();
