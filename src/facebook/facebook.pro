@@ -5,5 +5,5 @@ SUBDIRS = \
     $$PWD/facebook-contacts \
     $$PWD/facebook-images \
     $$PWD/facebook-notifications \
-    $$PWD/facebook-posts # JB#13153
+    $$PWD/facebook-posts
 

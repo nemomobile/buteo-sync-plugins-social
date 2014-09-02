@@ -25,7 +25,7 @@ OTHER_FILES += \
 
 INSTALLS += \
     facebook_posts_notification_xml
-# for now, don't install the sync plugin or profiles - JB#13153
+# for now, don't install the sync plugin or profiles
 #    target \
 #    facebook_posts_sync_profile \
 #    facebook_posts_client_plugin_xml \
