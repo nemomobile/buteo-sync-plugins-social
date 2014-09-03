@@ -146,7 +146,7 @@ void GoogleDataTypeSyncAdaptor::finalCleanup()
 void GoogleDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
     // Google sends error code 204 (HTTP code 401) for Unauthorized Error
-    // Note: sometimes it sends it spuriously - see JB#15645
+    // Note: sometimes it sends it spuriously
     // For now, don't raise the flag, until we can solve
     // any API rate limit issues associated with avatars
     // which might cause this (if multiple accounts are involved).
