@@ -123,14 +123,15 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
         }
     }
 
-    QList<QPair<QString, QString> > queryItems;
-    QUrlQuery query(url);
-    if (!url.toString().contains("access_token")) {
+    // if the url already contains query part (in which case it is continuationUrl), don't overwrite it.
+    if (!url.hasQuery()) {
+        QList<QPair<QString, QString> > queryItems;
+        QUrlQuery query(url);
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
+        queryItems.append(QPair<QString, QString>(QString(QLatin1String("limit")), QString(QLatin1String("2000"))));
+        query.setQueryItems(queryItems);
+        url.setQuery(query);
     }
-    queryItems.append(QPair<QString, QString>(QString(QLatin1String("limit")), QString(QLatin1String("2000"))));
-    query.setQueryItems(queryItems);
-    url.setQuery(query);
 
     QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
     if (reply) {
@@ -265,7 +266,6 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
 
 void FacebookImageSyncAdaptor::imagesFinishedHandler()
 {
-
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     bool isError = reply->property("isError").toBool();
     int accountId = reply->property("accountId").toInt();
