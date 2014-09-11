@@ -67,7 +67,7 @@ private Q_SLOTS:
 
 private:
     // for server-side removal detection.
-    void initRemovalDetectionLists();
+    bool initRemovalDetectionLists(int accountId);
     void clearRemovalDetectionLists();
     void checkRemovedImages(const QString &fbAlbumId);
     QMap<QString, FacebookAlbum::ConstPtr> m_cachedAlbums;
