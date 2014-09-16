@@ -64,7 +64,13 @@ QString FacebookImageSyncAdaptor::syncServiceName() const
 void FacebookImageSyncAdaptor::sync(const QString &dataTypeString, int accountId)
 {
     // get ready for sync
-    initRemovalDetectionLists();
+    if (!initRemovalDetectionLists(accountId)) {
+        TRACE(SOCIALD_ERROR,
+              QString(QLatin1String("unable to initialized cached account list for account %1"))
+              .arg(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        return;
+    }
 
     // call superclass impl.
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
@@ -224,10 +230,8 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
         QDateTime createdTime = QDateTime::fromString(createdTimeStr, Qt::ISODate);
         QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
 
-        // Removal detection
-        m_cachedAlbums.remove(fbAlbumId);
-
         const FacebookAlbum::ConstPtr &dbAlbum = m_cachedAlbums.value(fbAlbumId);
+        m_cachedAlbums.remove(fbAlbumId);  // Removal detection
         if (!dbAlbum.isNull() && (dbAlbum->updatedTime() >= updatedTime
                                   && dbAlbum->imageCount() == imageCount)) {
             TRACE(SOCIALD_DEBUG,
@@ -262,7 +266,6 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
     // Finally, reduce our semaphore.
     decrementSemaphore(accountId);
 }
-
 
 void FacebookImageSyncAdaptor::imagesFinishedHandler()
 {
@@ -368,8 +371,6 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
     decrementSemaphore(accountId);
 }
 
-
-
 bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbImageId, const QString &imageUrl)
 {
     FacebookImage::ConstPtr dbImage = m_db.image(fbImageId);
@@ -390,7 +391,6 @@ bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbImageId, 
 
     return true;
 }
-
 
 void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, int accountId,
                                                   const QString &accessToken)
@@ -425,7 +425,6 @@ void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, int a
     }
 }
 
-
 void FacebookImageSyncAdaptor::userFinishedHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply *>(sender());
@@ -451,7 +450,7 @@ void FacebookImageSyncAdaptor::userFinishedHandler()
     decrementSemaphore(accountId);
 }
 
-void FacebookImageSyncAdaptor::initRemovalDetectionLists()
+bool FacebookImageSyncAdaptor::initRemovalDetectionLists(int accountId)
 {
     // This function should be called as part of the ::sync() preamble.
     // Clear our internal state variables which we use to track server-side deletions.
@@ -459,10 +458,24 @@ void FacebookImageSyncAdaptor::initRemovalDetectionLists()
     // if Facebook returns results in paginated form.
     clearRemovalDetectionLists();
 
-    QList<FacebookAlbum::ConstPtr> albums = m_db.albums();
-    foreach (const FacebookAlbum::ConstPtr &album, albums) {
-        m_cachedAlbums.insert(album->fbAlbumId(), album);
+    bool ok = false;
+    QMap<int,QString> accounts = m_db.accounts(&ok);
+    if (!ok) {
+        return false;
     }
+    if (accounts.contains(accountId)) {
+        QString userId = accounts.value(accountId);
+
+        QStringList allAlbumIds = m_db.allAlbumIds();
+        foreach (const QString& albumId, allAlbumIds) {
+            FacebookAlbum::ConstPtr album = m_db.album(albumId);
+            if (album->fbUserId() == userId) {
+                m_cachedAlbums.insert(albumId, album);
+            }
+        }
+    }
+
+    return true;
 }
 
 void FacebookImageSyncAdaptor::clearRemovalDetectionLists()
@@ -483,41 +496,3 @@ void FacebookImageSyncAdaptor::checkRemovedImages(const QString &fbAlbumId)
 
     m_removedImages.append(cachedImageIds.toList());
 }
-
-// TODO v where is it used ? Defined but not used in the class
-/*
-void FacebookImageSyncAdaptor::purgeDetectedRemovals()
-{
-    // This function should be called once the synchronization process is completed.
-    int expectedPurgeAlbumCount = 0; // can't just subtract the counts for this, as add+remove = 0.
-    int actualPurgeAlbumCount = 0;
-    foreach (const QString &cachedId, m_cachedAlbumIds) {
-        if (!m_serverAlbumIds.contains(cachedId)) {
-            expectedPurgeAlbumCount += 1;
-            if (purgeAlbum(cachedId)) {
-                actualPurgeAlbumCount += 1;
-            }
-        }
-    }
-
-    int expectedPurgePhotoCount = 0; // can't just subtract the counts for this, as add+remove = 0.
-    int actualPurgePhotoCount = 0;
-    foreach (const QString &cachedId, m_cachedPhotoIds) {
-        if (!m_serverPhotoIds.contains(cachedId)) {
-            expectedPurgePhotoCount += 1;
-            if (purgePhoto(cachedId)) {
-                actualPurgePhotoCount += 1;
-            }
-        }
-    }
-
-    if (expectedPurgeAlbumCount != actualPurgeAlbumCount
-            || expectedPurgePhotoCount != actualPurgePhotoCount) {
-        TRACE(SOCIALD_INFORMATION, QString(QLatin1String("unable to purge all albums or photos: expected to remove %1 and %2, removed %3 and %4 respectively"))
-                                   .arg(expectedPurgeAlbumCount).arg(expectedPurgePhotoCount).arg(actualPurgeAlbumCount).arg(actualPurgePhotoCount));
-    } else if (actualPurgeAlbumCount != 0 || actualPurgePhotoCount != 0) {
-        TRACE(SOCIALD_DEBUG, QString(QLatin1String("successfully purged %1 albums and %2 photos")).arg(actualPurgeAlbumCount).arg(actualPurgePhotoCount));
-    }
-}
-
-}*/
