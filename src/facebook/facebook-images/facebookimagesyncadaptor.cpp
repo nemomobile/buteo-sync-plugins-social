@@ -364,10 +364,12 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
                 QString(QLatin1String("performing continuation request for more photos for Facebook account with id %1: %2"))
                 .arg(accountId).arg(nextUrl));
         requestData(accountId, accessToken, nextUrl, fbUserId, fbAlbumId);
+    } else {
+        // this was the laste page, check removed images
+        checkRemovedImages(fbAlbumId);
     }
 
     // we're finished this request.  Decrement our busy semaphore.
-    checkRemovedImages(fbAlbumId);
     decrementSemaphore(accountId);
 }
 
