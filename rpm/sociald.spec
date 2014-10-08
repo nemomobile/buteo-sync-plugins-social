@@ -121,7 +121,6 @@ Summary:    Provides notification synchronisation with Facebook
 License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
-BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  qt5-qttools-linguist
 Requires: %{name} = %{version}-%{release}
 
@@ -289,7 +288,6 @@ Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
-BuildRequires:  libmeegotouchevents-qt5-devel
 BuildRequires:  qt5-qttools-linguist
 Requires: %{name} = %{version}-%{release}
 
