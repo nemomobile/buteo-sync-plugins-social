@@ -60,7 +60,7 @@ private:
     void requestCalendars(int accountId, const QString &accessToken,
                           bool needCleanSync, const QString &pageToken = QString());
     void requestEvents(int accountId, const QString &accessToken,
-                       const QString &calendarId, const QDateTime &since,
+                       const QString &calendarId, bool needCleanSync,
                        const QString &pageToken = QString());
     void updateLocalCalendarNotebooks(int accountId, const QString &accessToken, bool needCleanSync);
     void updateLocalCalendarNotebookEvents(int accountId, const QString &accessToken,
