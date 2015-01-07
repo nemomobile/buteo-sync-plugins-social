@@ -105,9 +105,7 @@ void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &acc
 {
     Accounts::Account *account = accountManager->account(accountId);
     if (!account) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("unable to load Google account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to load Google account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
@@ -119,9 +117,7 @@ void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &acc
     }
     account->deleteLater();
     if (emailAddress.isEmpty()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("unable to determine email address for Google account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to determine email address for Google account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
@@ -137,9 +133,7 @@ void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &acc
     if (!initSyncAdapter(QString::number(accountId))
             || !readSyncStateData(&remoteSince, QString::number(accountId))
             || !readExtraStateData(accountId)) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("unable to init sync adapter - aborting sync Google contacts with account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to init sync adapter - aborting sync Google contacts with account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
@@ -149,9 +143,11 @@ void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &acc
     if (m_myContactsGroupAtomIds[accountId].isEmpty()) {
         // we need to determine the atom id of the My Contacts group
         // because we upload newly added contacts to that group.
+        SOCIALD_LOG_TRACE("performing request to determine atom id of My Contacts group with account" << accountId);
         requestData(accountId, m_accessTokens[accountId], 0, QString(), remoteSince, true); // true = isGroupRequest
     } else {
         // we can just sync changes immediately
+        SOCIALD_LOG_TRACE("atom id of My Contacts group already known; requesting contact sync deltas with account" << accountId);
         determineRemoteChanges(remoteSince, QString::number(accountId));
     }
     decrementSemaphore(accountId);
@@ -191,6 +187,8 @@ void GoogleTwoWayContactSyncAdaptor::requestData(int accountId, const QString &a
     req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                      QString(QLatin1String("Bearer ") + accessToken).toUtf8());
 
+    SOCIALD_LOG_TRACE("requesting" << requestUrl << "with start index" << startIndex << "with account" << accountId);
+
     // we're requesting data.  Increment the semaphore so that we know we're still busy.
     incrementSemaphore(accountId);
     QNetworkReply *reply = networkAccessManager->get(req);
@@ -210,10 +208,7 @@ void GoogleTwoWayContactSyncAdaptor::requestData(int accountId, const QString &a
         m_apiRequestsRemaining[accountId] = m_apiRequestsRemaining[accountId] - 1;
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: unable to request data from Google account with id %1"))
-              .arg(accountId));
-
+        SOCIALD_LOG_ERROR("unable to request data from Google account with id" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
@@ -233,19 +228,14 @@ void GoogleTwoWayContactSyncAdaptor::groupsFinishedHandler()
     removeReplyTimeout(accountId, reply);
 
     if (isError) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error occurred when performing groups request for Google account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("error occurred when performing groups request for Google account" << accountId);
 
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
         return;
     } else if (data.isEmpty()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: no groups data in reply from Google with account %1"))
-              .arg(accountId));
-
+        SOCIALD_LOG_ERROR("no groups data in reply from Google with account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
@@ -256,15 +246,14 @@ void GoogleTwoWayContactSyncAdaptor::groupsFinishedHandler()
     GoogleContactAtom *atom = parser.parse(data);
 
     if (!atom) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: unable to parse groups data from reply from Google using account with id %1"))
-              .arg(accountId));
-
+        SOCIALD_LOG_ERROR("unable to parse groups data from reply from Google using account with id" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
         return;
     }
+
+    SOCIALD_LOG_TRACE("received information about" << atom->entrySystemGroups().size() << "groups for account" << accountId);
 
     if (atom->entrySystemGroups().contains(QStringLiteral("Contacts"))) {
         // we have found the atom id of the group we need to upload new contacts to.
@@ -273,9 +262,9 @@ void GoogleTwoWayContactSyncAdaptor::groupsFinishedHandler()
         if (myContactsGroupAtomId.isEmpty()) {
             // We don't consider this a fatal error,
             // instead, we just refuse to upsync new contacts.
-            TRACE(SOCIALD_INFORMATION,
-                  QString(QLatin1String("the My Contacts group was found, but atom id not parsed correctly for account: %1"))
-                  .arg(accountId));
+            SOCIALD_LOG_INFO("the My Contacts group was found, but atom id not parsed correctly for account:" << accountId);
+        } else {
+            SOCIALD_LOG_TRACE("found atom id for My Contacts group; continuing contact sync with account" << accountId);
         }
         // we can now continue with contact sync.
         determineRemoteChanges(lastSyncTimestamp, QString::number(accountId));
@@ -287,9 +276,7 @@ void GoogleTwoWayContactSyncAdaptor::groupsFinishedHandler()
         // couldn't find the My Contacts group.
         // We don't consider this a fatal error,
         // instead we just refuse to upsync new contacts.
-        TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("unable to find My Contacts group when syncing Google contacts for account: %1"))
-              .arg(accountId));
+        SOCIALD_LOG_INFO("unable to find My Contacts group when syncing Google contacts for account:" << accountId << "; upsync disabled.");
         // we can now continue with contact sync.
         determineRemoteChanges(lastSyncTimestamp, QString::number(accountId));
     }
@@ -311,19 +298,13 @@ void GoogleTwoWayContactSyncAdaptor::contactsFinishedHandler()
     removeReplyTimeout(accountId, reply);
 
     if (isError) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error occurred when performing contacts request for Google account %1"))
-              .arg(accountId));
-
+        SOCIALD_LOG_ERROR("error occurred when performing contacts request for Google account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
         return;
     } else if (data.isEmpty()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: no contact data in reply from Google with account %1"))
-              .arg(accountId));
-
+        SOCIALD_LOG_ERROR("no contact data in reply from Google with account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
@@ -334,15 +315,17 @@ void GoogleTwoWayContactSyncAdaptor::contactsFinishedHandler()
     GoogleContactAtom *atom = parser.parse(data);
 
     if (!atom) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: unable to parse contacts data from reply from Google using account with id %1"))
-              .arg(accountId));
-
+        SOCIALD_LOG_ERROR("unable to parse contacts data from reply from Google using account with id" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
         return;
     }
+
+    SOCIALD_LOG_TRACE("received information about" <<
+                      atom->entryContacts().size() << "add/mod contacts and " <<
+                      atom->deletedEntryContacts().size() << "del contacts" <<
+                      "for account" << accountId);
 
     // for each remote contact, there are some associated XML elements which
     // could not be stored in QContactDetail form (eg, link URIs etc).
@@ -372,13 +355,13 @@ void GoogleTwoWayContactSyncAdaptor::contactsFinishedHandler()
     if (!atom->nextEntriesUrl().isEmpty()) {
         // request more if they exist.
         startIndex += SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS;
+        SOCIALD_LOG_TRACE("more contact sync information is available server-side; performing another request with account" << accountId);
         requestData(accountId, accessToken, startIndex, atom->nextEntriesUrl(), lastSyncTimestamp);
     } else {
         // we're finished downloading the remote changes - we should sync local changes up.
         int addModCount = m_remoteAddMods[accountId].size(), removedCount = m_remoteDels[accountId].size();
-        TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("Google contact sync with account %1 got remote changes: a/m: %2 r: %3."))
-              .arg(accountId).arg(addModCount).arg(removedCount));
+        SOCIALD_LOG_INFO("Google contact sync with account" << accountId <<
+                         "got remote changes: a/m:" << addModCount << "r:" << removedCount);
         continueSync(accountId, accessToken);
     }
 
@@ -392,10 +375,9 @@ void GoogleTwoWayContactSyncAdaptor::continueSync(int accountId, const QString &
     transformContactAvatars(m_remoteAddMods[accountId], accountId, accessToken);
 
     // now store the changes locally
+    SOCIALD_LOG_TRACE("storing remote changes locally for account" << accountId);
     if (!storeRemoteChanges(m_remoteDels[accountId], &m_remoteAddMods[accountId], QString::number(accountId))) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("unable to store remote changes locally - aborting sync Google contacts for account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to store remote changes locally - aborting sync Google contacts for account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         // note: don't decrement here - it's done by contactsFinishedHandler().
@@ -405,9 +387,9 @@ void GoogleTwoWayContactSyncAdaptor::continueSync(int accountId, const QString &
     // update our mapping of GUID to QContactId
     foreach (const QContact &c, m_remoteAddMods[accountId]) {
         if (c.id().toString().trimmed().isEmpty()) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("No local contact id specified for contact with guid %1 from account %2"))
-                  .arg(c.detail<QContactGuid>().guid()).arg(accountId));
+            SOCIALD_LOG_ERROR("no local contact id specified for contact with guid" <<
+                              c.detail<QContactGuid>().guid() <<
+                              "from account" << accountId);
         } else {
             m_contactIds[accountId].insert(c.detail<QContactGuid>().guid(), c.id().toString());
         }
@@ -431,9 +413,7 @@ void GoogleTwoWayContactSyncAdaptor::continueSync(int accountId, const QString &
     QDateTime localSince;
     QList<QContact> locallyAdded, locallyModified, locallyDeleted;
     if (!determineLocalChanges(&localSince, &locallyAdded, &locallyModified, &locallyDeleted, QString::number(accountId), ignorableDetailTypes)) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("unable to determine local changes - aborting sync Google contacts for account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to determine local changes - aborting sync Google contacts for account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         // note: don't decrement here - it's done by contactsFinishedHandler().
@@ -472,12 +452,11 @@ void GoogleTwoWayContactSyncAdaptor::upsyncLocalChanges(const QDateTime &localSi
     }
     m_localChanges[accId] = contactUpdatesToPost;
 
-    TRACE(SOCIALD_INFORMATION,
-          QString(QLatin1String("Google account: %1 upsyncing local contact changes since:%2\n"
-                                "    locally added:    %3\n"
-                                "    locally modified: %4\n"
-                                "    locally removed:  %5\n"))
-          .arg(accId).arg(localSince.toString(Qt::ISODate)).arg(locallyAdded.count()).arg(locallyModified.count()).arg(locallyDeleted.count()));
+    SOCIALD_LOG_INFO("Google account:" << accId <<
+                     "upsyncing local contact changes since:" << localSince.toString(Qt::ISODate) << "\n" <<
+                     "    locally added:    " << locallyAdded.count() << "\n"
+                     "    locally modified: " << locallyModified.count() << "\n"
+                     "    locally removed:  " << locallyDeleted.count() << "\n");
 
     upsyncLocalChangesList(accId);
 }
@@ -500,9 +479,8 @@ void GoogleTwoWayContactSyncAdaptor::upsyncLocalChangesList(int accountId)
                 // new contacts need to be inserted into the My Contacts group
                 QString myContactsGroupAtomId = m_myContactsGroupAtomIds[accountId];
                 if (myContactsGroupAtomId.isEmpty()) {
-                    TRACE(SOCIALD_INFORMATION,
-                          QString(QLatin1String("skipping upload of locally added contact %1 to account %2 due to unknown My Contacts group atom id"))
-                          .arg(entry.first.id().toString()).arg(accountId));
+                    SOCIALD_LOG_INFO("skipping upload of locally added contact" << entry.first.id().toString() <<
+                                     "to account" << accountId << "due to unknown My Contacts group atom id");
                 } else {
                     extraXmlElements.append(QStringLiteral("<gContact:groupMembershipInfo deleted=\"false\" href=\"%1\"></gContact:groupMembershipInfo>").arg(myContactsGroupAtomId));
                     batch.insertMulti(entry.second, qMakePair(entry.first, extraXmlElements));
@@ -520,9 +498,7 @@ void GoogleTwoWayContactSyncAdaptor::upsyncLocalChangesList(int accountId)
             }
         }
     } else {
-        TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("skipping upload of local contacts changes due to profile direction setting for account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_INFO("skipping upload of local contacts changes due to profile direction setting for account" << accountId);
     }
 
     if (!postedData) {
@@ -556,10 +532,7 @@ void GoogleTwoWayContactSyncAdaptor::storeToRemote(int accountId, const QString 
         m_apiRequestsRemaining[accountId] = m_apiRequestsRemaining[accountId] - 1;
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("error: unable to post contacts to Google account with id %1"))
-              .arg(accountId));
-
+        SOCIALD_LOG_ERROR("unable to post contacts to Google account with id" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
@@ -575,9 +548,8 @@ void GoogleTwoWayContactSyncAdaptor::postFinishedHandler()
     removeReplyTimeout(accountId, reply);
 
     if (reply->property("isError").toBool()) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("Error occurred posting contact data to google with account %1, got response: %2"))
-              .arg(accountId).arg(QString::fromUtf8(response)));
+        SOCIALD_LOG_ERROR("error occurred posting contact data to google with account" << accountId << "," <<
+                          "got response:" << QString::fromUtf8(response));
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
@@ -593,27 +565,19 @@ void GoogleTwoWayContactSyncAdaptor::postFinishedHandler()
     foreach (const GoogleContactAtom::BatchOperationResponse &response, operationResponses) {
         if (response.isError) {
             errorOccurredInBatch = true;
-            TRACE(SOCIALD_DEBUG,
-                  QString(QLatin1String("batch operation error:\n"
-                                        "    id:     %1\n"
-                                        "    type:   %2\n"
-                                        "    code:   %3\n"
-                                        "    reason: %4\n"
-                                        "    descr:  %5\n"))
-                  .arg(response.operationId)
-                  .arg(response.type)
-                  .arg(response.code)
-                  .arg(response.reason)
-                  .arg(response.reasonDescription));
+            SOCIALD_LOG_DEBUG("batch operation error:\n"
+                              "    id:     " << response.operationId << "\n"
+                              "    type:   " << response.type << "\n"
+                              "    code:   " << response.code << "\n"
+                              "    reason: " << response.reason << "\n"
+                              "    descr:  " << response.reasonDescription << "\n");
         } else {
             batchOperationIdsToGuids.insert(response.operationId, response.contactGuid);
         }
     }
 
     if (errorOccurredInBatch) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("Error occurred during batch operation with Google account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("error occurred during batch operation with Google account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
         decrementSemaphore(accountId);
@@ -649,10 +613,7 @@ void GoogleTwoWayContactSyncAdaptor::queueOutstandingAvatars(int accountId, cons
         }
     }
 
-    TRACE(SOCIALD_DEBUG,
-          QString(QLatin1String("queued %1 avatars for download for account %2"))
-          .arg(queuedCount)
-          .arg(accountId));
+    SOCIALD_LOG_DEBUG("queued" << queuedCount << "avatars for download for account" << accountId);
 }
 
 bool GoogleTwoWayContactSyncAdaptor::queueAvatarForDownload(int accountId, const QString &accessToken, const QString &contactGuid, const QString &imageUrl)
@@ -781,9 +742,7 @@ void GoogleTwoWayContactSyncAdaptor::purgeAccount(int pid)
     if (contactsToRemove.size()) {
         success = m_contactManager.removeContacts(contactsToRemove);
         if (!success) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("Failed to remove stale contacts: %1 - during purge of account %2"))
-                  .arg(m_contactManager.error()).arg(pid));
+            SOCIALD_LOG_ERROR("failed to remove stale contacts during purge of account" << pid << ":" << m_contactManager.error());
         }
     }
 
@@ -811,15 +770,11 @@ void GoogleTwoWayContactSyncAdaptor::purgeAccount(int pid)
     QString oobScope = QStringLiteral("%1-%2").arg(SOCIALD_GOOGLE_CONTACTS_SYNCTARGET).arg(pid);
     if (!d->m_engine->removeOOB(oobScope, purgeKeys)) {
         success = false;
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("Error occurred while purging OOB data for removed Google account %1"))
-              .arg(pid));
+        SOCIALD_LOG_ERROR("error occurred while purging OOB data for removed Google account" << pid);
     }
 
     if (success) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("Purged account %1 and successfully removed %2 contacts"))
-                .arg(pid).arg(purgeCount));
+        SOCIALD_LOG_INFO("purged account" << pid << "and successfully removed" << purgeCount << "contacts");
     }
 }
 
@@ -877,16 +832,13 @@ void GoogleTwoWayContactSyncAdaptor::finalize(int accountId)
                 d->m_stateData[QString::number(accountId)].m_mutatedPrevRemote.replace(it.key(), it.value());
             }
         } else {
-            TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("finalize: error adding avatars for %1 Google contacts from account %2"))
-                .arg(contactAvatarUpdates.size()).arg(accountId));
+            SOCIALD_LOG_ERROR("finalize: error adding avatars for" << contactAvatarUpdates.size() <<
+                              "Google contacts from account" << accountId);
         }
     }
 
     if (!storeExtraStateData(accountId) || !storeSyncStateData(QString::number(accountId))) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("unable to finalize sync of Google contacts with account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to finalize sync of Google contacts with account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
     }
@@ -992,19 +944,14 @@ void GoogleTwoWayContactSyncAdaptor::finalCleanup()
     QList<QContact> saveList = contactsToSave.values();
     QList<QContactDetail::DetailType> typeMask; typeMask << QContactDetail::TypeAvatar;
     if (m_contactManager.saveContacts(&saveList, typeMask)) {
-        TRACE(SOCIALD_INFORMATION,
-            QString(QLatin1String("finalCleanup() fixed up avatars from %1 Google contacts"))
-            .arg(saveList.size()));
+        SOCIALD_LOG_INFO("finalCleanup() fixed up avatars from" << saveList.size() << "Google contacts");
     } else {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("finalCleanup() failed to save non-existent avatar removals for Google contacts")));
+        SOCIALD_LOG_ERROR("finalCleanup() failed to save non-existent avatar removals for Google contacts");
     }
 
     // fifth, purge all data for those account ids which no longer exist.
     if (purgeAccountIds.size()) {
-        TRACE(SOCIALD_INFORMATION,
-            QString(QLatin1String("finalCleanup() purging contacts from %1 non-existent Google accounts"))
-            .arg(purgeAccountIds.size()));
+        SOCIALD_LOG_INFO("finalCleanup() purging contacts from" << purgeAccountIds.size() << "non-existent Google accounts");
         foreach (int purgeId, purgeAccountIds) {
             purgeAccount(purgeId);
         }
@@ -1022,9 +969,7 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
          << QStringLiteral("contactIds")
          << QStringLiteral("contactAvatars");
     if (!d->m_engine->fetchOOB(d->m_stateData[QString::number(accountId)].m_oobScope, keys, &values)) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("failed to read extra data for %1 account %2"))
-            .arg(d->m_syncTarget).arg(accountId));
+        SOCIALD_LOG_ERROR("failed to read extra data for" << d->m_syncTarget << "account" << accountId);
         d->clear(QString::number(accountId));
         return false;
     }
@@ -1084,9 +1029,8 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
         guidToContactAvatar.insert(guid, caJsonObj.value(guid).toString());
     }
     m_contactAvatars[accountId] = guidToContactAvatar;
-    TRACE(SOCIALD_INFORMATION,
-            QString(QLatin1String("have %1 outstanding contact avatars to sync from account %2"))
-            .arg(guidToContactAvatar.size()).arg(accountId));
+    SOCIALD_LOG_INFO("have" << guidToContactAvatar.size() <<
+                     "outstanding contact avatars to sync from account" << accountId);
 
     // Finally, if we're doing a "clean sync" we should pre-populate our prevRemote
     // list with the current state of the local database.
@@ -1103,9 +1047,7 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
                                             0,
                                             &maxTimestamp,
                                             &error)) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("failed to fetch pre-existing contacts for account %1"))
-                    .arg(accountId));
+            SOCIALD_LOG_ERROR("failed to fetch pre-existing contacts for account" << accountId);
             d->clear(QString::number(accountId));
             return false;
         }
@@ -1197,9 +1139,7 @@ bool GoogleTwoWayContactSyncAdaptor::storeExtraStateData(int accountId)
     values.insert("contactIds", ciValue);
     values.insert("contactAvatars", caValue);
     if (!d->m_engine->storeOOB(d->m_stateData[QString::number(accountId)].m_oobScope, values)) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("failed to store extra state data for %1 account %2"))
-            .arg(d->m_syncTarget).arg(accountId));
+        SOCIALD_LOG_ERROR("failed to store extra state data for" << d->m_syncTarget << "account" << accountId);
         d->clear(QString::number(accountId));
         return false;
     }

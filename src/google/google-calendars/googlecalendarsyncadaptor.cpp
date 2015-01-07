@@ -223,43 +223,38 @@ void extractRecurrence(const QJsonArray &recurrence, KCalCore::Event::Ptr event,
         if (ruleStr.toLower().startsWith(QString::fromLatin1("rrule:"))) {
             KCalCore::RecurrenceRule *rrule = new KCalCore::RecurrenceRule;
             if (!icalFormat.fromString(rrule, ruleStr.mid(6))) {
-                TRACE(SOCIALD_DEBUG,
-                        QString::fromLatin1("unable to parse RRULE information: %1\nfrom: %2")
-                        .arg(ruleStr).arg(QString::fromUtf8(QJsonDocument(recurrence).toJson())));
+                SOCIALD_LOG_DEBUG("unable to parse RRULE information:" << ruleStr << "\n" <<
+                                  "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
             } else {
                 kcalRecurrence->addRRule(rrule);
             }
         } else if (ruleStr.toLower().startsWith(QString::fromLatin1("exrule:"))) {
             KCalCore::RecurrenceRule *exrule = new KCalCore::RecurrenceRule;
             if (!icalFormat.fromString(exrule, ruleStr.mid(7))) {
-                TRACE(SOCIALD_DEBUG,
-                        QString::fromLatin1("unable to parse EXRULE information: %1\nfrom: %2")
-                        .arg(ruleStr).arg(QString::fromUtf8(QJsonDocument(recurrence).toJson())));
+                SOCIALD_LOG_DEBUG("unable to parse EXRULE information:" << ruleStr << "\n"
+                                  "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
             } else {
                 kcalRecurrence->addExRule(exrule);
             }
         } else if (ruleStr.toLower().startsWith(QString::fromLatin1("rdate:"))) {
             QDate rdate = QDate::fromString(ruleStr.mid(6), "yyyy-MM-dd");
             if (!rdate.isValid()) {
-                TRACE(SOCIALD_DEBUG,
-                        QString::fromLatin1("unable to parse RDATE information: %1\nfrom: %2")
-                        .arg(ruleStr).arg(QString::fromUtf8(QJsonDocument(recurrence).toJson())));
+                SOCIALD_LOG_DEBUG("unable to parse RDATE information:" << ruleStr << "\n"
+                                  "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
             } else {
                 kcalRecurrence->addRDate(rdate);
             }
         } else if (ruleStr.toLower().startsWith(QString::fromLatin1("exdate:"))) {
             QDate exdate = QDate::fromString(ruleStr.mid(7), "yyyy-MM-dd");
             if (!exdate.isValid()) {
-                TRACE(SOCIALD_DEBUG,
-                        QString::fromLatin1("unable to parse EXDATE information: %1\nfrom: %2")
-                        .arg(ruleStr).arg(QString::fromUtf8(QJsonDocument(recurrence).toJson())));
+                SOCIALD_LOG_DEBUG("unable to parse EXDATE information:" << ruleStr << "\n"
+                                  "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
             } else {
                 kcalRecurrence->addExDate(exdate);
             }
         } else {
-            TRACE(SOCIALD_DEBUG,
-                    QString::fromLatin1("unknown recurrence information: %1\nfrom: %2")
-                    .arg(ruleStr).arg(QString::fromUtf8(QJsonDocument(recurrence).toJson())));
+            SOCIALD_LOG_DEBUG("unknown recurrence information:" << ruleStr << "\n"
+                              "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
         }
     }
 }
@@ -409,9 +404,7 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds
 
 void GoogleCalendarSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
-    TRACE(SOCIALD_DEBUG,
-          QString(QLatin1String("Beginning Calendar sync for Google, account %1"))
-          .arg(accountId));
+    SOCIALD_LOG_DEBUG("beginning Calendar sync for Google, account" << accountId);
 
     bool needCleanSync = !wasLastSyncSuccessful(accountId);
     m_serverCalendarIdToSummaryAndColor[accountId].clear();
@@ -456,10 +449,7 @@ void GoogleCalendarSyncAdaptor::requestCalendars(int accountId, const QString &a
 
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request calendars"
-                                      " from Google account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request calendars from Google account with id" << accountId);
         m_syncSucceeded[accountId] = false;
         decrementSemaphore(accountId);
     }
@@ -509,9 +499,8 @@ void GoogleCalendarSyncAdaptor::calendarsFinishedHandler()
         }
     } else {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse calendar data from request with account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR("unable to parse calendar data from request with account" << accountId << ";" <<
+                          "got:" << QString::fromLatin1(replyData.constData()));
         m_syncSucceeded[accountId] = false;
     }
 
@@ -554,10 +543,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
             } else {
                 // the calendar has been removed from the server.
                 // we need to purge it from the device.
-                TRACE(SOCIALD_DEBUG,
-                      QString(QLatin1String("Removing calendar %1 for Google account: %2"))
-                      .arg(notebook->name())
-                      .arg(accountId));
+                SOCIALD_LOG_DEBUG("removing calendar" << notebook->name() << "for Google account:" << accountId);
                 m_storage->loadNotebookIncidences(notebook->uid());
                 KCalCore::Incidence::List incidenceList;
                 m_storage->allIncidences(&incidenceList, notebook->uid());
@@ -573,10 +559,8 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
     // any calendarIds which exist on the server but not the device need to be created.
     foreach (const QString &serverCalendarId, m_serverCalendarIdToSummaryAndColor[accountId].keys()) {
         if (!deviceCalendarIds.contains(serverCalendarId)) {
-            TRACE(SOCIALD_DEBUG,
-                  QString(QLatin1String("Adding new calendar %1 for Google account: %2"))
-                  .arg(m_serverCalendarIdToSummaryAndColor[accountId].value(serverCalendarId).first)
-                  .arg(accountId));
+            SOCIALD_LOG_DEBUG("adding new calendar" << m_serverCalendarIdToSummaryAndColor[accountId].value(serverCalendarId).first <<
+                              "for Google account:" << accountId);
             mKCal::Notebook::Ptr notebook = mKCal::Notebook::Ptr(new mKCal::Notebook);
             notebook->setIsReadOnly(false);
             notebook->setName(m_serverCalendarIdToSummaryAndColor[accountId].value(serverCalendarId).first);
@@ -601,9 +585,9 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
                                         SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::Calendars),
                                         accountId).addSecs(2); // add 2 secs to avoid fs sync time issues.
 
-    TRACE(SOCIALD_DEBUG,
-          QString(QLatin1String("Syncing calendar events for Google account: %1.  CleanSync: %2.  Since: %3."))
-          .arg(accountId).arg(needCleanSync || !since.isValid()).arg(since.toString(Qt::ISODate)));
+    SOCIALD_LOG_DEBUG("syncing calendar events for Google account:" << accountId << "." <<
+                      "CleanSync:" << (needCleanSync || !since.isValid()) <<
+                      "Since:" << since.toString(Qt::ISODate));
 
     foreach (const QString &calendarId, m_serverCalendarIdToSummaryAndColor[accountId].keys()) {
         requestEvents(accountId, accessToken, calendarId, since);
@@ -657,16 +641,12 @@ void GoogleCalendarSyncAdaptor::requestEvents(int accountId, const QString &acce
                 this, SLOT(sslErrorsHandler(QList<QSslError>)));
         connect(reply, SIGNAL(finished()), this, SLOT(eventsFinishedHandler()));
 
-        TRACE(SOCIALD_DEBUG,
-              QString(QLatin1String("Requesting calendar events for Google account: %1: %2"))
-              .arg(accountId).arg(url.toString()));
+        SOCIALD_LOG_DEBUG("requesting calendar events for Google account:" << accountId << ":" << url.toString());
 
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request events for calendar %1"
-                                      " from Google account with id %2"))
-                .arg(calendarId).arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request events for calendar" << calendarId <<
+                          "from Google account with id" << accountId);
         m_syncSucceeded[accountId] = false;
         decrementSemaphore(accountId);
     }
@@ -708,9 +688,8 @@ void GoogleCalendarSyncAdaptor::eventsFinishedHandler()
         }
     } else {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse event data from request with account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR("unable to parse event data from request with account" << accountId << ";"
+                          "got:" << QString::fromLatin1(replyData.constData()));
         m_syncSucceeded[accountId] = false;
     }
 
@@ -741,10 +720,8 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
     }
 
     if (!found) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: calendar %1 doesn't have a notebook"
-                                      " for Google account with id %2"))
-                .arg(calendarId).arg(accountId));
+        SOCIALD_LOG_ERROR("calendar" << calendarId <<
+                          "doesn't have a notebook for Google account with id" << accountId);
         m_syncSucceeded[accountId] = false;
         return;
     }
@@ -857,11 +834,9 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
         }
     }
 
-    TRACE(SOCIALD_INFORMATION,
-          QString(QLatin1String("%1 sync with Google calendar %2 for account %3: remote A/M/R: %4 / %5 / %6"))
-          .arg(since.isValid() ? "Delta" : "Clean")
-          .arg(googleNotebook->name()).arg(accountId)
-          .arg(remoteAdded).arg(remoteModified).arg(remoteRemoved));
+    SOCIALD_LOG_INFO((since.isValid() ? "Delta" : "Clean") <<
+                     "sync with Google calendar" << googleNotebook->name() << "for account" << accountId << ":"
+                     "remote A/M/R:" << remoteAdded << "/" << remoteModified << "/" << remoteRemoved);
 
     // only upsync changes if we're doing a delta sync, and upsync is enabled
     if (!m_accountSyncProfile || m_accountSyncProfile->syncDirection() != Buteo::SyncProfile::SYNC_DIRECTION_FROM_REMOTE) {
@@ -897,15 +872,11 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                 }
             }
 
-            TRACE(SOCIALD_INFORMATION,
-                  QString(QLatin1String("Delta sync with Google calendar %1 for account %2: local A/M/R: %3 / %4 / %5"))
-                  .arg(googleNotebook->name()).arg(accountId)
-                  .arg(localAdded).arg(localModified).arg(localRemoved));
+            SOCIALD_LOG_INFO("Delta sync with Google calendar" << googleNotebook->name() << "for account" << accountId << ":" <<
+                             "local A/M/R:" << localAdded << "/" << localModified << "/" << localRemoved);
         }
     } else {
-        TRACE(SOCIALD_INFORMATION,
-              QString(QLatin1String("skipping upload of local calendar changes due to profile direction setting for account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_INFO("skipping upload of local calendar changes due to profile direction setting for account" << accountId);
     }
 }
 
@@ -962,14 +933,14 @@ void GoogleCalendarSyncAdaptor::upsyncChanges(int accountId, const QString &acce
 
         setupReplyTimeout(accountId, reply);
 
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("Upsyncing change: %1 to calendarId: %2 of account %3:\n%4\n%5\n"))
-                .arg(upsyncTypeStr).arg(calendarId).arg(accountId).arg(request.url().toString()).arg(QString::fromUtf8(eventData)));
+        SOCIALD_LOG_DEBUG("upsyncing change:" << upsyncTypeStr <<
+                          "to calendarId:" << calendarId <<
+                          "of account" << accountId << ":\n" <<
+                          request.url().toString() << "\n" <<
+                          QString::fromUtf8(eventData));
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request upsync for calendar %1"
-                                      " from Google account with id %2"))
-                .arg(calendarId).arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request upsync for calendar" << calendarId <<
+                          "from Google account with id" << accountId);
         m_syncSucceeded[accountId] = false;
         decrementSemaphore(accountId);
     }
@@ -998,16 +969,14 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
     // parse the calendars' metadata from the response.
     if (isError) {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error occurred while upsyncing calendar data to Google account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR("error occurred while upsyncing calendar data to Google account" << accountId << ";" <<
+                          "got:" << QString::fromLatin1(replyData.constData()));
         m_syncSucceeded[accountId] = false;
     } else if (upsyncType == GoogleCalendarSyncAdaptor::UpsyncDelete) {
         // we expect an empty response body on success for Delete operations
         if (!replyData.isEmpty()) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error occurred while upsyncing calendar event deletion to Google account %1; got: %2"))
-                    .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+            SOCIALD_LOG_ERROR("error occurred while upsyncing calendar event deletion to Google account" << accountId << ";" <<
+                              "got:" << QString::fromLatin1(replyData.constData()));
             m_syncSucceeded[accountId] = false;
         }
     } else {
@@ -1018,9 +987,9 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
             QString typeStr = upsyncType == GoogleCalendarSyncAdaptor::UpsyncInsert
                             ? QString::fromLatin1("insertion")
                             : QString::fromLatin1("modification");
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error occurred while upsyncing calendar event %1 to Google account %2; got: %3"))
-                    .arg(typeStr).arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+            SOCIALD_LOG_ERROR("error occurred while upsyncing calendar event" << typeStr <<
+                              "to Google account" << accountId << ";" <<
+                              "got:" << QString::fromLatin1(replyData.constData()));
             m_syncSucceeded[accountId] = false;
         } else {
             // update the event in our local database.
@@ -1037,10 +1006,7 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
             }
 
             if (!found) {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: calendar %1 doesn't have a notebook"
-                                              " for Google account with id %2"))
-                        .arg(calendarId).arg(accountId));
+                SOCIALD_LOG_ERROR("calendar" << calendarId << "doesn't have a notebook for Google account with id" << accountId);
                 m_syncSucceeded[accountId] = false;
             } else {
                 // update this event in the local calendar
@@ -1048,27 +1014,18 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                 m_storage->load(kcalEventId);
                 KCalCore::Event::Ptr event = m_calendar->event(kcalEventId);
                 if (!event) {
-                    TRACE(SOCIALD_ERROR,
-                            QString(QLatin1String("event %1 was deleted locally during sync"
-                                                  " of Google account with id %2"))
-                            .arg(kcalEventId).arg(accountId));
+                    SOCIALD_LOG_ERROR("event" << kcalEventId << "was deleted locally during sync of Google account with id" << accountId);
                     m_syncSucceeded[accountId] = false;
                 } else {
                     QString oldDTS = event->dtStart().toString(RFC3339_FORMAT);
                     QString oldDTE = event->dtEnd().toString(RFC3339_FORMAT);
                     event->startUpdates();
                     jsonToKCal(parsed, event, m_icalFormat);
-                    TRACE(SOCIALD_DEBUG,
-                            QString(QLatin1String("Two-way calendar sync with account %1:\n"
-                                                  "  re-updating event %2:\n"
-                                                  "  old start: %3 old end: %4\n"
-                                                  "  new start: %5 new end: %6\n"))
-                            .arg(accountId)
-                            .arg(event->summary())
-                            .arg(oldDTS)
-                            .arg(oldDTE)
-                            .arg(event->dtStart().toString(RFC3339_FORMAT))
-                            .arg(event->dtEnd().toString(RFC3339_FORMAT)));
+                    SOCIALD_LOG_DEBUG("Two-way calendar sync with account" << accountId << ":\n" <<
+                                      "  re-updating event" << event->summary() << ":\n" <<
+                                      "  old start:" << oldDTS << ", old end:" << oldDTE << "\n" <<
+                                      "  new start:" << event->dtStart().toString(RFC3339_FORMAT) <<
+                                      ", new end:" << event->dtEnd().toString(RFC3339_FORMAT) << "\n");
                     event->endUpdates();
                     m_storageNeedsSave = true;
                     m_idDb.insertEvent(accountId, gCalEventId(event), googleNotebook->uid(), kcalEventId);

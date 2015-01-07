@@ -165,8 +165,7 @@ FacebookContactSyncAdaptor::FacebookContactSyncAdaptor(QObject *parent)
 {
     setInitialActive(false);
     if (!m_contactManager) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: no aggregating contact manager exists - Facebook contacts sync will be inactive")));
+        SOCIALD_LOG_ERROR("no aggregating contact manager exists - Facebook contacts sync will be inactive");
         return;
     }
 
@@ -263,9 +262,9 @@ void FacebookContactSyncAdaptor::requestData(int accountId, const QString &acces
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request %1 from Facebook account with id %2"))
-                .arg(isAvatarRequest ? QLatin1String("avatar") : QLatin1String("friends list")).arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request" <<
+                          (isAvatarRequest ? QLatin1String("avatar") : QLatin1String("friends list")) <<
+                          "from Facebook account with id" << accountId);
     }
 }
 
@@ -290,9 +289,7 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
         QJsonObject paging = parsed.value(QLatin1String("paging")).toObject(); // may not exist, if no more results.
 
         if (!data.size()) {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("no more friends received for account %1"))
-                    .arg(accountId));
+            SOCIALD_LOG_DEBUG("no more friends received for account" << accountId);
         } else {
             // for each friend, retrieve the detailed information.
             for (int i = 0; i < data.size(); ++i) {
@@ -301,9 +298,8 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
                 QString friendName = currFriend.value(QLatin1String("name")).toString();
                 if (friendId.isEmpty()) {
                     // strange error.  ignore this entry.
-                    TRACE(SOCIALD_DEBUG,
-                            QString(QLatin1String("strange entry in friends data list for account %1: %2, %3, keys:"))
-                            .arg(accountId).arg(friendId).arg(friendName) << currFriend.keys());
+                    SOCIALD_LOG_DEBUG("strange entry in friends data list for account" << accountId <<
+                                      ":" << friendId << friendName << "with keys:" << currFriend.keys());
                     continue;
                 }
 
@@ -326,17 +322,17 @@ void FacebookContactSyncAdaptor::friendsFinishedHandler()
             // we're finished - we should attempt to update our local database.
             int addedCount = 0, modifiedCount = 0, removedCount = 0, unchangedCount = 0;
             bool success = storeToLocal(accessToken, accountId, &addedCount, &modifiedCount, &removedCount, &unchangedCount);
-            TRACE(SOCIALD_INFORMATION,
-                  QString(QLatin1String("Facebook contact sync with account %1 finished with result: %2: a: %3 m: %4 r: %5 u: %6. Continuing to load avatars..."))
-                  .arg(accountId).arg(success ? "SUCCESS" : "ERROR").arg(addedCount).arg(modifiedCount).arg(removedCount).arg(unchangedCount));
+            SOCIALD_LOG_INFO("Facebook contact sync with account" << accountId <<
+                             "finished with result:" << (success ? "SUCCESS" : "ERROR") << "->" <<
+                             "a:" << addedCount << "m:" << modifiedCount << "r:" << removedCount << "u:" << unchangedCount <<
+                             "Continuing to load avatars...");
         }
     } else {
         QString message = isError ?
-                          QLatin1String("error: error occurred during friends request with account %1; got: %2") :
-                          QLatin1String("error: unable to parse friends data from request with account %1; got: %2");
+                          QLatin1String("error occurred during friends request with account %1; got: %2") :
+                          QLatin1String("unable to parse friends data from request with account %1; got: %2");
 
-        TRACE(SOCIALD_ERROR,
-              message.arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR(message.arg(accountId).arg(QString::fromLatin1(replyData.constData())));
     }
 
     // we're finished this request.  Decrement our busy semaphore.
@@ -401,9 +397,7 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
             *needsSaving = true;
             contactSyncTarget.setSyncTarget(SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET);
             if (!newOrExisting.saveDetail(&contactSyncTarget)) {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to save updated sync target for friend %1 of account %2"))
-                        .arg(name).arg(accountId));
+                SOCIALD_LOG_ERROR("unable to save updated sync target for friend" << name << "of account" << accountId);
                 *needsSaving = false;
                 return QContact();
             }
@@ -415,9 +409,7 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
             *needsSaving = true;
             contactGuid.setGuid(fbuid);
             if (!newOrExisting.saveDetail(&contactGuid)) {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: unable to save updated guid for friend %1 of account %2"))
-                        .arg(name).arg(accountId));
+                SOCIALD_LOG_ERROR("unable to save updated guid for friend" << name << "of account" << accountId);
                 *needsSaving = false;
                 return QContact();
             }
@@ -432,9 +424,7 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
                 contactName.setMiddleName(middleName);
                 contactName.setLastName(lastName);
                 if (!newOrExisting.saveDetail(&contactName)) {
-                    TRACE(SOCIALD_ERROR,
-                            QString(QLatin1String("error: unable to save updated name for friend %1 of account %2"))
-                            .arg(name).arg(accountId));
+                    SOCIALD_LOG_ERROR("unable to save updated name for friend" << name << "of account" << accountId);
                     *needsSaving = false;
                     return QContact();
                 }
@@ -647,9 +637,7 @@ QContact FacebookContactSyncAdaptor::parseContactDetails(const QJsonObject &blob
         return newOrExisting; // will only be saved if *needsSaving == true.
     } else {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse friend details, got: %1"))
-                .arg(QStringList(blobDetails.keys()).join(QChar(','))));
+        SOCIALD_LOG_ERROR("unable to parse friend details, got:" << QStringList(blobDetails.keys()).join(QChar(',')));
     }
 
     *needsSaving = false;
@@ -683,9 +671,7 @@ QContact FacebookContactSyncAdaptor::newOrExistingContact(const QString &fbuid, 
         *isNewContact = true;
         return retn;
     } else if (cids.size() > 1) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: friend %1 represented multiple times in QtContacts db"))
-                .arg(fbuid));
+        SOCIALD_LOG_ERROR("friend" << fbuid << "represented multiple times in QtContacts db");
         // return the first one anyway.  Flow down.
     }
 
@@ -805,8 +791,7 @@ bool FacebookContactSyncAdaptor::storeToLocal(const QString &accessToken, int ac
         QContact rc = remoteContacts[i];
         QString guid = rc.detail<QContactGuid>().guid();
         if (guid.isEmpty()) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("skipping: cannot store remote Facebook contact with no guid:")) << rc);
+            SOCIALD_LOG_ERROR("skipping: cannot store remote Facebook contact with no guid:" << rc);
             continue;
         }
 
@@ -899,17 +884,13 @@ bool FacebookContactSyncAdaptor::storeToLocal(const QString &accessToken, int ac
     if (remoteToSave.size()) {
         success = saveNonexportableContacts(m_contactManager, &remoteToSave);
         if (!success) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("Failed to save contacts: %1 - with account %2"))
-                  .arg(m_contactManager->error()).arg(accountId));
+            SOCIALD_LOG_ERROR("failed to save contacts for account" << accountId << ":" << m_contactManager->error());
         }
     }
     if (localToRemove.size()) {
         success = m_contactManager->removeContacts(localToRemove);
         if (!success) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("Failed to remove stale contacts: %1 - with account %2"))
-                  .arg(m_contactManager->error()).arg(accountId));
+            SOCIALD_LOG_ERROR("failed to remove stale contacts for account" << accountId << ":" << m_contactManager->error());
         }
     }
 
@@ -929,7 +910,7 @@ bool FacebookContactSyncAdaptor::storeToLocal(const QString &accessToken, int ac
 
 void FacebookContactSyncAdaptor::finalize(int accountId)
 {
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("Finished Facebook contacts sync for account %1")).arg(accountId));
+    SOCIALD_LOG_DEBUG("finished Facebook contacts sync for account" << accountId);
 }
 
 void FacebookContactSyncAdaptor::purgeAccount(int pid)
@@ -975,24 +956,20 @@ void FacebookContactSyncAdaptor::purgeAccount(int pid)
     if (contactsToUpdate.size()) {
         success = saveNonexportableContacts(m_contactManager, &contactsToUpdate);
         if (!success) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("Failed to update contacts: %1 - during purge of account %2"))
-                  .arg(m_contactManager->error()).arg(pid));
+            SOCIALD_LOG_ERROR("failed to update contacts during purge of account" << pid << ":" << m_contactManager->error());
         }
     }
     if (contactsToRemove.size()) {
         success = m_contactManager->removeContacts(contactsToRemove);
         if (!success) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("Failed to remove stale contacts: %1 - during purge of account %2"))
-                  .arg(m_contactManager->error()).arg(pid));
+            SOCIALD_LOG_ERROR("failed to remove stale contacts during purge of account" << pid << ":" << m_contactManager->error());
         }
     }
 
     if (success) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("purged account %1 and successfully removed %2 friends (kept %3 modified friends)"))
-                .arg(pid).arg(purgeCount).arg(modifiedCount));
+        SOCIALD_LOG_INFO("purged account" << pid <<
+                         "and successfully removed" << purgeCount << "friends"
+                         "(kept" << modifiedCount << "modified friends)");
     }
 }
 
@@ -1044,9 +1021,7 @@ void FacebookContactSyncAdaptor::finalCleanup()
 
     // fourth, purge all data for those account ids which no longer exist.
     if (purgeAccountIds.size()) {
-        TRACE(SOCIALD_INFORMATION,
-            QString(QLatin1String("finalCleanup() purging contacts from %1 non-existent Facebook accounts"))
-            .arg(purgeAccountIds.size()));
+        SOCIALD_LOG_INFO("finalCleanup() purging contacts from" << purgeAccountIds.size() << "non-existent Facebook accounts");
         foreach (int purgeId, purgeAccountIds) {
             purgeAccount(purgeId);
         }

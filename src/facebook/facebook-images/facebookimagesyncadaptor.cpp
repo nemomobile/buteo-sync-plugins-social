@@ -65,9 +65,7 @@ void FacebookImageSyncAdaptor::sync(const QString &dataTypeString, int accountId
 {
     // get ready for sync
     if (!initRemovalDetectionLists(accountId)) {
-        TRACE(SOCIALD_ERROR,
-              QString(QLatin1String("unable to initialized cached account list for account %1"))
-              .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to initialized cached account list for account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
@@ -158,9 +156,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request data from Facebook account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request data from Facebook account with id" << accountId);
         clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
     }
 }
@@ -182,9 +178,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (isError || !ok || !parsed.contains(QLatin1String("data"))) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to read albums response for Facebook account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to read albums response for Facebook account with id" << accountId);
         clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
         decrementSemaphore(accountId);
         return;
@@ -192,9 +186,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
 
     QJsonArray data = parsed.value(QLatin1String("data")).toArray();
     if (data.size() == 0) {
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("Facebook account with id %1 has no albums"))
-                .arg(accountId));
+        SOCIALD_LOG_DEBUG("Facebook account with id" << accountId << "has no albums");
         decrementSemaphore(accountId);
         return;
     }
@@ -234,9 +226,8 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
         m_cachedAlbums.remove(fbAlbumId);  // Removal detection
         if (!dbAlbum.isNull() && (dbAlbum->updatedTime() >= updatedTime
                                   && dbAlbum->imageCount() == imageCount)) {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("album with id %1 by user %2 from Facebook account with id %3 doesn't need sync"))
-                    .arg(albumId).arg(userId).arg(accountId));
+            SOCIALD_LOG_DEBUG("album with id" << albumId << "by user" << userId <<
+                              "from Facebook account with id" << accountId << "doesn't need sync");
             continue;
         }
 
@@ -257,9 +248,7 @@ void FacebookImageSyncAdaptor::albumsFinishedHandler()
     QString nextUrl = paging.value(QLatin1String("next")).toString();
     if (!nextUrl.isEmpty() && nextUrl != continuationUrl) {
         // note: we check equality because fb can return spurious paging data...
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("performing continuation request for more albums for Facebook account with id %1: %2"))
-                .arg(accountId).arg(nextUrl));
+        SOCIALD_LOG_DEBUG("performing continuation request for more albums for Facebook account with id" << accountId << ":" << nextUrl);
         requestData(accountId, accessToken, nextUrl, fbUserId, QString());
     }
 
@@ -284,9 +273,7 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (isError || !ok || !parsed.contains(QLatin1String("data"))) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to read photos response for Facebook account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to read photos response for Facebook account with id" << accountId);
         clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
         decrementSemaphore(accountId);
         return;
@@ -294,9 +281,7 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
 
     QJsonArray data = parsed.value(QLatin1String("data")).toArray();
     if (data.size() == 0) {
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("Album with id %1 from Facebook account with id %2 has no photos"))
-                .arg(fbAlbumId).arg(accountId));
+        SOCIALD_LOG_DEBUG("album with id" << fbAlbumId << "from Facebook account with id" << accountId << "has no photos");
         checkRemovedImages(fbAlbumId);
         decrementSemaphore(accountId);
         return;
@@ -345,13 +330,9 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
 
         // check if we need to sync, and write to the database.
         if (haveAlreadyCachedImage(photoId, imageSrcUrl)) {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("have previously cached photo %1: %2"))
-                    .arg(photoId).arg(imageSrcUrl));
+            SOCIALD_LOG_DEBUG("have previously cached photo" << photoId << ":" << imageSrcUrl);
         } else {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("caching new photo %1: %2"))
-                    .arg(photoId).arg(imageSrcUrl));
+            SOCIALD_LOG_DEBUG("caching new photo" << photoId << ":" << imageSrcUrl);
             m_db.addImage(photoId, fbAlbumId, fbUserId, createdTime, updatedTime,
                           photoName, width, height, thumbnailUrl, imageSrcUrl);
         }
@@ -360,9 +341,7 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
     QJsonObject paging = parsed.value(QLatin1String("paging")).toObject();
     QString nextUrl = paging.value(QLatin1String("next")).toString();
     if (!nextUrl.isEmpty() && nextUrl != continuationUrl) {
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("performing continuation request for more photos for Facebook account with id %1: %2"))
-                .arg(accountId).arg(nextUrl));
+        SOCIALD_LOG_DEBUG("performing continuation request for more photos for Facebook account with id" << accountId << ":" << nextUrl);
         requestData(accountId, accessToken, nextUrl, fbUserId, fbAlbumId);
     } else {
         // this was the laste page, check removed images
@@ -384,10 +363,10 @@ bool FacebookImageSyncAdaptor::haveAlreadyCachedImage(const QString &fbImageId, 
 
     QString dbImageUrl = dbImage->imageUrl();
     if (dbImageUrl != imageUrl) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: Image/facebook.db has outdated data!"
-                                      "\n   fbPhotoId: %1\n   cached image url: %2\n   new image url: %3"))
-                .arg(fbImageId).arg(dbImageUrl).arg(imageUrl));
+        SOCIALD_LOG_ERROR("Image/facebook.db has outdated data!\n"
+                          "   fbPhotoId:" << fbImageId << "\n"
+                          "   cached image url:" << dbImageUrl << "\n"
+                          "   new image url:" << imageUrl);
         return false;
     }
 
@@ -438,9 +417,7 @@ void FacebookImageSyncAdaptor::userFinishedHandler()
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!ok || !parsed.contains(QLatin1String("id"))) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to read user response for Facebook account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to read user response for Facebook account with id" << accountId);
         return;
     }
 

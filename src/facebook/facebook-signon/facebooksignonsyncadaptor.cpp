@@ -97,9 +97,7 @@ void FacebookSignonSyncAdaptor::beginSync(int accountId, const QString &accessTo
         setupReplyTimeout(accountId, reply);
         incrementSemaphore(accountId);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to verify access token via network request for Facebook account: %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to verify access token via network request for Facebook account:" << accountId);
     }
 }
 
@@ -136,9 +134,8 @@ void FacebookSignonSyncAdaptor::requestFinishedHandler()
                     || (errorCode >= 200 && errorCode <= 299)) {
                 // the account is in a state which requires user intervention
                 forceTokenExpiry(0, accountId, accessToken);
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("access token has expired for Facebook account %1: %2: %3: %4"))
-                        .arg(accountId).arg(errorCode).arg(errorType).arg(errorMessage));
+                SOCIALD_LOG_DEBUG("access token has expired for Facebook account" << accountId <<
+                                  ":" <<  errorCode << "," << errorType << "," << errorMessage);
             } else {
                 // other error (downtime / service disruption / etc)
                 // ignore this one.
@@ -154,15 +151,11 @@ void FacebookSignonSyncAdaptor::requestFinishedHandler()
         // response data in this case.
         // the account is in a state which requires user intervention
         forceTokenExpiry(0, accountId, accessToken);
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("access token has presumably expired for Facebook account %1"))
-                .arg(accountId));
+        SOCIALD_LOG_DEBUG("access token has presumably expired for Facebook account" << accountId);
     } else {
         // could have been a network error, or something.
         // we treat it as a sync error, but not a signon error.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse response information for verification request for Facebook account: %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to parse response information for verification request for Facebook account:" << accountId);
     }
 
     decrementSemaphore(accountId);
@@ -176,9 +169,7 @@ Accounts::Account *FacebookSignonSyncAdaptor::loadAccount(int accountId)
     } else {
         acc = m_accountManager.account(accountId);
         if (!acc) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: Facebook account %1 was deleted during signon refresh sync"))
-                    .arg(accountId));
+            SOCIALD_LOG_ERROR("Facebook account" << accountId << "was deleted during signon refresh sync");
             return 0;
         } else {
             m_accounts.insert(accountId, acc);
@@ -187,9 +178,8 @@ Accounts::Account *FacebookSignonSyncAdaptor::loadAccount(int accountId)
 
     Accounts::Service srv = m_accountManager.service(syncServiceName());
     if (!srv.isValid()) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: invalid service %1 specified for refresh sync with Facebook account: %2"))
-                .arg(syncServiceName()).arg(accountId));
+        SOCIALD_LOG_ERROR("invalid service" << syncServiceName() <<
+                          "specified for refresh sync with Facebook account" << accountId);
         return 0;
     }
 
@@ -231,17 +221,13 @@ void FacebookSignonSyncAdaptor::forceTokenExpiry(int seconds, int accountId, con
         acc->selectService(srv);
         SignOn::Identity *identity = acc->credentialsId() > 0 ? SignOn::Identity::existingIdentity(acc->credentialsId()) : 0;
         if (!identity) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: Facebook account %1 has no valid credentials, cannot perform refresh sync"))
-                    .arg(accountId));
+            SOCIALD_LOG_ERROR("Facebook account" << accountId << "has no valid credentials, cannot perform refresh sync");
             return;
         }
 
         Accounts::AccountService *accSrv = new Accounts::AccountService(acc, srv);
         if (!accSrv) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: Facebook account %1 has no valid account service, cannot perform refresh sync"))
-                    .arg(accountId));
+            SOCIALD_LOG_ERROR("Facebook account" << accountId << "has no valid account service, cannot perform refresh sync");
             identity->deleteLater();
             return;
         }
@@ -250,9 +236,7 @@ void FacebookSignonSyncAdaptor::forceTokenExpiry(int seconds, int accountId, con
         QString mechanism = accSrv->authData().mechanism();
         SignOn::AuthSession *session = identity->createSession(method);
         if (!session) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: could not create signon session for Facebook account %1, cannot perform refresh sync"))
-                    .arg(accountId));
+            SOCIALD_LOG_ERROR("could not create signon session for Facebook account" << accountId << "cannot perform refresh sync");
             accSrv->deleteLater();
             identity->deleteLater();
             return;
@@ -293,9 +277,8 @@ void FacebookSignonSyncAdaptor::forceTokenExpiryResponse(const SignOn::SessionDa
         vmrd.insert(key, responseData.getProperty(key));
     }
 
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("forcibly updated cache for Facebook account %1, ExpiresIn now: %2, expected %3"))
-            .arg(accountId).arg(vmrd.value("ExpiresIn").toInt()).arg(seconds));
+    SOCIALD_LOG_DEBUG("forcibly updated cache for Facebook account" << accountId << "," <<
+                      "ExpiresIn now:" << vmrd.value("ExpiresIn").toInt() << ", expected" << seconds);
 
     if (seconds == 0) {
         // successfully forced expiry
@@ -313,9 +296,8 @@ void FacebookSignonSyncAdaptor::forceTokenExpiryError(const SignOn::Error &error
     int accountId = session->property("accountId").toInt();
     int seconds = session->property("seconds").toInt();
 
-    TRACE(SOCIALD_INFORMATION,
-            QString(QLatin1String("got signon error when performing force-expire for Facebook account %1: %2: %3"))
-            .arg(accountId).arg(error.type()).arg(error.message()));
+    SOCIALD_LOG_INFO("got signon error when performing force-expire for Facebook account" <<
+                     accountId << ":" << error.type() << "," << error.message());
 
     if (seconds == 0) {
         // we treat the error as if it was a success, since we need to update the credentials anyway.

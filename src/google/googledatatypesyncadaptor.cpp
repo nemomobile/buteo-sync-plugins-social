@@ -54,21 +54,20 @@ GoogleDataTypeSyncAdaptor::~GoogleDataTypeSyncAdaptor()
 void GoogleDataTypeSyncAdaptor::sync(const QString &dataTypeString, int accountId)
 {
     if (dataTypeString != SocialNetworkSyncAdaptor::dataTypeName(dataType)) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: Google %1 sync adaptor was asked to sync %2"))
-                .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(dataTypeString));
+        SOCIALD_LOG_ERROR("Google" << SocialNetworkSyncAdaptor::dataTypeName(dataType) <<
+                          "sync adaptor was asked to sync" << dataTypeString);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
 
     if (clientId().isEmpty()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: client id couldn't be retrieved for Google")));
+        SOCIALD_LOG_ERROR("client id couldn't be retrieved for Google account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
 
     if (clientSecret().isEmpty()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: client secret couldn't be retrieved for Google")));
+        SOCIALD_LOG_ERROR("client secret couldn't be retrieved for Google account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
@@ -88,18 +87,14 @@ void GoogleDataTypeSyncAdaptor::sync(const QString &dataTypeString, int accountI
         // We only actually perform the purge operation for all-account (template) syncs.
         purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
 
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("successfully triggered sync of %1: purged %2 accounts"))
-                .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(purgeIds.size()));
+        SOCIALD_LOG_DEBUG("successfully triggered sync of" << SocialNetworkSyncAdaptor::dataTypeName(dataType) << ":"
+                          "purged" << purgeIds.size() << "accounts");
 
         setFinishedInactive(); // just had to purge, and we're done.
     } else {
         // single account sync.
         updateDataForAccounts(QList<int>() << accountId);
-
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("successfully triggered sync with profile: %1"))
-                .arg(m_accountSyncProfile->name()));
+        SOCIALD_LOG_DEBUG("successfully triggered sync with profile:" << m_accountSyncProfile->name());
     }
 }
 
@@ -127,9 +122,7 @@ void GoogleDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountI
     foreach (int accountId, accountIds) {
         Accounts::Account *account = accountManager->account(accountId);
         if (!account) {
-            TRACE(SOCIALD_ERROR,
-                  QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
-                  .arg(accountId));
+            SOCIALD_LOG_ERROR("existing account with id" << accountId << "couldn't be retrieved");
             setStatus(SocialNetworkSyncAdaptor::Error);
             decrementSemaphore(accountId);
             continue;
@@ -172,12 +165,10 @@ void GoogleDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
                    << "    Json body:\n" << jsonBody << "\n";
     }
 
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: %1 request with account %2 experienced error: %3\n%4"))
-            .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType))
-            .arg(sender()->property("accountId").toInt())
-            .arg(err)
-            .arg(QString::fromUtf8(reply->readAll())));
+    SOCIALD_LOG_ERROR(SocialNetworkSyncAdaptor::dataTypeName(dataType) <<
+                      "request with account" << sender()->property("accountId").toInt() <<
+                      "experienced error:" << err << "\n" <<
+                      QString::fromUtf8(reply->readAll()));
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     reply->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
@@ -192,9 +183,9 @@ void GoogleDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     if (errs.size() > 0) {
         sslerrs.chop(2);
     }
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
-            .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
+    SOCIALD_LOG_ERROR(SocialNetworkSyncAdaptor::dataTypeName(dataType) <<
+                      "request with account" << sender()->property("accountId").toInt() <<
+                      "experienced ssl errors:" << sslerrs);
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     sender()->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
@@ -270,9 +261,7 @@ void GoogleDataTypeSyncAdaptor::signIn(Accounts::Account *account)
     account->selectService(srv);
     SignOn::Identity *identity = account->credentialsId() > 0 ? SignOn::Identity::existingIdentity(account->credentialsId()) : 0;
     if (!identity) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: account %1 has no valid credentials, cannot sign in"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("account" << accountId << "has no valid credentials; cannot sign in");
         decrementSemaphore(accountId);
         return;
     }
@@ -282,9 +271,7 @@ void GoogleDataTypeSyncAdaptor::signIn(Accounts::Account *account)
     QString mechanism = accSrv.authData().mechanism();
     SignOn::AuthSession *session = identity->createSession(method);
     if (!session) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: could not create signon session for account %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("could not create signon session for account" << accountId);
         identity->deleteLater();
         decrementSemaphore(accountId);
         return;
@@ -313,9 +300,8 @@ void GoogleDataTypeSyncAdaptor::signOnError(const SignOn::Error &error)
     Accounts::Account *account = session->property("account").value<Accounts::Account*>();
     SignOn::Identity *identity = session->property("identity").value<SignOn::Identity*>();
     int accountId = account->id();
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved: %2: %3"))
-          .arg(accountId).arg(error.type()).arg(error.message()));
+    SOCIALD_LOG_ERROR("credentials for account with id" << accountId <<
+                      "couldn't be retrieved:" << error.type() << error.message());
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
@@ -348,9 +334,7 @@ void GoogleDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &respon
     if (data.contains(QLatin1String("AccessToken"))) {
         accessToken = data.value(QLatin1String("AccessToken")).toString();
     } else {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("signon response for account with id %1 contained no access token"))
-                .arg(accountId));
+        SOCIALD_LOG_INFO("signon response for account with id" << accountId << "contained no access token");
     }
 
     session->disconnect(this);

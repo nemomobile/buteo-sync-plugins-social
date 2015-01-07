@@ -88,8 +88,7 @@ FacebookPostSyncAdaptor::FacebookPostSyncAdaptor(QObject *parent)
 {
     setInitialActive(false);
     if (!m_contactManager) {
-        TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: no aggregating contact manager exists - Facebook posts sync will be inactive")));
+        SOCIALD_LOG_ERROR("no aggregating contact manager exists - Facebook posts sync will be inactive");
         return;
     }
 
@@ -159,9 +158,7 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request feed posts from Facebook account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request feed posts from Facebook account with id" << accountId);
     }
 }
 
@@ -194,9 +191,7 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request home posts from Facebook account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request home posts from Facebook account with id" << accountId);
     }
 }
 
@@ -221,9 +216,7 @@ void FacebookPostSyncAdaptor::finishedMeHandler()
 
         requestPosts(accountId, accessToken);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse self user id from me request for account %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("error: unable to parse self user id from me request for account" << accountId);
     }
 
     decrementSemaphore(accountId);
@@ -245,9 +238,7 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         if (!data.size()) {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("no home posts received for account %1"))
-                    .arg(accountId));
+            SOCIALD_LOG_DEBUG("no home posts received for account" << accountId);
             decrementSemaphore(accountId);
             return;
         }
@@ -366,9 +357,9 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             QString postId = post.value(QLatin1String("post_id")).toVariant().toString();
             QString parentPostId = post.value(QLatin1String("parent_post_id")).toVariant().toString();
             if (!parentPostId.isEmpty() && postObjectIds.contains(parentPostId) && parentPostId != postId) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("Discarding post:\n%1because parent_post_id is already cached.\n"))
-                        .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson())));
+                SOCIALD_LOG_DEBUG("discarding post:\n" <<
+                                  QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson()) <<
+                                  "\nbecause parent_post_id is already cached.");
                 continue;
             }
 
@@ -394,9 +385,9 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
             QList<uint> likesPostTypes; likesPostTypes << 161 << 245 << 283 << 347;
             QList<uint> commentsPostTypes; commentsPostTypes << 257;
             if (!isMessagePost && (likesPostTypes.contains(postType) || commentsPostTypes.contains(postType))) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("Discarding post:\n%1because it's a like or comment.\n"))
-                        .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson())));
+                SOCIALD_LOG_DEBUG("discarding post:\n" <<
+                                  QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson()) <<
+                                  "\nbecause it's a Like or Comment.");
                 continue;
             }
 
@@ -426,9 +417,9 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
 
                 // If the media is empty (but exists) we discard
                 if (media.isEmpty()) {
-                    TRACE(SOCIALD_DEBUG,
-                            QString(QLatin1String("Discarding post:\n%1because no valid media was found.\n"))
-                            .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson())));
+                    SOCIALD_LOG_DEBUG("discarding post:\n" <<
+                                      QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson()) <<
+                                      "\nbecause no valid media was found.");
                     continue;
                 }
 
@@ -466,18 +457,16 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                 }
 
                 if (wrongMediaFound) {
-                    TRACE(SOCIALD_DEBUG,
-                            QString(QLatin1String("Discarding post:\n%1because media url was empty.\n"))
-                            .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson())));
+                    SOCIALD_LOG_DEBUG("discarding post:\n" <<
+                                      QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson()) <<
+                                      "\nbecause media url was empty.");
                     continue;
                 }
             }
 
             // check to see if we need to post it to the events feed
             if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > 7) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("event for account %1 is more than a week old:\n"))
-                        .arg(accountId) << "    " << createdTime << ":" << body);
+                SOCIALD_LOG_DEBUG("event for account" << accountId << "is more than a week old:" << createdTime << ":\n" << body);
                 break;                 // all subsequent events will be even older.
             } else {
                 QString icon;
@@ -511,15 +500,15 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
                     icon = QString(FACEBOOK_AVATAR).arg(actorId);
                 }
 
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("Adding post:\n%1into the Posts database as:\n%2, %3, %4, %5, %6, %7\n"))
-                        .arg(QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson()))
-                        .arg(postId)
-                        .arg(icon)
-                        .arg(name)
-                        .arg(body)
-                        .arg(attachmentCaption)
-                        .arg(attachmentDescription));
+                SOCIALD_LOG_DEBUG("adding post:\n" <<
+                                  QString::fromUtf8(QJsonDocument::fromVariant(post.toVariantMap()).toJson()) <<
+                                  "into the Posts database as:\n" <<
+                                  "  " << postId << "\n"
+                                  "  " << icon << "\n"
+                                  "  " << name << "\n"
+                                  "  " << body << "\n"
+                                  "  " << attachmentCaption << "\n"
+                                  "  " << attachmentDescription << "\n");
 
                 m_db.addFacebookPost(postId, name, body, createdTime, icon, imageList,
                                      attachmentName, attachmentCaption, attachmentDescription,
@@ -528,9 +517,8 @@ void FacebookPostSyncAdaptor::finishedPostsHandler()
         }
     } else {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse event feed data from request with account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR("unable to parse event feed data from request with account" << accountId <<
+                          "- got:" <<QString::fromLatin1(replyData.constData()));
     }
 
     // we're finished this request.  Decrement our busy semaphore.
