@@ -52,7 +52,7 @@ void FacebookSignonSyncAdaptor::sync(const QString &dataTypeString, int accountI
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void FacebookSignonSyncAdaptor::purgeDataForOldAccounts(const QList<int> &, SocialNetworkSyncAdaptor::PurgeMode)
+void FacebookSignonSyncAdaptor::purgeDataForOldAccount(int, SocialNetworkSyncAdaptor::PurgeMode)
 {
     // Nothing to do.
 }
@@ -84,7 +84,7 @@ void FacebookSignonSyncAdaptor::beginSync(int accountId, const QString &accessTo
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);

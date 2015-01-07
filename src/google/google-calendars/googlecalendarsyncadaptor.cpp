@@ -365,7 +365,7 @@ void GoogleCalendarSyncAdaptor::finalCleanup()
     }
 }
 
-void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode)
+void GoogleCalendarSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode mode)
 {
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // need to initialise the database
@@ -374,27 +374,25 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds
     }
 
     // We clean all the entries in the calendar
-    foreach (int accountId, oldIds) {
-        // Delete the notebooks from the storage
-        foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
-            if (notebook->pluginName().startsWith(QString(QLatin1String("google-")))
-                    && notebook->account() == QString::number(accountId)) {
-                // remove the incidences and delete the notebook
-                notebook->setIsReadOnly(false);
-                m_storage->loadNotebookIncidences(notebook->uid());
-                KCalCore::Incidence::List incidenceList;
-                m_storage->allIncidences(&incidenceList, notebook->uid());
-                foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-                    m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
-                }
-                m_storage->deleteNotebook(notebook);
-                m_storageNeedsSave = true;
+    // Delete the notebooks from the storage
+    foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
+        if (notebook->pluginName().startsWith(QString(QLatin1String("google-")))
+                && notebook->account() == QString::number(oldId)) {
+            // remove the incidences and delete the notebook
+            notebook->setIsReadOnly(false);
+            m_storage->loadNotebookIncidences(notebook->uid());
+            KCalCore::Incidence::List incidenceList;
+            m_storage->allIncidences(&incidenceList, notebook->uid());
+            foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
+                m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
             }
+            m_storage->deleteNotebook(notebook);
+            m_storageNeedsSave = true;
         }
-
-        // Delete ids from our local->remote id mapping
-        m_idDb.removeEvents(accountId);
     }
+
+    // Delete ids from our local->remote id mapping
+    m_idDb.removeEvents(oldId);
 
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // and commit any changes made.
@@ -432,7 +430,7 @@ void GoogleCalendarSyncAdaptor::requestCalendars(int accountId, const QString &a
     request.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                          QString(QLatin1String("Bearer ") + accessToken).toUtf8());
 
-    QNetworkReply *reply = networkAccessManager->get(request);
+    QNetworkReply *reply = m_networkAccessManager->get(request);
 
     // we're requesting data.  Increment the semaphore so that we know we're still busy.
     incrementSemaphore(accountId);
@@ -625,7 +623,7 @@ void GoogleCalendarSyncAdaptor::requestEvents(int accountId, const QString &acce
     request.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                          QString(QLatin1String("Bearer ") + accessToken).toUtf8());
 
-    QNetworkReply *reply = networkAccessManager->get(request);
+    QNetworkReply *reply = m_networkAccessManager->get(request);
 
     // we're requesting data.  Increment the semaphore so that we know we're still busy.
     incrementSemaphore(accountId);
@@ -902,16 +900,16 @@ void GoogleCalendarSyncAdaptor::upsyncChanges(int accountId, const QString &acce
     switch (upsyncType) {
         case GoogleCalendarSyncAdaptor::UpsyncInsert:
             upsyncTypeStr = QString::fromLatin1("Insert");
-            reply = networkAccessManager->post(request, eventData);
+            reply = m_networkAccessManager->post(request, eventData);
             break;
         case GoogleCalendarSyncAdaptor::UpsyncModify:
             upsyncTypeStr = QString::fromLatin1("Modify");
-            reply = networkAccessManager->put(request, eventData);
+            reply = m_networkAccessManager->put(request, eventData);
             break;
         case GoogleCalendarSyncAdaptor::UpsyncDelete: // flow through
         default:
             upsyncTypeStr = QString::fromLatin1("Delete");
-            reply = networkAccessManager->deleteResource(request);
+            reply = m_networkAccessManager->deleteResource(request);
             break;
     }
 

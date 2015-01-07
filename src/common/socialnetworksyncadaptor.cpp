@@ -63,9 +63,9 @@ SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(const QString &serviceName,
                                                    SocialNetworkSyncAdaptor::DataType dataType,
                                                    QObject *parent)
     : QObject(parent)
-    , dataType(dataType)
-    , accountManager(new Accounts::Manager(this))
-    , networkAccessManager(new SocialdNetworkAccessManager(this))
+    , m_dataType(dataType)
+    , m_accountManager(new Accounts::Manager(this))
+    , m_networkAccessManager(new SocialdNetworkAccessManager(this))
     , m_accountSyncProfile(NULL)
     , m_syncDb(new SocialNetworkSyncDatabase())
     , m_status(SocialNetworkSyncAdaptor::Invalid)
@@ -83,15 +83,7 @@ SocialNetworkSyncAdaptor::~SocialNetworkSyncAdaptor()
 void SocialNetworkSyncAdaptor::setAccountSyncProfile(Buteo::SyncProfile* perAccountSyncProfile)
 {
     delete m_accountSyncProfile;
-    m_accountSyncProfile = NULL;
-
-    if (perAccountSyncProfile) { // can be null if template sync profile was triggered.
-        if (perAccountSyncProfile->key(Buteo::KEY_ACCOUNT_ID).toInt() > 0) {
-            m_accountSyncProfile = perAccountSyncProfile;
-        } else {
-            qWarning() << Q_FUNC_INFO << "sync profile is not per-account profile:" << perAccountSyncProfile->name();
-        }
-    }
+    m_accountSyncProfile = perAccountSyncProfile;
 }
 
 SocialNetworkSyncAdaptor::Status SocialNetworkSyncAdaptor::status() const
@@ -116,53 +108,6 @@ void SocialNetworkSyncAdaptor::sync(const QString &dataType, int accountId)
     SOCIALD_LOG_ERROR("sync() must be overridden by derived types");
 }
 
-void SocialNetworkSyncAdaptor::checkAccounts(SocialNetworkSyncAdaptor::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds)
-{
-    QList<int> knownIds = syncedAccounts(SocialNetworkSyncAdaptor::dataTypeName(dataType));
-    QList<uint> currentAUIds = accountManager->accountList();
-    QList<int> currentIds;
-    foreach (uint auid, currentAUIds) {
-        currentIds.append(static_cast<int>(auid));
-    }
-    SOCIALD_LOG_DEBUG("have found" << currentIds.size() <<
-                      "accounts which support a sync service; determining old/new/update sets...");
-
-    foreach (int currId, currentIds) {
-        Accounts::Account *act = accountManager->account(currId);
-        if (!act || act->services().size() <= 0 || act->providerName() != m_serviceName) {
-            SOCIALD_LOG_DEBUG("account" << currId << "does not support service" << m_serviceName << "- ignoring.");
-            continue; // not same account provider as m_serviceName.  Ignore it.
-        }
-
-        // we have a valid account with the provider
-        // we need to determine whether it is either:
-        // - new account
-        // - account needing update
-        // - disabled account (neither sync nor purge)
-        if (act->enabled() && checkAccount(act)) {
-            if (knownIds.contains(currId)) {
-                // existing account needing update sync
-                knownIds.removeAll(currId);
-                updateIds->append(currId);
-            } else {
-                // new account needing first-time sync
-                newIds->append(currId);
-            }
-        } else {
-            // disabled, or disabled with this type of data sync
-            // we neither purge nor sync this account.
-            knownIds.removeAll(currId);
-            SOCIALD_LOG_DEBUG("account" << currId << "is disabled for" <<
-                              m_serviceName << dataTypeName(dataType) << "sync.");
-        }
-    }
-
-    // anything left in knownIds must belong to an old, removed account.
-    foreach (int id, knownIds) {
-        purgeIds->append(id);
-    }
-}
-
 /*!
  * \brief SocialNetworkSyncAdaptor::checkAccount
  * \param account
@@ -174,11 +119,11 @@ void SocialNetworkSyncAdaptor::checkAccounts(SocialNetworkSyncAdaptor::DataType 
 bool SocialNetworkSyncAdaptor::checkAccount(Accounts::Account *account)
 {
     bool globallyEnabled = account->enabled();
-    Accounts::Service srv(accountManager->service(syncServiceName()));
+    Accounts::Service srv(m_accountManager->service(syncServiceName()));
     if (!srv.isValid()) {
         SOCIALD_LOG_INFO("invalid service" << syncServiceName() <<
                          "specified, account" << account->id() <<
-                         "will be disabled for" << m_serviceName << dataTypeName(dataType) << "sync");
+                         "will be disabled for" << m_serviceName << dataTypeName(m_dataType) << "sync");
         return false;
     }
     account->selectService(srv);
@@ -300,7 +245,7 @@ void SocialNetworkSyncAdaptor::setInitialActive(bool enabled)
 void SocialNetworkSyncAdaptor::setFinishedInactive()
 {
     finalCleanup();
-    SOCIALD_LOG_INFO("Finished" << m_serviceName << SocialNetworkSyncAdaptor::dataTypeName(dataType) <<
+    SOCIALD_LOG_INFO("Finished" << m_serviceName << SocialNetworkSyncAdaptor::dataTypeName(m_dataType) <<
                      "sync at:" << QDateTime::currentDateTime().toString(Qt::ISODate));
     setStatus(SocialNetworkSyncAdaptor::Inactive);
 }
@@ -342,7 +287,7 @@ void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
         // finished all outstanding sync requests for this account.
         // update the sync time in the global sociald database.
         updateLastSyncTimestamp(m_serviceName,
-                                SocialNetworkSyncAdaptor::dataTypeName(dataType), accountId,
+                                SocialNetworkSyncAdaptor::dataTypeName(m_dataType), accountId,
                                 QDateTime::currentDateTime().toTimeSpec(Qt::UTC));
 
         // if all outstanding requests for all accounts have finished,

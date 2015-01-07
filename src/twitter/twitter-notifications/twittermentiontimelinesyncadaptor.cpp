@@ -50,14 +50,12 @@ QString TwitterMentionTimelineSyncAdaptor::syncServiceName() const
     return QStringLiteral("twitter-microblog");
 }
 
-void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    foreach (int accountIdentifier, purgeIds) {
-        Notification *notification = findNotification(accountIdentifier);
-        if (notification) {
-            notification->close();
-            notification->deleteLater();
-        }
+    Notification *notification = findNotification(oldId);
+    if (notification) {
+        notification->close();
+        notification->deleteLater();
     }
 }
 
@@ -84,7 +82,7 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
 
-    QNetworkReply *reply = networkAccessManager->get(nreq);
+    QNetworkReply *reply = m_networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);

@@ -36,15 +36,11 @@ TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
 {
 }
 
-void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    if (purgeIds.size()) {
-        foreach (int accountIdentifier, purgeIds) {
-            m_db.removePosts(accountIdentifier);
-        }
-        m_db.commit();
-        m_db.wait();
-    }
+    m_db.removePosts(oldId);
+    m_db.commit();
+    m_db.wait();
 }
 
 QString TwitterHomeTimelineSyncAdaptor::syncServiceName() const
@@ -78,7 +74,7 @@ void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oau
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = networkAccessManager->get(nreq);
+    QNetworkReply *reply = m_networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -118,7 +114,7 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = networkAccessManager->get(nreq);
+    QNetworkReply *reply = m_networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);

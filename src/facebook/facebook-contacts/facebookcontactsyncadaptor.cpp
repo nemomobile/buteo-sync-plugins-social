@@ -58,7 +58,7 @@
 #define SOCIALD_FACEBOOK_CONTACTS_ID_PREFIX QLatin1String("facebook-contacts-")
 #define SOCIALD_FACEBOOK_CONTACTS_GROUPNAME QLatin1String("sociald-sync-facebook-contacts")
 #define SOCIALD_FACEBOOK_CONTACTS_SYNCTARGET QLatin1String("facebook")
-#define SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbFriendId, avatarType) QString("%1/%2/%3-%4.jpg").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(fbFriendId).arg(avatarType)
+#define SOCIALD_FACEBOOK_CONTACTS_AVATAR_FILENAME(fbFriendId, avatarType) QString("%1/%2/%3-%4.jpg").arg(QLatin1String(PRIVILEGED_DATA_DIR)).arg(SocialNetworkSyncAdaptor::dataTypeName(m_dataType)).arg(fbFriendId).arg(avatarType)
 #define SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE 20
 
 static const char *WHICH_FIELDS = "name,first_name,middle_name,last_name,link,website,"\
@@ -196,12 +196,9 @@ void FacebookContactSyncAdaptor::sync(const QString &dataTypeString, int account
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void FacebookContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void FacebookContactSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    foreach (int pid, purgeIds) {
-        // first, purge all data from QtContacts and also our cache db.
-        purgeAccount(pid);
-    }
+    purgeAccount(oldId);
 }
 
 void FacebookContactSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -247,7 +244,7 @@ void FacebookContactSyncAdaptor::requestData(int accountId, const QString &acces
         url.setQuery(query);
     }
 
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -982,12 +979,12 @@ void FacebookContactSyncAdaptor::finalCleanup()
     QList<int> facebookAccountIds;
     QList<int> purgeAccountIds;
     QList<int> currentAccountIds;
-    QList<uint> uaids = accountManager->accountList();
+    QList<uint> uaids = m_accountManager->accountList();
     foreach (uint uaid, uaids) {
         currentAccountIds.append(static_cast<int>(uaid));
     }
     foreach (int currId, currentAccountIds) {
-        Accounts::Account *act = accountManager->account(currId);
+        Accounts::Account *act = m_accountManager->account(currId);
         if (act) {
             if (act->providerName() == QString(QLatin1String("facebook")) && checkAccount(act)) {
                 facebookAccountIds.append(currId);

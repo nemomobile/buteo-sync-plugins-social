@@ -55,7 +55,7 @@ public:
 protected:
     QString clientId();
     QString clientSecret();
-    virtual void updateDataForAccounts(const QList<int> &accountIds);
+    virtual void updateDataForAccount(int accountId);
     virtual void beginSync(int accountId, const QString &accessToken) = 0;
     virtual void finalCleanup();
 

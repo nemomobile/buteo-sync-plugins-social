@@ -74,12 +74,9 @@ void FacebookImageSyncAdaptor::sync(const QString &dataTypeString, int accountId
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void FacebookImageSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void FacebookImageSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    foreach (int pid, purgeIds) {
-        // first, purge the data from our database + our cache directory
-        m_db.purgeAccount(pid);
-    }
+    m_db.purgeAccount(oldId);
     m_db.commit();
     m_db.wait();
 }
@@ -137,7 +134,7 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
         url.setQuery(query);
     }
 
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -391,7 +388,7 @@ void FacebookImageSyncAdaptor::possiblyAddNewUser(const QString &fbUserId, int a
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);

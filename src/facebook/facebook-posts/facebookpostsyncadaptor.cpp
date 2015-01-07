@@ -112,15 +112,11 @@ void FacebookPostSyncAdaptor::sync(const QString &dataTypeString, int accountId)
     FacebookDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void FacebookPostSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void FacebookPostSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    if (purgeIds.size()) {
-        foreach (int accountIdentifier, purgeIds) {
-            m_db.removePosts(accountIdentifier);
-        }
-        m_db.commit();
-        m_db.wait();
-    }
+    m_db.removePosts(oldId);
+    m_db.commit();
+    m_db.wait();
 }
 
 void FacebookPostSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -145,7 +141,7 @@ void FacebookPostSyncAdaptor::requestMe(int accountId, const QString &accessToke
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -178,7 +174,7 @@ void FacebookPostSyncAdaptor::requestPosts(int accountId, const QString &accessT
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
     
     if (reply) {
         reply->setProperty("accountId", accountId);

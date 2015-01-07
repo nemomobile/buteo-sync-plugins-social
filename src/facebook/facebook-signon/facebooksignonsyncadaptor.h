@@ -49,10 +49,10 @@ public:
     ~FacebookSignonSyncAdaptor();
 
     QString syncServiceName() const;
-    void sync(const QString &dataTypeString, int accountId = 0);
+    void sync(const QString &dataTypeString, int accountId);
 
 protected: // implementing FacebookDataTypeSyncAdaptor interface
-    void purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode);
+    void purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode mode);
     void beginSync(int accountId, const QString &accessToken);
     void finalize(int accountId);
 

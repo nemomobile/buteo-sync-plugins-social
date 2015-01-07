@@ -94,16 +94,14 @@ void GoogleTwoWayContactSyncAdaptor::sync(const QString &dataTypeString, int acc
     GoogleDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void GoogleTwoWayContactSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode )
+void GoogleTwoWayContactSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode )
 {
-    foreach (int pid, purgeIds) {
-        purgeAccount(pid);
-    }
+    purgeAccount(oldId);
 }
 
 void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
-    Accounts::Account *account = accountManager->account(accountId);
+    Accounts::Account *account = m_accountManager->account(accountId);
     if (!account) {
         SOCIALD_LOG_ERROR("unable to load Google account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -191,7 +189,7 @@ void GoogleTwoWayContactSyncAdaptor::requestData(int accountId, const QString &a
 
     // we're requesting data.  Increment the semaphore so that we know we're still busy.
     incrementSemaphore(accountId);
-    QNetworkReply *reply = networkAccessManager->get(req);
+    QNetworkReply *reply = m_networkAccessManager->get(req);
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -522,7 +520,7 @@ void GoogleTwoWayContactSyncAdaptor::storeToRemote(int accountId, const QString 
 
     // we're posting data.  Increment the semaphore so that we know we're still busy.
     incrementSemaphore(accountId);
-    QNetworkReply *reply = networkAccessManager->post(req, encodedContactUpdates);
+    QNetworkReply *reply = m_networkAccessManager->post(req, encodedContactUpdates);
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -854,12 +852,12 @@ void GoogleTwoWayContactSyncAdaptor::finalCleanup()
     QList<int> googleAccountIds;
     QList<int> purgeAccountIds;
     QList<int> currentAccountIds;
-    QList<uint> uaids = accountManager->accountList();
+    QList<uint> uaids = m_accountManager->accountList();
     foreach (uint uaid, uaids) {
         currentAccountIds.append(static_cast<int>(uaid));
     }
     foreach (int currId, currentAccountIds) {
-        Accounts::Account *act = accountManager->account(currId);
+        Accounts::Account *act = m_accountManager->account(currId);
         if (act) {
             if (act->providerName() == QString(QLatin1String("google"))) {
                 // this account still exists, no need to purge its content.

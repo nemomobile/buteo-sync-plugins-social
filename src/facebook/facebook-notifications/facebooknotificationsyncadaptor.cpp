@@ -43,15 +43,11 @@ QString FacebookNotificationSyncAdaptor::syncServiceName() const
     return QStringLiteral("facebook-microblog");
 }
 
-void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void FacebookNotificationSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    if (purgeIds.size()) {
-        foreach (int accountIdentifier, purgeIds) {
-            m_db.removeNotifications(accountIdentifier);
-        }
-        m_db.sync();
-        m_db.wait();
-    }
+    m_db.removeNotifications(oldId);
+    m_db.sync();
+    m_db.wait();
 }
 
 void FacebookNotificationSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -93,7 +89,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);

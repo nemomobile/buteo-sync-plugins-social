@@ -87,9 +87,8 @@ public:
     Status status() const;
     bool enabled() const;
     QString serviceName() const;
-    void checkAccounts(SocialNetworkSyncAdaptor::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds);
     virtual void sync(const QString &dataType, int accountId = 0);
-    virtual void purgeDataForOldAccounts(const QList<int> &accountIds, PurgeMode mode = SyncPurge) = 0;
+    virtual void purgeDataForOldAccount(int accountId, PurgeMode mode = SyncPurge) = 0;
 
 Q_SIGNALS:
     void statusChanged();
@@ -120,9 +119,9 @@ protected:
     static QJsonObject parseJsonObjectReplyData(const QByteArray &replyData, bool *ok);
     static QJsonArray parseJsonArrayReplyData(const QByteArray &replyData, bool *ok);
 
-    const SocialNetworkSyncAdaptor::DataType dataType;
-    Accounts::Manager * const accountManager;
-    QNetworkAccessManager * const networkAccessManager;
+    const SocialNetworkSyncAdaptor::DataType m_dataType;
+    Accounts::Manager * const m_accountManager;
+    QNetworkAccessManager * const m_networkAccessManager;
     Buteo::SyncProfile *m_accountSyncProfile;
 
 protected Q_SLOTS:

@@ -201,8 +201,8 @@ bool SocialdButeoPlugin::cleanUp()
     }
 
     if (m_socialNetworkSyncAdaptor && m_profileAccountId > 0) {
-        m_socialNetworkSyncAdaptor->purgeDataForOldAccounts(QList<int>() << m_profileAccountId,
-                                                            SocialNetworkSyncAdaptor::CleanUpPurge);
+        m_socialNetworkSyncAdaptor->purgeDataForOldAccount(m_profileAccountId,
+                                                           SocialNetworkSyncAdaptor::CleanUpPurge);
     }
 
     return true;

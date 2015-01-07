@@ -96,7 +96,7 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
     if (!ghostEventCleanupPerformed()) {
         // Delete any events which are not associated with a notebook.
         // These events are ghost events, caused by a bug which previously
-        // existed in the purgeDataForOldAccounts code.
+        // existed in the purgeDataForOldAccount code.
         // The mkcal API doesn't allow us to determine which notebook a
         // given incidence belongs to, so we have to instead load
         // everything and then find the ones which are ophaned.
@@ -129,7 +129,7 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
     m_storage->close();
 }
 
-void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode)
+void FacebookCalendarSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode mode)
 {
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // we need to initialise the storage
@@ -138,27 +138,25 @@ void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldI
     }
 
     // We clean all the entries in the calendar
-    foreach (int accountId, oldIds) {
-        foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
-            if (notebook->pluginName() == QLatin1String(FACEBOOK)
-                    && notebook->account() == QString::number(accountId)) {
-                notebook->setIsReadOnly(false);
-                m_storage->loadNotebookIncidences(notebook->uid());
-                KCalCore::Incidence::List allIncidences;
-                m_storage->allIncidences(&allIncidences, notebook->uid());
-                foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
-                    m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
-                }
-                m_storage->deleteNotebook(notebook);
-                m_storageNeedsSave = true;
+    foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
+        if (notebook->pluginName() == QLatin1String(FACEBOOK)
+                && notebook->account() == QString::number(oldId)) {
+            notebook->setIsReadOnly(false);
+            m_storage->loadNotebookIncidences(notebook->uid());
+            KCalCore::Incidence::List allIncidences;
+            m_storage->allIncidences(&allIncidences, notebook->uid());
+            foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
+                m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
             }
+            m_storage->deleteNotebook(notebook);
+            m_storageNeedsSave = true;
         }
-
-        // Clean the database
-        m_db.removeEvents(accountId);
-        m_db.sync(accountId);
-        m_db.wait();
     }
+
+    // Clean the database
+    m_db.removeEvents(oldId);
+    m_db.sync(oldId);
+    m_db.wait();
 
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // and commit any changes made.
@@ -200,7 +198,7 @@ void FacebookCalendarSyncAdaptor::requestEvents(int accountId, const QString &ac
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -278,7 +276,7 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
             notebook->setPluginName(QLatin1String(FACEBOOK));
             notebook->setAccount(QString::number(accountId));
             notebook->setColor(QLatin1String(FACEBOOK_COLOR));
-            notebook->setDescription(accountManager->account(accountId)->displayName());
+            notebook->setDescription(m_accountManager->account(accountId)->displayName());
             notebook->setIsReadOnly(true);
             m_storage->addNotebook(notebook);
             m_storageNeedsSave = true;
@@ -287,7 +285,7 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
             bool changed = false;
 
             if (notebook->description().isEmpty()) {
-                notebook->setDescription(accountManager->account(accountId)->displayName());
+                notebook->setDescription(m_accountManager->account(accountId)->displayName());
                 changed = true;
             }
 
