@@ -439,22 +439,29 @@ void GoogleTwoWayContactSyncAdaptor::upsyncLocalChanges(const QDateTime &localSi
         updatedLocallyModified.append(c);
     }
 
+    QList<QContactId> alreadyEncoded; // shouldn't be necessary, as determineLocalChanges should already ensure distinct result sets.
     QList<QPair<QContact, GoogleContactStream::UpdateType> > contactUpdatesToPost;
-    foreach (const QContact &c, locallyAdded)
-        contactUpdatesToPost.append(qMakePair(c, GoogleContactStream::Add));
-    foreach (const QContact &c, updatedLocallyModified)
-        contactUpdatesToPost.append(qMakePair(c, GoogleContactStream::Modify));
     foreach (const QContact &c, locallyDeleted) {
         contactUpdatesToPost.append(qMakePair(c, GoogleContactStream::Remove));
         m_contactAvatars[accId].remove(c.detail<QContactGuid>().guid()); // just in case the avatar was outstanding.
+        alreadyEncoded.append(c.id());
+    }
+    foreach (const QContact &c, locallyAdded) {
+        if (!alreadyEncoded.contains(c.id())) {
+            contactUpdatesToPost.append(qMakePair(c, GoogleContactStream::Add));
+            alreadyEncoded.append(c.id());
+        }
+    }
+    foreach (const QContact &c, updatedLocallyModified) {
+        if (!alreadyEncoded.contains(c.id())) {
+            contactUpdatesToPost.append(qMakePair(c, GoogleContactStream::Modify));
+        }
     }
     m_localChanges[accId] = contactUpdatesToPost;
 
     SOCIALD_LOG_INFO("Google account:" << accId <<
-                     "upsyncing local contact changes since:" << localSince.toString(Qt::ISODate) << "\n" <<
-                     "    locally added:    " << locallyAdded.count() << "\n"
-                     "    locally modified: " << locallyModified.count() << "\n"
-                     "    locally removed:  " << locallyDeleted.count() << "\n");
+                     "upsyncing local A/M/R:" << locallyAdded.count() << "/" << locallyModified.count() << "/" << locallyDeleted.count() <<
+                     "since:" << localSince.toString(Qt::ISODate));
 
     upsyncLocalChangesList(accId);
 }
@@ -469,6 +476,7 @@ void GoogleTwoWayContactSyncAdaptor::upsyncLocalChangesList(int accountId)
     bool postedData = false;
     if (!m_accountSyncProfile || m_accountSyncProfile->syncDirection() != Buteo::SyncProfile::SYNC_DIRECTION_FROM_REMOTE) {
         // two-way sync is the default setting.  Upsync the changes.
+        int batchCount = 0;
         QMultiMap<GoogleContactStream::UpdateType, QPair<QContact, QStringList> > batch;
         for (int i = m_localChanges[accountId].size() - 1; i >= 0; --i) {
             QPair<QContact, GoogleContactStream::UpdateType> entry = m_localChanges[accountId].takeAt(i);
@@ -482,14 +490,19 @@ void GoogleTwoWayContactSyncAdaptor::upsyncLocalChangesList(int accountId)
                 } else {
                     extraXmlElements.append(QStringLiteral("<gContact:groupMembershipInfo deleted=\"false\" href=\"%1\"></gContact:groupMembershipInfo>").arg(myContactsGroupAtomId));
                     batch.insertMulti(entry.second, qMakePair(entry.first, extraXmlElements));
+                    batchCount++;
                 }
             } else {
                 batch.insertMulti(entry.second, qMakePair(entry.first, extraXmlElements));
+                batchCount++;
             }
 
-            if (batch.size() == SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS || i == 0) {
+            if (batchCount == SOCIALD_GOOGLE_MAX_CONTACT_ENTRY_RESULTS || i == 0) {
                 GoogleContactStream encoder(false, accountId, m_emailAddresses[accountId]);
                 QByteArray encodedContactUpdates = encoder.encode(batch);
+                SOCIALD_LOG_TRACE("storing a batch of" << batchCount << "local changes to remote server for account" << accountId);
+                batch.clear();
+                batchCount = 0;
                 storeToRemote(accountId, m_accessTokens[accountId], encodedContactUpdates);
                 postedData = true;
                 break;
@@ -888,7 +901,7 @@ void GoogleTwoWayContactSyncAdaptor::finalCleanup()
                 purgeAccountIds.append(purgeId);
             }
         } else {
-            qWarning() << Q_FUNC_INFO << "Malformed GUID not of form <accountId>:<remoteGuid>";
+            SOCIALD_LOG_ERROR("Malformed GUID not of form <accountId>:<remoteGuid> for contact" << contact.id().toString() << ":" << guid.guid());
         }
     }
 

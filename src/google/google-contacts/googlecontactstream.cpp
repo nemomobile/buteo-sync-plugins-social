@@ -26,8 +26,7 @@
 #include "googlecontactstream.h"
 #include "googlecontactatom.h"
 #include "constants_p.h"
-
-#include <LogMacros.h> // from Buteo
+#include "trace.h"
 
 #include <QDateTime>
 
@@ -77,11 +76,19 @@ QByteArray GoogleContactStream::encode(const QMultiMap<GoogleContactStream::Upda
     mXmlWriter = new QXmlStreamWriter(&xmlBuffer);
     startBatchFeed();
 
-    foreach (GoogleContactStream::UpdateType updateType, updates.keys()) {
-        QList<QPair<QContact, QStringList> > contacts = updates.values(updateType);
-        for (int i = 0; i < contacts.size(); ++i) {
-            encodeContactUpdate(contacts[i].first, contacts[i].second, updateType, true); // batchmode = true
-        }
+    QList<QPair<QContact, QStringList> > removedContacts = updates.values(GoogleContactStream::Remove);
+    for (int i = 0; i < removedContacts.size(); ++i) {
+        encodeContactUpdate(removedContacts[i].first, removedContacts[i].second, GoogleContactStream::Remove, true); // batchmode = true
+    }
+
+    QList<QPair<QContact, QStringList> > addedContacts = updates.values(GoogleContactStream::Add);
+    for (int i = 0; i < addedContacts.size(); ++i) {
+        encodeContactUpdate(addedContacts[i].first, addedContacts[i].second, GoogleContactStream::Add, true); // batchmode = true
+    }
+
+    QList<QPair<QContact, QStringList> > modifiedContacts = updates.values(GoogleContactStream::Modify);
+    for (int i = 0; i < modifiedContacts.size(); ++i) {
+        encodeContactUpdate(modifiedContacts[i].first, modifiedContacts[i].second, GoogleContactStream::Modify, true); // batchmode = true
     }
 
     endBatchFeed();
@@ -800,7 +807,7 @@ void GoogleContactStream::encodeId(const QContact &qContact, bool isUpdate)
         if (isUpdate) {
             // according to the docs, this should be "base" instead of "full" -- but that actually fails.
             if (mAccountEmail.isEmpty()) {
-                qWarning() << Q_FUNC_INFO << "account email not known - unable to build batch edit id!";
+                SOCIALD_LOG_ERROR("account email not known - unable to build batch edit id!");
             } else {
                 mXmlWriter->writeTextElement("atom:id", "http://www.google.com/m8/feeds/contacts/" + mAccountEmail + "/full/" + remoteId);
             }
@@ -831,7 +838,7 @@ void GoogleContactStream::encodeEtag(const QContact &qContact, bool needed)
     } else if (needed) {
         // we're trying to delete a contact in a batch operation
         // but we don't know the etag of the deleted contact.
-        qWarning() << Q_FUNC_INFO << "etag needed but not available! caller needs to prefill for deletion updates!";
+        SOCIALD_LOG_ERROR("etag needed but not available! caller needs to prefill for deletion updates!");
     }
 }
 
@@ -1008,7 +1015,7 @@ void GoogleContactStream::encodeHobby(const QContactHobby &hobby)
 void GoogleContactStream::encodeGeoLocation(const QContactGeoLocation &geolocation)
 {
     Q_UNUSED(geolocation);
-    qWarning() << Q_FUNC_INFO << "skipping geolocation";
+    SOCIALD_LOG_INFO("skipping geolocation");
 }
 
 void GoogleContactStream::encodeOrganization(const QContactOrganization &organization)
@@ -1029,7 +1036,7 @@ void GoogleContactStream::encodeAvatar(const QContactAvatar &avatar, const QCont
     // XXX TODO: determine if it's a new local avatar, if so, push it up.
     QUrl imageUrl(avatar.imageUrl());
     if (imageUrl.isLocalFile()) {
-        qWarning() << Q_FUNC_INFO << "have avatar:" << imageUrl;
+        SOCIALD_LOG_INFO("have avatar:" << imageUrl << "but not upsyncing avatars");
         mEncodedContactsWithAvatars << qContact.id();
     }
 }
