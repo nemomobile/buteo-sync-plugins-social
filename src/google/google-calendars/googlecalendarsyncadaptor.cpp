@@ -34,6 +34,8 @@
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 
+#include <ksystemtimezone.h>
+
 //----------------------------------------------
 
 #define RFC3339_FORMAT      "%Y-%m-%dT%H:%M:%S%:z"
@@ -41,10 +43,39 @@
 #define KDATEONLY_FORMAT    "%Y-%m-%d"
 #define QDATEONLY_FORMAT    "yyyy-MM-dd"
 #define KLONGTZ_FORMAT      "%:Z"
+#define RFC5545_KDATETIME_FORMAT "%Y%m%dT%H%M%SZ"
+#define RFC5545_KDATETIME_FORMAT_NTZC "%Y%m%dT%H%M%S"
+#define RFC5545_QDATE_FORMAT "yyyyMMdd"
 
 namespace {
 
 static int GOOGLE_CAL_SYNC_PLUGIN_VERSION = 2;
+
+void errorDumpStr(const QString &str)
+{
+    // Dump the entire string to the log.
+    // Note that the log cannot handle newlines,
+    // so we separate the string into chunks.
+    Q_FOREACH (const QString &chunk, str.split('\n', QString::SkipEmptyParts)) {
+        SOCIALD_LOG_ERROR(chunk);
+    }
+}
+
+void traceDumpStr(const QString &str)
+{
+    // 8 is the minimum log level for TRACE logs
+    // as defined in Buteo's LogMacros.h
+    if (Buteo::Logger::instance()->getLogLevel() < 8) {
+        return;
+    }
+
+    // Dump the entire string to the log.
+    // Note that the log cannot handle newlines,
+    // so we separate the string into chunks.
+    Q_FOREACH (const QString &chunk, str.split('\n', QString::SkipEmptyParts)) {
+        SOCIALD_LOG_TRACE(chunk);
+    }
+}
 
 QString gCalEventId(KCalCore::Incidence::Ptr event)
 {
@@ -55,27 +86,171 @@ void setGCalEventId(KCalCore::Incidence::Ptr event, const QString &id)
     event->setCustomProperty("jolla-sociald", "gcal-id", id);
 }
 
+QList<KDateTime> datetimesFromExRDateStr(const QString &exrdatestr, bool *isDateOnly)
+{
+    // possible forms:
+    // RDATE:19970714T123000Z
+    // RDATE;VALUE=DATE-TIME:19970714T123000Z
+    // RDATE;VALUE=DATE-TIME:19970714T123000Z,19970715T123000Z
+    // RDATE;TZID=America/New_York:19970714T083000
+    // RDATE;VALUE=PERIOD:19960403T020000Z/19960403T040000Z,19960404T010000Z/PT3H
+    // RDATE;VALUE=DATE:19970101,19970120
+
+    QList<KDateTime> retn;
+    QString str = exrdatestr;
+    *isDateOnly = false; // by default.
+
+    if (str.startsWith(QStringLiteral("exdate"), Qt::CaseInsensitive)) {
+        str.remove(0, 6);
+    } else if (str.startsWith(QStringLiteral("rdate"), Qt::CaseInsensitive)) {
+        str.remove(0, 5);
+    } else {
+        SOCIALD_LOG_ERROR("not an ex/rdate string:" << exrdatestr);
+        return retn;
+    }
+
+    if (str.startsWith(';')) {
+        str.remove(0,1);
+        if (str.startsWith("DATE-TIME:", Qt::CaseInsensitive)) {
+            str.remove(0, 10);
+            QStringList dts = str.split(',');
+            Q_FOREACH (const QString &dtstr, dts) {
+                if (dtstr.endsWith('Z')) {
+                    // UTC
+                    KDateTime kdt = KDateTime::fromString(dtstr, RFC5545_KDATETIME_FORMAT);
+                    kdt.setTimeSpec(KDateTime::Spec::UTC());
+                    retn.append(kdt);
+                } else {
+                    // Floating time
+                    KDateTime kdt = KDateTime::fromString(dtstr, RFC5545_KDATETIME_FORMAT_NTZC);
+                    kdt.setTimeSpec(KDateTime::Spec::ClockTime());
+                    retn.append(kdt);
+                }
+            }
+        } else if (str.startsWith("DATE:", Qt::CaseInsensitive)) {
+            str.remove(0, 5);
+            QStringList dts = str.split(',');
+            Q_FOREACH(const QString &dstr, dts) {
+                QDate date = QDate::fromString(dstr, RFC5545_QDATE_FORMAT);
+                KDateTime kdt(date, KDateTime::Spec::ClockTime());
+                retn.append(kdt);
+            }
+        } else if (str.startsWith("PERIOD:", Qt::CaseInsensitive)) {
+            SOCIALD_LOG_ERROR("unsupported parameter in ex/rdate string:" << exrdatestr);
+            // TODO: support PERIOD formats, or just switch to CalDAV for Google sync...
+        } else if (str.startsWith("TZID=")) {
+            QString tzidstr = str.mid(0, str.indexOf(':'));
+            KTimeZone tz = KSystemTimeZones::zone(tzidstr);
+            str.remove(0, tzidstr.size()+1);
+            QStringList dts = str.split(',');
+            Q_FOREACH (const QString &dtstr, dts) {
+                KDateTime kdt = KDateTime::fromString(dtstr, RFC5545_KDATETIME_FORMAT_NTZC);
+                if (tz.isValid()) {
+                    kdt.setTimeSpec(tz);
+                } else {
+                    kdt.setTimeSpec(KDateTime::Spec::ClockTime());
+                    SOCIALD_LOG_INFO("WARNING: unknown tzid:" << tzidstr << "; assuming clock-time instead!");
+                }
+                retn.append(kdt);
+            }
+        } else {
+            SOCIALD_LOG_ERROR("invalid parameter in ex/rdate string:" << exrdatestr);
+        }
+    } else if (str.startsWith(':')) {
+        str.remove(0,1);
+        QStringList dts = str.split(',');
+        Q_FOREACH (const QString &dtstr, dts) {
+            if (dtstr.endsWith('Z')) {
+                // UTC
+                KDateTime kdt = KDateTime::fromString(dtstr, RFC5545_KDATETIME_FORMAT);
+                kdt.setTimeSpec(KDateTime::Spec::UTC());
+                retn.append(kdt);
+            } else {
+                // Floating time
+                KDateTime kdt = KDateTime::fromString(dtstr, RFC5545_KDATETIME_FORMAT_NTZC);
+                kdt.setTimeSpec(KDateTime::Spec::ClockTime());
+                retn.append(kdt);
+            }
+        }
+    } else {
+        SOCIALD_LOG_ERROR("not a valid ex/rdate string:" << exrdatestr);
+    }
+
+    return retn;
+}
+
 QJsonArray recurrenceArray(KCalCore::Event::Ptr event, KCalCore::ICalFormat &icalFormat)
 {
     QJsonArray retn;
+
+    // RRULE
     KCalCore::Recurrence *kcalRecurrence = event->recurrence();
     Q_FOREACH (KCalCore::RecurrenceRule *rrule, kcalRecurrence->rRules()) {
         QString rruleStr = icalFormat.toString(rrule);
         rruleStr.replace("\r\n", "");
         retn.append(QJsonValue(rruleStr));
     }
+
+    // EXRULE
     Q_FOREACH (KCalCore::RecurrenceRule *exrule, kcalRecurrence->exRules()) {
         QString exruleStr = icalFormat.toString(exrule);
         exruleStr.replace("RRULE", "EXRULE");
         exruleStr.replace("\r\n", "");
         retn.append(QJsonValue(exruleStr));
     }
+
+    // RDATE (date)
+    QString rdates;
     Q_FOREACH (const QDate &rdate, kcalRecurrence->rDates()) {
-        retn.append(QJsonValue(QString::fromLatin1("RDATE:%1").arg(rdate.toString("yyyy-MM-dd"))));
+        rdates.append(rdate.toString(RFC5545_QDATE_FORMAT));
+        rdates.append(',');
     }
+    if (rdates.size()) {
+        rdates.chop(1); // trailing comma
+        retn.append(QJsonValue(QString::fromLatin1("RDATE;VALUE=DATE:%1").arg(rdates)));
+    }
+
+    // RDATE (date-time)
+    QString rdatetimes;
+    Q_FOREACH (const KDateTime &rdatetime, kcalRecurrence->rDateTimes()) {
+        if (rdatetime.timeSpec() == KDateTime::Spec::ClockTime()) {
+            rdatetimes.append(rdatetime.toString(RFC5545_KDATETIME_FORMAT_NTZC));
+        } else {
+            rdatetimes.append(rdatetime.toUtc().toString(RFC5545_KDATETIME_FORMAT));
+        }
+        rdatetimes.append(',');
+    }
+    if (rdatetimes.size()) {
+        rdatetimes.chop(1); // trailing comma
+        retn.append(QJsonValue(QString::fromLatin1("RDATE;VALUE=DATE-TIME:%1").arg(rdatetimes)));
+    }
+
+    // EXDATE (date)
+    QString exdates;
     Q_FOREACH (const QDate &exdate, kcalRecurrence->exDates()) {
-        retn.append(QJsonValue(QString::fromLatin1("EXDATE:%1").arg(exdate.toString("yyyy-MM-dd"))));
+        exdates.append(exdate.toString(RFC5545_QDATE_FORMAT));
+        exdates.append(',');
     }
+    if (exdates.size()) {
+        exdates.chop(1); // trailing comma
+        retn.append(QJsonValue(QString::fromLatin1("EXDATE;VALUE=DATE:%1").arg(exdates)));
+    }
+
+    // EXDATE (date-time)
+    QString exdatetimes;
+    Q_FOREACH (const KDateTime &exdatetime, kcalRecurrence->exDateTimes()) {
+        if (exdatetime.timeSpec() == KDateTime::Spec::ClockTime()) {
+            exdatetimes.append(exdatetime.toString(RFC5545_KDATETIME_FORMAT_NTZC));
+        } else {
+            exdatetimes.append(exdatetime.toUtc().toString(RFC5545_KDATETIME_FORMAT));
+        }
+        exdatetimes.append(',');
+    }
+    if (exdatetimes.size()) {
+        exdatetimes.chop(1); // trailing comma
+        retn.append(QJsonValue(QString::fromLatin1("EXDATE;VALUE=DATE-TIME:%1").arg(exdatetimes)));
+    }
+
     return retn;
 }
 
@@ -214,49 +389,58 @@ void extractStartAndEnd(const QJsonObject &eventData,
 void extractRecurrence(const QJsonArray &recurrence, KCalCore::Event::Ptr event, KCalCore::ICalFormat &icalFormat)
 {
     KCalCore::Recurrence *kcalRecurrence = event->recurrence();
-
-    if (!recurrence.size()) {
-        kcalRecurrence->unsetRecurs();
-        return;
-    }
-
+    kcalRecurrence->clear(); // avoid adding duplicate recurrence information
     for (int i = 0; i < recurrence.size(); ++i) {
         QString ruleStr = recurrence.at(i).toString();
-        if (ruleStr.toLower().startsWith(QString::fromLatin1("rrule:"))) {
+        if (ruleStr.startsWith(QString::fromLatin1("rrule"), Qt::CaseInsensitive)) {
             KCalCore::RecurrenceRule *rrule = new KCalCore::RecurrenceRule;
             if (!icalFormat.fromString(rrule, ruleStr.mid(6))) {
-                SOCIALD_LOG_DEBUG("unable to parse RRULE information:" << ruleStr << "\n" <<
-                                  "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
+                SOCIALD_LOG_DEBUG("unable to parse RRULE information:" << ruleStr);
+                traceDumpStr(QString::fromUtf8(QJsonDocument(recurrence).toJson()));
             } else {
                 kcalRecurrence->addRRule(rrule);
             }
-        } else if (ruleStr.toLower().startsWith(QString::fromLatin1("exrule:"))) {
+        } else if (ruleStr.startsWith(QString::fromLatin1("exrule"), Qt::CaseInsensitive)) {
             KCalCore::RecurrenceRule *exrule = new KCalCore::RecurrenceRule;
             if (!icalFormat.fromString(exrule, ruleStr.mid(7))) {
-                SOCIALD_LOG_DEBUG("unable to parse EXRULE information:" << ruleStr << "\n"
-                                  "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
+                SOCIALD_LOG_DEBUG("unable to parse EXRULE information:" << ruleStr);
+                traceDumpStr(QString::fromUtf8(QJsonDocument(recurrence).toJson()));
             } else {
                 kcalRecurrence->addExRule(exrule);
             }
-        } else if (ruleStr.toLower().startsWith(QString::fromLatin1("rdate:"))) {
-            QDate rdate = QDate::fromString(ruleStr.mid(6), "yyyy-MM-dd");
-            if (!rdate.isValid()) {
-                SOCIALD_LOG_DEBUG("unable to parse RDATE information:" << ruleStr << "\n"
-                                  "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
+        } else if (ruleStr.startsWith(QString::fromLatin1("rdate"), Qt::CaseInsensitive)) {
+            bool isDateOnly = false;
+            QList<KDateTime> rdatetimes = datetimesFromExRDateStr(ruleStr, &isDateOnly);
+            if (!rdatetimes.size()) {
+                SOCIALD_LOG_DEBUG("unable to parse RDATE information:" << ruleStr);
+                traceDumpStr(QString::fromUtf8(QJsonDocument(recurrence).toJson()));
             } else {
-                kcalRecurrence->addRDate(rdate);
+                Q_FOREACH (const KDateTime &kdt, rdatetimes) {
+                    if (isDateOnly) {
+                        kcalRecurrence->addRDate(kdt.date());
+                    } else {
+                        kcalRecurrence->addRDateTime(kdt);
+                    }
+                }
             }
-        } else if (ruleStr.toLower().startsWith(QString::fromLatin1("exdate:"))) {
-            QDate exdate = QDate::fromString(ruleStr.mid(7), "yyyy-MM-dd");
-            if (!exdate.isValid()) {
-                SOCIALD_LOG_DEBUG("unable to parse EXDATE information:" << ruleStr << "\n"
-                                  "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
+        } else if (ruleStr.startsWith(QString::fromLatin1("exdate"), Qt::CaseInsensitive)) {
+            bool isDateOnly = false;
+            QList<KDateTime> exdatetimes = datetimesFromExRDateStr(ruleStr, &isDateOnly);
+            if (!exdatetimes.size()) {
+                SOCIALD_LOG_DEBUG("unable to parse EXDATE information:" << ruleStr);
+                traceDumpStr(QString::fromUtf8(QJsonDocument(recurrence).toJson()));
             } else {
-                kcalRecurrence->addExDate(exdate);
+                Q_FOREACH (const KDateTime &kdt, exdatetimes) {
+                    if (isDateOnly) {
+                        kcalRecurrence->addExDate(kdt.date());
+                    } else {
+                        kcalRecurrence->addExDateTime(kdt);
+                    }
+                }
             }
         } else {
-            SOCIALD_LOG_DEBUG("unknown recurrence information:" << ruleStr << "\n"
-                              "from:" << QString::fromUtf8(QJsonDocument(recurrence).toJson()));
+          SOCIALD_LOG_DEBUG("unknown recurrence information:" << ruleStr);
+          traceDumpStr(QString::fromUtf8(QJsonDocument(recurrence).toJson()));
         }
     }
 }
@@ -875,6 +1059,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             Q_FOREACH (const QString &deletedGcalId, deletedMap.keys()) {
                 QString incidenceUid = deletedMap.value(deletedGcalId);
                 localRemoved++;
+                SOCIALD_LOG_TRACE("upsyncing deletion for gcal id:" << deletedGcalId);
                 upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncDelete,
                               incidenceUid, calendarId, deletedGcalId, QByteArray());
             }
@@ -884,8 +1069,11 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                 KCalCore::Event::Ptr event = updatedMap.value(updatedGcalId);
                 if (event) {
                     localModified++;
+                    QByteArray eventBlob = QJsonDocument(kCalToJson(event, m_icalFormat)).toJson();
+                    SOCIALD_LOG_TRACE("upsyncing modification for gcal id:" << updatedGcalId);
+                    traceDumpStr(QString::fromUtf8(eventBlob));
                     upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncModify,
-                                  event->uid(), calendarId, updatedGcalId, QJsonDocument(kCalToJson(event, m_icalFormat)).toJson());
+                                  event->uid(), calendarId, updatedGcalId, eventBlob);
                 }
             }
 
@@ -894,8 +1082,11 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                 KCalCore::Event::Ptr event = m_calendar->event(incidence->uid());
                 if (event) {
                     localAdded++;
+                    QByteArray eventBlob = QJsonDocument(kCalToJson(event, m_icalFormat)).toJson();
+                    SOCIALD_LOG_TRACE("upsyncing modification for local id:" << incidence->uid());
+                    traceDumpStr(QString::fromUtf8(eventBlob));
                     upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncInsert,
-                                  event->uid(), calendarId, QString(), QJsonDocument(kCalToJson(event, m_icalFormat)).toJson());
+                                  event->uid(), calendarId, QString(), eventBlob);
                 }
             }
 
@@ -962,9 +1153,9 @@ void GoogleCalendarSyncAdaptor::upsyncChanges(int accountId, const QString &acce
 
         SOCIALD_LOG_DEBUG("upsyncing change:" << upsyncTypeStr <<
                           "to calendarId:" << calendarId <<
-                          "of account" << accountId << ":\n" <<
-                          request.url().toString() << "\n" <<
-                          QString::fromUtf8(eventData));
+                          "of account" << accountId << "to" <<
+                          request.url().toString());
+        traceDumpStr(QString::fromUtf8(eventData));
     } else {
         SOCIALD_LOG_ERROR("unable to request upsync for calendar" << calendarId <<
                           "from Google account with id" << accountId);
@@ -1003,7 +1194,8 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
         // we expect an empty response body on success for Delete operations
         if (!replyData.isEmpty()) {
             SOCIALD_LOG_ERROR("error occurred while upsyncing calendar event deletion to Google account" << accountId << ";" <<
-                              "got:" << QString::fromLatin1(replyData.constData()));
+                              "got:");
+            errorDumpStr(QString::fromLatin1(replyData.constData()));
             m_syncSucceeded[accountId] = false;
         }
     } else {
@@ -1016,7 +1208,8 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                             : QString::fromLatin1("modification");
             SOCIALD_LOG_ERROR("error occurred while upsyncing calendar event" << typeStr <<
                               "to Google account" << accountId << ";" <<
-                              "got:" << QString::fromLatin1(replyData.constData()));
+                              "got:");
+            errorDumpStr(QString::fromLatin1(replyData.constData()));
             m_syncSucceeded[accountId] = false;
         } else {
             // update the event in our local database.
@@ -1047,12 +1240,14 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                     QString oldDTS = event->dtStart().toString(RFC3339_FORMAT);
                     QString oldDTE = event->dtEnd().toString(RFC3339_FORMAT);
                     event->startUpdates();
+                    SOCIALD_LOG_TRACE("Local upsync response json:");
+                    traceDumpStr(QString::fromUtf8(replyData));
                     jsonToKCal(parsed, event, m_icalFormat);
-                    SOCIALD_LOG_DEBUG("Two-way calendar sync with account" << accountId << ":\n" <<
-                                      "  re-updating event" << event->summary() << ":\n" <<
-                                      "  old start:" << oldDTS << ", old end:" << oldDTE << "\n" <<
-                                      "  new start:" << event->dtStart().toString(RFC3339_FORMAT) <<
-                                      ", new end:" << event->dtEnd().toString(RFC3339_FORMAT) << "\n");
+                    SOCIALD_LOG_DEBUG("Two-way calendar sync with account" << accountId << ":");
+                    SOCIALD_LOG_DEBUG("  re-updating event" << event->summary());
+                    SOCIALD_LOG_DEBUG("  old start:" << oldDTS << ", old end:" << oldDTE);
+                    SOCIALD_LOG_DEBUG("  new start:" << event->dtStart().toString(RFC3339_FORMAT) <<
+                                      ", new end:" << event->dtEnd().toString(RFC3339_FORMAT));
                     event->endUpdates();
                     m_storageNeedsSave = true;
                     m_idDb.insertEvent(accountId, gCalEventId(event), googleNotebook->uid(), kcalEventId);
