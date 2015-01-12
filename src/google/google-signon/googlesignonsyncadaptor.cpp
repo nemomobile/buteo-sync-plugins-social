@@ -51,7 +51,7 @@ void GoogleSignonSyncAdaptor::sync(const QString &dataTypeString, int accountId)
     GoogleDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
 
-void GoogleSignonSyncAdaptor::purgeDataForOldAccounts(const QList<int> &, SocialNetworkSyncAdaptor::PurgeMode)
+void GoogleSignonSyncAdaptor::purgeDataForOldAccount(int, SocialNetworkSyncAdaptor::PurgeMode)
 {
     // Nothing to do.
 }
@@ -75,7 +75,7 @@ Accounts::Account *GoogleSignonSyncAdaptor::loadAccount(int accountId)
     } else {
         acc = m_accountManager.account(accountId);
         if (!acc) {
-            TRACE(SOCIALD_ERROR,
+            SOCIALD_LOG_ERROR(
                     QString(QLatin1String("error: Google account %1 was deleted during signon refresh sync"))
                     .arg(accountId));
             return 0;
@@ -86,7 +86,7 @@ Accounts::Account *GoogleSignonSyncAdaptor::loadAccount(int accountId)
 
     Accounts::Service srv = m_accountManager.service(syncServiceName());
     if (!srv.isValid()) {
-        TRACE(SOCIALD_ERROR,
+        SOCIALD_LOG_ERROR(
                 QString(QLatin1String("error: invalid service %1 specified for refresh sync with Google account: %2"))
                 .arg(syncServiceName()).arg(accountId));
         return 0;
@@ -133,7 +133,7 @@ void GoogleSignonSyncAdaptor::refreshTokens(int accountId)
     acc->selectService(srv);
     SignOn::Identity *identity = acc->credentialsId() > 0 ? SignOn::Identity::existingIdentity(acc->credentialsId()) : 0;
     if (!identity) {
-        TRACE(SOCIALD_ERROR,
+        SOCIALD_LOG_ERROR(
                 QString(QLatin1String("error: Google account %1 has no valid credentials, cannot perform refresh sync"))
                 .arg(accountId));
         return;
@@ -141,7 +141,7 @@ void GoogleSignonSyncAdaptor::refreshTokens(int accountId)
 
     Accounts::AccountService *accSrv = new Accounts::AccountService(acc, srv);
     if (!accSrv) {
-        TRACE(SOCIALD_ERROR,
+        SOCIALD_LOG_ERROR(
                 QString(QLatin1String("error: Google account %1 has no valid account service, cannot perform refresh sync"))
                 .arg(accountId));
         identity->deleteLater();
@@ -152,7 +152,7 @@ void GoogleSignonSyncAdaptor::refreshTokens(int accountId)
     QString mechanism = accSrv->authData().mechanism();
     SignOn::AuthSession *session = identity->createSession(method);
     if (!session) {
-        TRACE(SOCIALD_ERROR,
+        SOCIALD_LOG_ERROR(
                 QString(QLatin1String("error: could not create signon session for Google account %1, cannot perform refresh sync"))
                 .arg(accountId));
         accSrv->deleteLater();
@@ -255,7 +255,7 @@ void GoogleSignonSyncAdaptor::refreshTokenResponse(const SignOn::SessionData &re
         session->deleteLater();
     }
 
-    TRACE(SOCIALD_INFORMATION,
+    SOCIALD_LOG_INFO(
             QString(QLatin1String("successfully performed signon refresh for Google account %1: new ExpiresIn: %3"))
             .arg(accountId).arg(responseData.getProperty("ExpiresIn").toInt()));
 
@@ -278,7 +278,7 @@ void GoogleSignonSyncAdaptor::signonError(const SignOn::Error &error)
     }
 
     bool raiseFlag = error.type() == SignOn::AuthSession::UserInteractionError;
-    TRACE(SOCIALD_INFORMATION,
+    SOCIALD_LOG_INFO(
             QString(QLatin1String("got signon error when performing signon refresh for Google account %1: %2: %3.  Raising flag? %4"))
             .arg(accountId).arg(error.type()).arg(error.message()).arg(raiseFlag));
 

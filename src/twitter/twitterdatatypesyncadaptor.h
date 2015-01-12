@@ -54,7 +54,7 @@ public:
 protected:
     static QDateTime parseTwitterDateTime(const QString &tdt);
     virtual QString authorizationHeader(int accountId, const QString &oauthToken, const QString &oauthTokenSecret, const QString &requestMethod, const QString &requestUrl, const QList<QPair<QString, QString> > &parameters);
-    virtual void updateDataForAccounts(const QList<int> &accountIds);
+    virtual void updateDataForAccount(int accountId);
     virtual void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret) = 0;
     QString consumerKey();
     QString consumerSecret();

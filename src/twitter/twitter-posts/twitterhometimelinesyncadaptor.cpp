@@ -36,15 +36,11 @@ TwitterHomeTimelineSyncAdaptor::~TwitterHomeTimelineSyncAdaptor()
 {
 }
 
-void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    if (purgeIds.size()) {
-        foreach (int accountIdentifier, purgeIds) {
-            m_db.removePosts(accountIdentifier);
-        }
-        m_db.commit();
-        m_db.wait();
-    }
+    m_db.removePosts(oldId);
+    m_db.commit();
+    m_db.wait();
 }
 
 QString TwitterHomeTimelineSyncAdaptor::syncServiceName() const
@@ -78,7 +74,7 @@ void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oau
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = networkAccessManager->get(nreq);
+    QNetworkReply *reply = m_networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -92,9 +88,7 @@ void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oau
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request user verification from Twitter account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request user verification from Twitter account with id" << accountId);
     }
 }
 
@@ -120,7 +114,7 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
     nreq.setRawHeader("Authorization", authorizationHeader(
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
-    QNetworkReply *reply = networkAccessManager->get(nreq);
+    QNetworkReply *reply = m_networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -135,21 +129,13 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request user timeline posts from Twitter account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request user timeline posts from Twitter account with id" << accountId);
     }
 }
 
 void TwitterHomeTimelineSyncAdaptor::finishedMeHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
-    if (!reply) {
-        // shouldn't happen, but just in case.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: invalid reply in finished me - unable to decrement semaphore!")));
-        return;
-    }
     int accountId = reply->property("accountId").toInt();
     QString oauthToken = reply->property("oauthToken").toString();
     QString oauthTokenSecret = reply->property("oauthTokenSecret").toString();
@@ -172,9 +158,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedMeHandler()
 
         requestPosts(accountId, oauthToken, oauthTokenSecret, QString(), QString());
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse self user id from me request for account %1, got:"))
-                .arg(accountId) << replyData);
+        SOCIALD_LOG_ERROR("unable to parse self user id from me request for account" << accountId << "," <<
+                          "got:" << replyData);
     }
 
     decrementSemaphore(accountId);
@@ -183,13 +168,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedMeHandler()
 void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
-    if (!reply) {
-        // shouldn't happen, but just in case
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: invalid reply in finished posts - unable to decrement semaphore!")));
-        return;
-    }
-
     int accountId = reply->property("accountId").toInt();
     QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"),
                                            SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::Posts),
@@ -203,9 +181,7 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
     QJsonArray tweets = parseJsonArrayReplyData(replyData, &ok);
     if (ok) {
         if (!tweets.size()) {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("no feed posts received for account %1"))
-                    .arg(accountId));
+            SOCIALD_LOG_DEBUG("no feed posts received for account" << accountId);
             decrementSemaphore(accountId);
             return;
         }
@@ -272,9 +248,9 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                           ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
                           : 7;
             if (eventTimestamp.daysTo(QDateTime::currentDateTime()) > sinceSpan) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("tweet for account %1 is more than %2 days old:\n    %3 - %4"))
-                        .arg(accountId).arg(sinceSpan).arg(eventTimestamp.toString(Qt::ISODate)).arg(body));
+                SOCIALD_LOG_DEBUG("tweet for account" << accountId <<
+                                  "is more than" << sinceSpan << "days old:" <<
+                                  eventTimestamp.toString(Qt::ISODate) << body);
             } else {
                 m_db.addTwitterPost(postId, name, body, eventTimestamp, icon, imageList,
                                     screenName, retweeter, consumerKey(), consumerSecret(), accountId);
@@ -282,9 +258,8 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
         }
     } else {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse event feed data from request with account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR("unable to parse event feed data from request with account" << accountId << "," <<
+                          "got:" << QString::fromLatin1(replyData.constData()));
     }
 
     // we're finished this request.  Decrement our busy semaphore.

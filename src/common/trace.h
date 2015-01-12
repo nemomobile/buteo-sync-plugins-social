@@ -22,24 +22,11 @@
 #ifndef TRACE_H
 #define TRACE_H
 
-#include <QtDebug>
+#include "buteosyncfw_p.h"
 
-#define SOCIALD_DEBUG 3
-#define SOCIALD_INFORMATION 2
-#define SOCIALD_ERROR 1
-
-#define TRACE(level, message)                                       \
-    do {                                                            \
-        QByteArray llba = qgetenv("SOCIALD_LOGGING_LEVEL");         \
-        QString llstr = QString::fromLocal8Bit(llba.constData());   \
-        bool ok = false;                                            \
-        int llint = llstr.toInt(&ok);                               \
-        if (!ok) {                                                  \
-            llint = -1;                                             \
-        }                                                           \
-        if (level <= llint) {                                       \
-            qWarning() << Q_FUNC_INFO << message;                   \
-        }                                                           \
-    } while (0)
+#define SOCIALD_LOG_TRACE(message)   LOG_TRACE("trace: "   << message) /* MSYNCD_LOGGING_LEVEL >= 8 */
+#define SOCIALD_LOG_DEBUG(message)   LOG_DEBUG("debug: "   << message) /* MSYNCD_LOGGING_LEVEL >= 7 */
+#define SOCIALD_LOG_INFO(message)    LOG_INFO("info : "    << message) /* MSYNCD_LOGGING_LEVEL >= 6 */
+#define SOCIALD_LOG_ERROR(message)   LOG_WARNING("ERROR: " << message) /* MSYNCD_LOGGING_LEVEL == * */
 
 #endif // TRACE_H

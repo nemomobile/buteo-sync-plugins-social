@@ -50,14 +50,12 @@ QString TwitterMentionTimelineSyncAdaptor::syncServiceName() const
     return QStringLiteral("twitter-microblog");
 }
 
-void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void TwitterMentionTimelineSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    foreach (int accountIdentifier, purgeIds) {
-        Notification *notification = findNotification(accountIdentifier);
-        if (notification) {
-            notification->close();
-            notification->deleteLater();
-        }
+    Notification *notification = findNotification(oldId);
+    if (notification) {
+        notification->close();
+        notification->deleteLater();
     }
 }
 
@@ -84,7 +82,7 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
             accountId, oauthToken, oauthTokenSecret,
             QLatin1String("GET"), baseUrl, queryItems).toLatin1());
 
-    QNetworkReply *reply = networkAccessManager->get(nreq);
+    QNetworkReply *reply = m_networkAccessManager->get(nreq);
     
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -98,9 +96,7 @@ void TwitterMentionTimelineSyncAdaptor::requestNotifications(int accountId, cons
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request mention timeline notifications from Twitter account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request mention timeline notifications from Twitter account with id" << accountId);
     }
 }
 
@@ -111,8 +107,7 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
     QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"),
                                            SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::Notifications),
                                            accountId);
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("Last sync:")) << lastSync);
+    SOCIALD_LOG_TRACE("last sync:" << lastSync);
 
     QByteArray replyData = reply->readAll();
     disconnect(reply);
@@ -123,9 +118,7 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
     QJsonArray tweets = parseJsonArrayReplyData(replyData, &ok);
     if (ok) {
         if (!tweets.size()) {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("no notifications received for account %1"))
-                    .arg(accountId));
+            SOCIALD_LOG_DEBUG("no notifications received for account" << accountId);
             decrementSemaphore(accountId);
             return;
         }
@@ -149,14 +142,10 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                           ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
                           : 7;
             if (lastSync.isValid() && createdTime < lastSync) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("notification for account %1 came after last sync:"))
-                        .arg(accountId) << "    " << createdTime << ":" << text);
-                break;                 // all subsequent notifications will be even older.
+                SOCIALD_LOG_DEBUG("notification for account" << accountId << "came after last sync:" << createdTime << ":" << text);
+                break; // all subsequent notifications will be even older.
             } else if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > sinceSpan) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("mention for account %1 is more than %2 days old:\n    %3 - %4"))
-                        .arg(accountId).arg(sinceSpan).arg(createdTime.toString(Qt::ISODate)).arg(text));
+                SOCIALD_LOG_DEBUG("mention for account" << accountId << "is more than" << sinceSpan << "days old:" << createdTime << ":" << text);
             } else {
                 body = userName;
                 summary = text;
@@ -199,16 +188,13 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
             qlonglong localId = (0 + notification->replacesId());
             if (localId == 0) {
                 // failed.
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("error: failed to publish notification: %1"))
-                        .arg(body));
+                SOCIALD_LOG_ERROR("failed to publish notification:" <<  body);
             }
         }
     } else {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse notification data from request with account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR("unable to parse notification data from request with account" << accountId << "," <<
+                          "got:" << QString::fromLatin1(replyData.constData()));
     }
 
     // we're finished this request.  Decrement our busy semaphore.

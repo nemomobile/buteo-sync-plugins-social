@@ -29,7 +29,7 @@
 #include <qcontactoriginmetadata_impl.h>
 
 #include "googlecalendarsyncadaptor.h"
-#include "googlecontactsyncadaptor.h"
+#include "googletwowaycontactsyncadaptor.h"
 
 class tst_google : public QObject
 {
@@ -87,7 +87,7 @@ void tst_google::calendars()
 
 void tst_google::contacts()
 {
-    QScopedPointer<GoogleContactSyncAdaptor> ggConSa(new GoogleContactSyncAdaptor(this));
+    QScopedPointer<GoogleTwoWayContactSyncAdaptor> ggConSa(new GoogleTwoWayContactSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 

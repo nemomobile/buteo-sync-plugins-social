@@ -24,7 +24,6 @@
 #include <qcontactoriginmetadata_impl.h>
 
 #include "googlecontactsplugin.h"
-#include "googlecontactsyncadaptor.h"
 #include "googletwowaycontactsyncadaptor.h"
 #include "socialnetworksyncadaptor.h"
 

@@ -60,83 +60,37 @@ TwitterDataTypeSyncAdaptor::~TwitterDataTypeSyncAdaptor()
 
 void TwitterDataTypeSyncAdaptor::sync(const QString &dataTypeString, int accountId)
 {
-    if (dataTypeString != SocialNetworkSyncAdaptor::dataTypeName(dataType)) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: Twitter %1 sync adaptor was asked to sync %2"))
-                .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(dataTypeString));
+    if (dataTypeString != SocialNetworkSyncAdaptor::dataTypeName(m_dataType)) {
+        SOCIALD_LOG_ERROR("Twitter" << SocialNetworkSyncAdaptor::dataTypeName(m_dataType) <<
+                          "sync adaptor was asked to sync" << dataTypeString);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
 
     if (consumerKey().isEmpty() || consumerSecret().isEmpty()) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: secrets could not be retrieved for twitter")));
+        SOCIALD_LOG_ERROR("secrets could not be retrieved for twitter account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
 
-    // either a single-account sync, or an all-account sync.
-    // an all-account sync is a three stage process.
-    // 1) if an account has been removed, we need to purge the data we retrieved with it
-    // 2) if an account has been added, we need to pull data for the account
-    // 3) for existing accounts, pull new data for the existing account
     setStatus(SocialNetworkSyncAdaptor::Busy);
-
-    QList<int> newIds, purgeIds, updateIds;
-    if (accountId == 0) {
-        // all account sync.  determine accounts added/removed/need updating.
-        checkAccounts(dataType, &newIds, &purgeIds, &updateIds);
-
-        // We only actually perform the purge operation for all-account (template) syncs.
-        purgeDataForOldAccounts(purgeIds); // call the derived-class purge entrypoint.
-
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("successfully triggered sync of %1: purged %2 accounts"))
-                .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(purgeIds.size()));
-
-        setFinishedInactive(); // just had to purge, and we're done.
-    } else {
-        // single account sync.
-        updateDataForAccounts(QList<int>() << accountId);
-
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("successfully triggered sync with profile: %1"))
-                .arg(m_accountSyncProfile->name()));
-    }
+    updateDataForAccount(accountId);
+    SOCIALD_LOG_DEBUG("successfully triggered sync with profile:" << m_accountSyncProfile->name());
 }
 
-void TwitterDataTypeSyncAdaptor::updateDataForAccounts(const QList<int> &accountIds)
+void TwitterDataTypeSyncAdaptor::updateDataForAccount(int accountId)
 {
-    if (accountIds.size() != 1) {
-        // Since the "split monolithic plugin" refactoring, this function
-        // should only ever be called for a single account.
-        // TODO: refactor all of the plugins even more completely, to
-        // remove the per-accountId state data (maps etc) and "fix" the
-        // function signatures to match the new per-account paradigm.
-        qWarning() << Q_FUNC_INFO << "called with multiple accounts - ERROR!";
+    Accounts::Account *account = m_accountManager->account(accountId);
+    if (!account) {
+        SOCIALD_LOG_ERROR("existing account with id" << accountId << "couldn't be retrieved");
         setStatus(SocialNetworkSyncAdaptor::Error);
+        decrementSemaphore(accountId);
         return;
     }
 
-    foreach (int accountId, accountIds) {
-        // will be decremented by either signOnError or signOnResponse.
-        // we increment them prior to the loop below to avoid spurious
-        // "all are zero" causing setFinishedInactive() too early,
-        // if one of the accounts could not be loaded.
-        incrementSemaphore(accountId);
-    }
-
-    foreach (int accountId, accountIds) {
-        Accounts::Account *account = accountManager->account(accountId);
-        if (!account) {
-            TRACE(SOCIALD_ERROR,
-                    QString(QLatin1String("error: existing account with id %1 couldn't be retrieved"))
-                    .arg(accountId));
-            setStatus(SocialNetworkSyncAdaptor::Error);
-            decrementSemaphore(accountId);
-            continue;
-        }
-        signIn(account);
-    }
+    // will be decremented by either signOnError or signOnResponse.
+    incrementSemaphore(accountId);
+    signIn(account);
 }
 
 
@@ -162,10 +116,10 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
     QByteArray replyData = reply->readAll();
     int accountId = reply->property("accountId").toInt();
 
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: %1 request with account %2 experienced error: %3 (%4)"))
-            .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(accountId).arg(err)
-            .arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()));
+    SOCIALD_LOG_ERROR(SocialNetworkSyncAdaptor::dataTypeName(m_dataType) <<
+                      "request with account" << accountId <<
+                      "experienced error:" << err <<
+                      "HTTP:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     reply->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
@@ -179,7 +133,7 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         foreach (QJsonValue data, dataList) {
             QJsonObject dataMap = data.toObject();
             if (dataMap.value("code").toDouble() == 32 || dataMap.value("code").toDouble() == 89) {
-                Accounts::Account *account = accountManager->account(accountId);
+                Accounts::Account *account = m_accountManager->account(accountId);
                 if (account) {
                     setCredentialsNeedUpdate(account);
                 }
@@ -197,9 +151,9 @@ void TwitterDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     if (errs.size() > 0) {
         sslerrs.chop(2);
     }
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: %1 request with account %2 experienced ssl errors: %3"))
-            .arg(SocialNetworkSyncAdaptor::dataTypeName(dataType)).arg(sender()->property("accountId").toInt()).arg(sslerrs));
+    SOCIALD_LOG_ERROR(SocialNetworkSyncAdaptor::dataTypeName(m_dataType) <<
+                      "request with account" << sender()->property("accountId").toInt() <<
+                      "experienced ssl errors:" << sslerrs);
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     sender()->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
@@ -333,7 +287,7 @@ void TwitterDataTypeSyncAdaptor::loadConsumerKeyAndSecret()
     int csSuccess = SailfishKeyProvider_storedKey("twitter", "twitter-sync", "consumer_secret", &cConsumerSecret);
 
     if (ckSuccess != 0 || cConsumerKey == NULL || csSuccess != 0 || cConsumerSecret == NULL) {
-        TRACE(SOCIALD_INFORMATION, QLatin1String("No valid OAuth2 keys found"));
+        SOCIALD_LOG_INFO("No valid OAuth2 keys found");
         return;
     }
 
@@ -346,7 +300,7 @@ void TwitterDataTypeSyncAdaptor::loadConsumerKeyAndSecret()
 void TwitterDataTypeSyncAdaptor::setCredentialsNeedUpdate(Accounts::Account *account)
 {
     qWarning() << "sociald:Twitter: setting CredentialsNeedUpdate to true for account:" << account->id();
-    Accounts::Service srv(accountManager->service(syncServiceName()));
+    Accounts::Service srv(m_accountManager->service(syncServiceName()));
     account->selectService(srv);
     account->setValue(QStringLiteral("CredentialsNeedUpdate"), QVariant::fromValue<bool>(true));
     account->setValue(QStringLiteral("CredentialsNeedUpdateFrom"), QVariant::fromValue<QString>(QString::fromLatin1("sociald-twitter")));
@@ -366,13 +320,11 @@ void TwitterDataTypeSyncAdaptor::signIn(Accounts::Account *account)
     }
 
     // grab out a valid identity for the sync service.
-    Accounts::Service srv(accountManager->service(syncServiceName()));
+    Accounts::Service srv(m_accountManager->service(syncServiceName()));
     account->selectService(srv);
     SignOn::Identity *identity = account->credentialsId() > 0 ? SignOn::Identity::existingIdentity(account->credentialsId()) : 0;
     if (!identity) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: account %1 has no valid credentials, cannot sign in"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("account" << accountId << "has no valid credentials, cannot sign in");
         decrementSemaphore(accountId);
         return;
     }
@@ -382,9 +334,7 @@ void TwitterDataTypeSyncAdaptor::signIn(Accounts::Account *account)
     QString mechanism = accSrv.authData().mechanism();
     SignOn::AuthSession *session = identity->createSession(method);
     if (!session) {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: could not create signon session for account %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("could not create signon session for account" << accountId);
         identity->deleteLater();
         decrementSemaphore(accountId);
         return;
@@ -413,9 +363,8 @@ void TwitterDataTypeSyncAdaptor::signOnError(const SignOn::Error &error)
     Accounts::Account *account = session->property("account").value<Accounts::Account*>();
     SignOn::Identity *identity = session->property("identity").value<SignOn::Identity*>();
     int accountId = account->id();
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("error: credentials for account with id %1 couldn't be retrieved: %2: %3"))
-          .arg(accountId).arg(error.type()).arg(error.message()));
+    SOCIALD_LOG_ERROR("credentials for account with id" << accountId <<
+                      "couldn't be retrieved:" << error.type() << "," << error.message());
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
@@ -450,17 +399,13 @@ void TwitterDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &respo
     if (data.contains(QLatin1String("AccessToken"))) {
         oauthToken = data.value(QLatin1String("AccessToken")).toString();
     } else {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("signon response for account with id %1 contained no oauth token"))
-                .arg(accountId));
+        SOCIALD_LOG_INFO("signon response for account with id" << accountId << "contained no oauth token");
     }
 
     if (data.contains(QLatin1String("TokenSecret"))) {
         oauthTokenSecret = data.value(QLatin1String("TokenSecret")).toString();
     } else {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("signon response for account with id %1 contained no oauth token secret"))
-                .arg(accountId));
+        SOCIALD_LOG_INFO("signon response for account with id" << accountId << "contained no oauth token secret");
     }
 
     session->disconnect(this);

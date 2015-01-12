@@ -4,14 +4,12 @@ QT += contacts-private
 
 SOURCES += \
     $$PWD/googletwowaycontactsyncadaptor.cpp \
-    $$PWD/googlecontactsyncadaptor.cpp \
     $$PWD/googlecontactstream.cpp \
     $$PWD/googlecontactatom.cpp \
     $$PWD/googlecontactimagedownloader.cpp
 
 HEADERS += \
     $$PWD/googletwowaycontactsyncadaptor.h \
-    $$PWD/googlecontactsyncadaptor.h \
     $$PWD/googlecontactstream.h \
     $$PWD/googlecontactatom.h \
     $$PWD/googlecontactimagedownloader.h

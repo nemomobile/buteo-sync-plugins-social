@@ -47,7 +47,7 @@ public:
     QString syncServiceName() const;
 
 protected: // implementing TwitterDataTypeSyncAdaptor interface
-    void purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode);
+    void purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode mode);
     void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret);
     void finalize(int accountId);
 

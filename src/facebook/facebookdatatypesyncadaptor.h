@@ -54,7 +54,7 @@ public:
 
 protected:
     QString clientId();
-    virtual void updateDataForAccounts(const QList<int> &accountIds);
+    virtual void updateDataForAccount(int accountIds);
     virtual void beginSync(int accountId, const QString &accessToken) = 0;
 
 protected Q_SLOTS:

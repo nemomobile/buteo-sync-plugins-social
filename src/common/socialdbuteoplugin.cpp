@@ -171,23 +171,18 @@ bool SocialdButeoPlugin::startSync()
     // purging any synced data associated with those accounts).
     if (m_socialNetworkSyncAdaptor && m_socialNetworkSyncAdaptor->enabled()) {
         if (m_socialNetworkSyncAdaptor->status() == SocialNetworkSyncAdaptor::Inactive) {
-            TRACE(SOCIALD_DEBUG,
-                  QString(QLatin1String("performing sync of %1 from %2 for account %3"))
-                  .arg(m_dataTypeName).arg(m_socialServiceName).arg(m_profileAccountId));
+            SOCIALD_LOG_DEBUG("performing sync of" << m_dataTypeName <<
+                              "from" << m_socialServiceName <<
+                              "for account" << m_profileAccountId);
             m_socialNetworkSyncAdaptor->sync(m_dataTypeName, m_profileAccountId);
             return true;
         } else {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("%1 sync adaptor for %2 is still busy with last sync of account %3"))
-                  .arg(m_socialServiceName)
-                  .arg(m_dataTypeName)
-                  .arg(m_profileAccountId));
+            SOCIALD_LOG_DEBUG(m_socialServiceName << "sync adaptor for" <<
+                              m_dataTypeName << "is still busy with last sync of account" <<
+                              m_profileAccountId);
         }
     } else {
-        TRACE(SOCIALD_DEBUG,
-                QString(QLatin1String("no enabled %1 sync adaptor for %2"))
-              .arg(m_socialServiceName)
-              .arg(m_dataTypeName));
+        SOCIALD_LOG_DEBUG("no enabled" << m_socialServiceName << "sync adaptor for" << m_dataTypeName);
     }
     return false;
 }
@@ -206,8 +201,8 @@ bool SocialdButeoPlugin::cleanUp()
     }
 
     if (m_socialNetworkSyncAdaptor && m_profileAccountId > 0) {
-        m_socialNetworkSyncAdaptor->purgeDataForOldAccounts(QList<int>() << m_profileAccountId,
-                                                            SocialNetworkSyncAdaptor::CleanUpPurge);
+        m_socialNetworkSyncAdaptor->purgeDataForOldAccount(m_profileAccountId,
+                                                           SocialNetworkSyncAdaptor::CleanUpPurge);
     }
 
     return true;
@@ -297,17 +292,15 @@ QList<Buteo::SyncProfile*> SocialdButeoPlugin::ensurePerAccountSyncProfilesExist
 
         if (!foundProfile) {
             // it should have been generated for the account when the account was added.
-            TRACE(SOCIALD_INFORMATION,
-                    QString(QLatin1String("no per-account %1 sync profile exists for account: %2"))
-                    .arg(profile().name()).arg(currAccount->id()));
+            SOCIALD_LOG_INFO("no per-account" << profile().name() <<
+                             "sync profile exists for account:" << currAccount->id());
 
             // create the per-account profile... we shouldn't need to do this...
             QString profileName = createProfile(&m_profileManager, profile().name(), currAccount, dataTypeSyncService, true, QVariantMap());
             Buteo::SyncProfile *newProfile = m_profileManager.syncProfile(profileName);
             if (!newProfile) {
-                TRACE(SOCIALD_ERROR,
-                        QString(QLatin1String("unable to create per-account %1 sync profile for account: %2"))
-                        .arg(profile().name()).arg(currAccount->id()));
+                SOCIALD_LOG_ERROR("unable to create per-account" << profile().name() <<
+                                  "sync profile for account:" << currAccount->id());
             } else {
                 // enable the sync schedule for the profile.
                 Buteo::SyncSchedule schedule = newProfile->syncSchedule();

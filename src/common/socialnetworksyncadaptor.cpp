@@ -63,9 +63,9 @@ SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(const QString &serviceName,
                                                    SocialNetworkSyncAdaptor::DataType dataType,
                                                    QObject *parent)
     : QObject(parent)
-    , dataType(dataType)
-    , accountManager(new Accounts::Manager(this))
-    , networkAccessManager(new SocialdNetworkAccessManager(this))
+    , m_dataType(dataType)
+    , m_accountManager(new Accounts::Manager(this))
+    , m_networkAccessManager(new SocialdNetworkAccessManager(this))
     , m_accountSyncProfile(NULL)
     , m_syncDb(new SocialNetworkSyncDatabase())
     , m_status(SocialNetworkSyncAdaptor::Invalid)
@@ -83,15 +83,7 @@ SocialNetworkSyncAdaptor::~SocialNetworkSyncAdaptor()
 void SocialNetworkSyncAdaptor::setAccountSyncProfile(Buteo::SyncProfile* perAccountSyncProfile)
 {
     delete m_accountSyncProfile;
-    m_accountSyncProfile = NULL;
-
-    if (perAccountSyncProfile) { // can be null if template sync profile was triggered.
-        if (perAccountSyncProfile->key(Buteo::KEY_ACCOUNT_ID).toInt() > 0) {
-            m_accountSyncProfile = perAccountSyncProfile;
-        } else {
-            qWarning() << Q_FUNC_INFO << "sync profile is not per-account profile:" << perAccountSyncProfile->name();
-        }
-    }
+    m_accountSyncProfile = perAccountSyncProfile;
 }
 
 SocialNetworkSyncAdaptor::Status SocialNetworkSyncAdaptor::status() const
@@ -113,58 +105,7 @@ void SocialNetworkSyncAdaptor::sync(const QString &dataType, int accountId)
 {
     Q_UNUSED(dataType)
     Q_UNUSED(accountId)
-    TRACE(SOCIALD_ERROR, QString(QLatin1String("error: should be overridden by derived types")));
-}
-
-void SocialNetworkSyncAdaptor::checkAccounts(SocialNetworkSyncAdaptor::DataType dataType, QList<int> *newIds, QList<int> *purgeIds, QList<int> *updateIds)
-{
-    QList<int> knownIds = syncedAccounts(SocialNetworkSyncAdaptor::dataTypeName(dataType));
-    QList<uint> currentAUIds = accountManager->accountList();
-    QList<int> currentIds;
-    foreach (uint auid, currentAUIds) {
-        currentIds.append(static_cast<int>(auid));
-    }
-    TRACE(SOCIALD_DEBUG,
-            QString(QLatin1String("have found %1 accounts which support a sync service; determining old/new/update sets..."))
-            .arg(currentIds.size()));
-
-    foreach (int currId, currentIds) {
-        Accounts::Account *act = accountManager->account(currId);
-        if (!act || act->services().size() <= 0 || act->providerName() != m_serviceName) {
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("account %1 does not support service %2, ignoring"))
-                    .arg(currId).arg(m_serviceName));
-            continue; // not same account provider as m_serviceName.  Ignore it.
-        }
-
-        // we have a valid account with the provider
-        // we need to determine whether it is either:
-        // - new account
-        // - account needing update
-        // - disabled account (neither sync nor purge)
-        if (act->enabled() && checkAccount(act)) {
-            if (knownIds.contains(currId)) {
-                // existing account needing update sync
-                knownIds.removeAll(currId);
-                updateIds->append(currId);
-            } else {
-                // new account needing first-time sync
-                newIds->append(currId);
-            }
-        } else {
-            // disabled, or disabled with this type of data sync
-            // we neither purge nor sync this account.
-            knownIds.removeAll(currId);
-            TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("account %1 is disabled for %2 %3 sync"))
-                    .arg(currId).arg(m_serviceName).arg(dataTypeName(dataType)));
-        }
-    }
-
-    // anything left in knownIds must belong to an old, removed account.
-    foreach (int id, knownIds) {
-        purgeIds->append(id);
-    }
+    SOCIALD_LOG_ERROR("sync() must be overridden by derived types");
 }
 
 /*!
@@ -178,11 +119,11 @@ void SocialNetworkSyncAdaptor::checkAccounts(SocialNetworkSyncAdaptor::DataType 
 bool SocialNetworkSyncAdaptor::checkAccount(Accounts::Account *account)
 {
     bool globallyEnabled = account->enabled();
-    Accounts::Service srv(accountManager->service(syncServiceName()));
+    Accounts::Service srv(m_accountManager->service(syncServiceName()));
     if (!srv.isValid()) {
-        TRACE(SOCIALD_INFORMATION,
-                QString(QLatin1String("invalid service %1 specified, account %2 will be disabled for %2 %3 sync"))
-                .arg(syncServiceName()).arg(account->id()).arg(m_serviceName).arg(dataTypeName(dataType)));
+        SOCIALD_LOG_INFO("invalid service" << syncServiceName() <<
+                         "specified, account" << account->id() <<
+                         "will be disabled for" << m_serviceName << dataTypeName(m_dataType) << "sync");
         return false;
     }
     account->selectService(srv);
@@ -304,9 +245,8 @@ void SocialNetworkSyncAdaptor::setInitialActive(bool enabled)
 void SocialNetworkSyncAdaptor::setFinishedInactive()
 {
     finalCleanup();
-    TRACE(SOCIALD_INFORMATION, QString(QLatin1String("Finished %1 %2 sync at: %3"))
-                               .arg(m_serviceName, SocialNetworkSyncAdaptor::dataTypeName(dataType),
-                                    QDateTime::currentDateTime().toString(Qt::ISODate)));
+    SOCIALD_LOG_INFO("Finished" << m_serviceName << SocialNetworkSyncAdaptor::dataTypeName(m_dataType) <<
+                     "sync at:" << QDateTime::currentDateTime().toString(Qt::ISODate));
     setStatus(SocialNetworkSyncAdaptor::Inactive);
 }
 
@@ -315,21 +255,21 @@ void SocialNetworkSyncAdaptor::incrementSemaphore(int accountId)
     int semaphoreValue = m_accountSyncSemaphores.value(accountId);
     semaphoreValue += 1;
     m_accountSyncSemaphores.insert(accountId, semaphoreValue);
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("incremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
+    SOCIALD_LOG_DEBUG("incremented busy semaphore for account" << accountId << "to:" << semaphoreValue);
 }
 
 void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
 {
     if (!m_accountSyncSemaphores.contains(accountId)) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: no such semaphore for account: %1")).arg(accountId));
+        SOCIALD_LOG_ERROR("no such semaphore for account" << accountId);
         return;
     }
 
     int semaphoreValue = m_accountSyncSemaphores.value(accountId);
     semaphoreValue -= 1;
-    TRACE(SOCIALD_DEBUG, QString(QLatin1String("decremented busy semaphore for account %1 to %2")).arg(accountId).arg(semaphoreValue));
+    SOCIALD_LOG_DEBUG("decremented busy semaphore for account" << accountId << "to:" << semaphoreValue);
     if (semaphoreValue < 0) {
-        TRACE(SOCIALD_ERROR, QString(QLatin1String("error: busy semaphore is negative for account: %1")).arg(accountId));
+        SOCIALD_LOG_ERROR("busy semaphore is negative for account" << accountId);
         return;
     }
     m_accountSyncSemaphores.insert(accountId, semaphoreValue);
@@ -347,7 +287,7 @@ void SocialNetworkSyncAdaptor::decrementSemaphore(int accountId)
         // finished all outstanding sync requests for this account.
         // update the sync time in the global sociald database.
         updateLastSyncTimestamp(m_serviceName,
-                                SocialNetworkSyncAdaptor::dataTypeName(dataType), accountId,
+                                SocialNetworkSyncAdaptor::dataTypeName(m_dataType), accountId,
                                 QDateTime::currentDateTime().toTimeSpec(Qt::UTC));
 
         // if all outstanding requests for all accounts have finished,
@@ -373,9 +313,7 @@ void SocialNetworkSyncAdaptor::timeoutReply()
     QNetworkReply *reply = timer->property("networkReply").value<QNetworkReply*>();
     int accountId = timer->property("accountId").toInt();
 
-    TRACE(SOCIALD_ERROR,
-            QString(QLatin1String("network request timed out while performing sync with account %1"))
-            .arg(accountId));
+    SOCIALD_LOG_ERROR("network request timed out while performing sync with account" << accountId);
 
     m_networkReplyTimeouts[accountId].remove(reply);
     reply->setProperty("isError", QVariant::fromValue<bool>(true));

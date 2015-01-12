@@ -59,7 +59,7 @@ protected:
 
 protected:
     // implementing GoogleDataTypeSyncAdaptor interface
-    void purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode);
+    void purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode mode);
     void beginSync(int accountId, const QString &accessToken);
     void finalize(int accountId);
     void finalCleanup();

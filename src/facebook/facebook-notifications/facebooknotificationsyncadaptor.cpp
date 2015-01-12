@@ -43,15 +43,11 @@ QString FacebookNotificationSyncAdaptor::syncServiceName() const
     return QStringLiteral("facebook-microblog");
 }
 
-void FacebookNotificationSyncAdaptor::purgeDataForOldAccounts(const QList<int> &purgeIds, SocialNetworkSyncAdaptor::PurgeMode)
+void FacebookNotificationSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode)
 {
-    if (purgeIds.size()) {
-        foreach (int accountIdentifier, purgeIds) {
-            m_db.removeNotifications(accountIdentifier);
-        }
-        m_db.sync();
-        m_db.wait();
-    }
+    m_db.removeNotifications(oldId);
+    m_db.sync();
+    m_db.wait();
 }
 
 void FacebookNotificationSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -93,7 +89,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -106,9 +102,7 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request notifications from Facebook account with id %1"))
-                .arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request notifications from Facebook account with id" << accountId);
     }
 }
 
@@ -142,13 +136,11 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
             if (createdTime.daysTo(QDateTime::currentDateTime()) > sinceSpan
                     && updatedTime.daysTo(QDateTime::currentDateTime()) > sinceSpan) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("notification for account %1 is more than %2 days old:\n    %3 - %4 - %5"))
-                        .arg(accountId)
-                        .arg(sinceSpan)
-                        .arg(createdTime.toString(Qt::ISODate))
-                        .arg(updatedTime.toString(Qt::ISODate))
-                        .arg(object.value(QLatin1String("title")).toString()));
+                SOCIALD_LOG_DEBUG("notification for account" << accountId <<
+                                  "is more than" << sinceSpan << "days old:\n" <<
+                                  createdTime.toString(Qt::ISODate) << "-" <<
+                                  updatedTime.toString(Qt::ISODate) << "-" <<
+                                  object.value(QLatin1String("title")).toString());
                 seenOldNotification = true;
                 needNextPage = false;
                 continue;
@@ -193,18 +185,15 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
             QString pagingToken = npuQuery.queryItemValue(QStringLiteral("__paging_token"));
 
             if (!nextPage.isEmpty() && !until.isEmpty() && !pagingToken.isEmpty()) {
-                TRACE(SOCIALD_DEBUG,
-                        QString(QLatin1String("another page of notifications exists for account %1: %2"))
-                        .arg(accountId).arg(nextPage));
+                SOCIALD_LOG_DEBUG("another page of notifications exists for account" << accountId << ":" << nextPage);
                 requestNotifications(accountId, accessToken, until, pagingToken);
             }
             */
         }
     } else {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse notification data from request with account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR("unable to parse notification data from request with account" << accountId <<
+                          "got:" << QString::fromLatin1(replyData.constData()));
     }
 
     // we're finished this request.  Decrement our busy semaphore.

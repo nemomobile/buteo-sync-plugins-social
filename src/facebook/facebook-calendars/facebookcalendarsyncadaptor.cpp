@@ -96,7 +96,7 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
     if (!ghostEventCleanupPerformed()) {
         // Delete any events which are not associated with a notebook.
         // These events are ghost events, caused by a bug which previously
-        // existed in the purgeDataForOldAccounts code.
+        // existed in the purgeDataForOldAccount code.
         // The mkcal API doesn't allow us to determine which notebook a
         // given incidence belongs to, so we have to instead load
         // everything and then find the ones which are ophaned.
@@ -114,8 +114,7 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
         foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
             if (!notebookIncidenceUids.contains(incidence->uid())) {
                 // orphan/ghost incidence.  must be deleted.
-                TRACE(SOCIALD_DEBUG,
-                    QString(QLatin1String("deleting orphan event %1")).arg(incidence->uid()));
+                SOCIALD_LOG_DEBUG("deleting orphan event with uid:" << incidence->uid());
                 m_calendar->deleteIncidence(incidence);
                 m_storageNeedsSave = true;
             }
@@ -130,7 +129,7 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
     m_storage->close();
 }
 
-void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldIds, SocialNetworkSyncAdaptor::PurgeMode mode)
+void FacebookCalendarSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode mode)
 {
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // we need to initialise the storage
@@ -139,27 +138,25 @@ void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldI
     }
 
     // We clean all the entries in the calendar
-    foreach (int accountId, oldIds) {
-        foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
-            if (notebook->pluginName() == QLatin1String(FACEBOOK)
-                    && notebook->account() == QString::number(accountId)) {
-                notebook->setIsReadOnly(false);
-                m_storage->loadNotebookIncidences(notebook->uid());
-                KCalCore::Incidence::List allIncidences;
-                m_storage->allIncidences(&allIncidences, notebook->uid());
-                foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
-                    m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
-                }
-                m_storage->deleteNotebook(notebook);
-                m_storageNeedsSave = true;
+    foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
+        if (notebook->pluginName() == QLatin1String(FACEBOOK)
+                && notebook->account() == QString::number(oldId)) {
+            notebook->setIsReadOnly(false);
+            m_storage->loadNotebookIncidences(notebook->uid());
+            KCalCore::Incidence::List allIncidences;
+            m_storage->allIncidences(&allIncidences, notebook->uid());
+            foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
+                m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
             }
+            m_storage->deleteNotebook(notebook);
+            m_storageNeedsSave = true;
         }
-
-        // Clean the database
-        m_db.removeEvents(accountId);
-        m_db.sync(accountId);
-        m_db.wait();
     }
+
+    // Clean the database
+    m_db.removeEvents(oldId);
+    m_db.sync(oldId);
+    m_db.wait();
 
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // and commit any changes made.
@@ -169,9 +166,7 @@ void FacebookCalendarSyncAdaptor::purgeDataForOldAccounts(const QList<int> &oldI
 
 void FacebookCalendarSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
-    TRACE(SOCIALD_DEBUG,
-          QString(QLatin1String("Beginning Calendar sync for Facebook, account %1")).arg(accountId));
-
+    SOCIALD_LOG_DEBUG("beginning Calendar sync for Facebook account" << accountId);
     requestEvents(accountId, accessToken);
 }
 
@@ -203,7 +198,7 @@ void FacebookCalendarSyncAdaptor::requestEvents(int accountId, const QString &ac
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = networkAccessManager->get(QNetworkRequest(url));
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
 
     if (reply) {
         reply->setProperty("accountId", accountId);
@@ -218,9 +213,7 @@ void FacebookCalendarSyncAdaptor::requestEvents(int accountId, const QString &ac
         incrementSemaphore(accountId);
         setupReplyTimeout(accountId, reply);
     } else {
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to request events "\
-                                      "from Facebook account with id %1")).arg(accountId));
+        SOCIALD_LOG_ERROR("unable to request events from Facebook account" << accountId);
     }
 }
 
@@ -240,8 +233,7 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
     if (!isError && ok) {
         QList<FacebookEvent::ConstPtr> dbEvents = m_db.events(accountId);
 
-        TRACE(SOCIALD_DEBUG,
-              QString(QLatin1String("%1 events in the database")).arg(dbEvents.count()));
+        SOCIALD_LOG_DEBUG("have:" << dbEvents.count() << "events in the database");
 
         // Search for the Facebook Notebook
         // Create one if not found (TODO: check if it failed)
@@ -254,16 +246,13 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
             }
         }
 
-        TRACE(SOCIALD_DEBUG,
-              QString(QLatin1String("Found %1 notebooks")).arg(facebookNotebooks.count()));
+        SOCIALD_LOG_DEBUG("found" << facebookNotebooks.count() << "notebooks");
 
         // That should not happen, but we check it nevertheless
         // we should purge anything that is contained in these notebooks
         // and restart over
         if (facebookNotebooks.count() > 1) {
-            TRACE(SOCIALD_DEBUG,
-                  QString(QLatin1String("Resetting notebooks")));
-
+            SOCIALD_LOG_DEBUG("multiple notebooks detected! resetting notebooks");
             foreach (mKCal::Notebook::Ptr notebook, facebookNotebooks) {
                 m_storage->loadNotebookIncidences(notebook->uid());
                 KCalCore::Incidence::List incidenceList;
@@ -287,7 +276,7 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
             notebook->setPluginName(QLatin1String(FACEBOOK));
             notebook->setAccount(QString::number(accountId));
             notebook->setColor(QLatin1String(FACEBOOK_COLOR));
-            notebook->setDescription(accountManager->account(accountId)->displayName());
+            notebook->setDescription(m_accountManager->account(accountId)->displayName());
             notebook->setIsReadOnly(true);
             m_storage->addNotebook(notebook);
             m_storageNeedsSave = true;
@@ -296,7 +285,7 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
             bool changed = false;
 
             if (notebook->description().isEmpty()) {
-                notebook->setDescription(accountManager->account(accountId)->displayName());
+                notebook->setDescription(m_accountManager->account(accountId)->displayName());
                 changed = true;
             }
 
@@ -434,10 +423,8 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
 
     } else {
         // error occurred during request.
-        TRACE(SOCIALD_ERROR,
-                QString(QLatin1String("error: unable to parse calendar data from request with "\
-                                      "account %1; got: %2"))
-                .arg(accountId).arg(QString::fromLatin1(replyData.constData())));
+        SOCIALD_LOG_ERROR("unable to parse calendar data from request with account"
+                          << accountId << ", got:" << QString::fromLatin1(replyData.constData()));
     }
 
     // we're finished this request.  Decrement our busy semaphore.
