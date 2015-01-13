@@ -44,6 +44,8 @@
 
 namespace {
 
+static int GOOGLE_CAL_SYNC_PLUGIN_VERSION = 2;
+
 QString gCalEventId(KCalCore::Incidence::Ptr event)
 {
     return event->customProperty("jolla-sociald", "gcal-id");
@@ -298,6 +300,12 @@ bool wasLastSyncSuccessful(int accountId)
     QSettings settingsFile(settingsFileName, QSettings::IniFormat);
     bool retn = settingsFile.value(QString::fromLatin1("%1-success").arg(accountId), QVariant::fromValue<bool>(false)).toBool();
     settingsFile.setValue(QString::fromLatin1("%1-success").arg(accountId), QVariant::fromValue<bool>(false));
+    int pluginVersion = settingsFile.value(QString::fromLatin1("%1-pluginVersion").arg(accountId), QVariant::fromValue<int>(1)).toInt();
+    if (pluginVersion != GOOGLE_CAL_SYNC_PLUGIN_VERSION) {
+        settingsFile.setValue(QString::fromLatin1("%1-pluginVersion").arg(accountId), GOOGLE_CAL_SYNC_PLUGIN_VERSION);
+        SOCIALD_LOG_DEBUG("Google cal sync plugin version mismatch, force clean sync");
+        retn = false;
+    }
     settingsFile.sync();
     return retn;
 }
