@@ -819,6 +819,9 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             // delete existing event.
             remoteRemoved++;
 
+            // if modified locally and deleted on server side, don't upsync modifications
+            updatedMap.remove(eventId);
+
             m_idDb.removeEvent(accountId, eventId);
             if (allMap.contains(eventId)) {
                 m_calendar->deleteEvent(allMap.value(eventId));
