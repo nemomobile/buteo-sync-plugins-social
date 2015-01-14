@@ -62,7 +62,7 @@
 #define SOCIALD_FACEBOOK_CONTACTS_AVATAR_BATCHSIZE 20
 
 static const char *WHICH_FIELDS = "name,first_name,middle_name,last_name,link,website,"\
-        "picture.type(large),cover,username,birthday,bio,gender,updated_time";
+        "picture.type(large),cover,birthday,bio,gender,updated_time";
 static const char *IDENTIFIER_KEY = "identifier";
 static const char *ACCOUNT_ID_KEY = "account_id";
 static const char *TYPE_KEY = "type";
@@ -235,7 +235,7 @@ void FacebookContactSyncAdaptor::requestData(int accountId, const QString &acces
         }
     } else {
         // beginning a new sync via me/friends request.
-        url = QUrl(QString(QLatin1String("https://graph.facebook.com/me/friends")));
+        url = QUrl(graphAPI(QLatin1String("/me/friends")));
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("limit")), QLatin1String("200")));
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("fields")),
                                                   QLatin1String(WHICH_FIELDS)));

@@ -67,12 +67,11 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
 {
     // continuation requests require until+paging token.
     // if not set, set "since" to the timestamp value.
-
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("include_read")), QString(QLatin1String("true"))));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("locale")), QLocale::system().name()));
-    QUrl url(QLatin1String("https://graph.facebook.com/me/notifications"));
+    QUrl url(graphAPI(QLatin1String("/me/notifications")));
     if (pagingToken.isEmpty()) {
         int sinceSpan = m_accountSyncProfile
                       ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
@@ -122,7 +121,7 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
                   ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
                   : 7;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
-    if (!isError && ok && parsed.contains(QLatin1String("summary"))) {
+    if (!isError && ok && parsed.contains(QLatin1String("data"))) {
         QJsonArray data = parsed.value(QLatin1String("data")).toArray();
 
         bool needNextPage = false;

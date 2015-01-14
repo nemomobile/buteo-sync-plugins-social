@@ -138,6 +138,11 @@ QString FacebookDataTypeSyncAdaptor::clientId()
     return m_clientId;
 }
 
+QString FacebookDataTypeSyncAdaptor::graphAPI(const QString &request) const
+{
+    return m_graphAPI + request;
+}
+
 void FacebookDataTypeSyncAdaptor::loadClientId()
 {
     m_triedLoading = true;
@@ -251,6 +256,8 @@ void FacebookDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &resp
     } else {
         SOCIALD_LOG_INFO("signon response for account with id" << accountId << "contained no access token");
     }
+
+    m_graphAPI = account->value(QStringLiteral("graph_api/Host")).toString();
 
     session->disconnect(this);
     identity->destroySession(session);

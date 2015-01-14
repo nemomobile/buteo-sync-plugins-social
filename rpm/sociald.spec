@@ -144,34 +144,6 @@ rm -f /home/nemo/.cache/msyncd/sync/facebook.Notifications.xml
 systemctl-user restart msyncd.service || :
 
 
-%package facebook-posts
-Summary:    Provides post synchronisation with Facebook
-License:    LGPLv2.1
-Group:      System/Libraries
-BuildRequires:  pkgconfig(Qt5Contacts)
-BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
-BuildRequires:  qt5-qttools-linguist
-Requires: %{name} = %{version}-%{release}
-
-%description facebook-posts
-Provides post synchronisation with Facebook
-
-%files facebook-posts
-%{_datadir}/lipstick/notificationcategories/x-nemo.social.facebook.statuspost.conf
-####out-of-process-plugin form:
-###/usr/lib/buteo-plugins-qt5/oopp/facebook-posts-client
-####in-process-plugin form:
-###/usr/lib/buteo-plugins-qt5/libfacebook-posts-client.so
-###%config %{_sysconfdir}/buteo/profiles/client/facebook-posts.xml
-###%config %{_sysconfdir}/buteo/profiles/sync/facebook.Posts.xml
-
-%pre facebook-posts
-rm -f /home/nemo/.cache/msyncd/sync/client/facebook-posts.xml
-rm -f /home/nemo/.cache/msyncd/sync/facebook.Posts.xml
-
-%post facebook-posts
-systemctl-user restart msyncd.service || :
-
 
 %package facebook-signon
 Summary:    Provides signon credentials refreshing with Facebook
