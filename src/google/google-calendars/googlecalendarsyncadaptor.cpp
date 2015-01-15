@@ -138,8 +138,8 @@ QList<KDateTime> datetimesFromExRDateStr(const QString &exrdatestr, bool *isDate
         } else if (str.startsWith("PERIOD:", Qt::CaseInsensitive)) {
             SOCIALD_LOG_ERROR("unsupported parameter in ex/rdate string:" << exrdatestr);
             // TODO: support PERIOD formats, or just switch to CalDAV for Google sync...
-        } else if (str.startsWith("TZID=")) {
-            QString tzidstr = str.mid(0, str.indexOf(':'));
+        } else if (str.startsWith("TZID=") && str.contains(':')) {
+            QString tzidstr = str.mid(5, str.indexOf(':') - 5); // something like: "Australia/Brisbane"
             KTimeZone tz = KSystemTimeZones::zone(tzidstr);
             str.remove(0, tzidstr.size()+1);
             QStringList dts = str.split(',');
@@ -901,8 +901,8 @@ void GoogleCalendarSyncAdaptor::eventsFinishedHandler()
                                                             accountId).addSecs(2); // add 2 secs to avoid fs sync time issues.
 
         if (!updated.isEmpty()) {
+            SOCIALD_LOG_INFO("setting updated timestamp for Google account: " << accountId << "; calendarId: " << calendarId << "; timestamp:" << updated);
             m_idDb.setLastUpdateTime(calendarId, accountId, updated);
-            SOCIALD_LOG_ERROR("Setting updated timestamp for Google account: " << accountId << ". Calendar Id: " << calendarId << ".  Timestamp: " << updated);
         }
         updateLocalCalendarNotebookEvents(accountId, accessToken, calendarId, since);
     }
@@ -1046,7 +1046,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
     }
 
     SOCIALD_LOG_INFO((since.isValid() ? "Delta" : "Clean") <<
-                     "sync with Google calendar" << googleNotebook->name() << "for account" << accountId << ":"
+                     "downsync from Google calendar" << googleNotebook->name() << "for account" << accountId << ":"
                      "remote A/M/R:" << remoteAdded << "/" << remoteModified << "/" << remoteRemoved);
 
     // only upsync changes if we're doing a delta sync, and upsync is enabled
@@ -1090,7 +1090,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                 }
             }
 
-            SOCIALD_LOG_INFO("Delta sync with Google calendar" << googleNotebook->name() << "for account" << accountId << ":" <<
+            SOCIALD_LOG_INFO("Delta upsync with Google calendar" << googleNotebook->name() << "for account" << accountId << ":" <<
                              "local A/M/R:" << localAdded << "/" << localModified << "/" << localRemoved);
         }
     } else {
