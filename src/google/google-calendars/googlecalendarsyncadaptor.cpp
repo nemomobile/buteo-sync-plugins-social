@@ -139,19 +139,28 @@ QList<KDateTime> datetimesFromExRDateStr(const QString &exrdatestr, bool *isDate
             SOCIALD_LOG_ERROR("unsupported parameter in ex/rdate string:" << exrdatestr);
             // TODO: support PERIOD formats, or just switch to CalDAV for Google sync...
         } else if (str.startsWith("TZID=") && str.contains(':')) {
-            QString tzidstr = str.mid(5, str.indexOf(':') - 5); // something like: "Australia/Brisbane"
+            str.remove(0, 5);
+            QString tzidstr = str.mid(0, str.indexOf(':')); // something like: "Australia/Brisbane"
             KTimeZone tz = KSystemTimeZones::zone(tzidstr);
             str.remove(0, tzidstr.size()+1);
             QStringList dts = str.split(',');
             Q_FOREACH (const QString &dtstr, dts) {
                 KDateTime kdt = KDateTime::fromString(dtstr, RFC5545_KDATETIME_FORMAT_NTZC);
-                if (tz.isValid()) {
-                    kdt.setTimeSpec(tz);
-                } else {
-                    kdt.setTimeSpec(KDateTime::Spec::ClockTime());
-                    SOCIALD_LOG_INFO("WARNING: unknown tzid:" << tzidstr << "; assuming clock-time instead!");
+                if (!kdt.isValid()) {
+                    // try parsing from alternate formats
+                    kdt = KDateTime::fromString(dtstr, RFC3339_FORMAT_NTZC);
                 }
-                retn.append(kdt);
+                if (!kdt.isValid()) {
+                    SOCIALD_LOG_ERROR("unable to parse datetime from ex/rdate string:" << exrdatestr);
+                } else {
+                    if (tz.isValid()) {
+                        kdt.setTimeSpec(tz);
+                    } else {
+                        kdt.setTimeSpec(KDateTime::Spec::ClockTime());
+                        SOCIALD_LOG_INFO("WARNING: unknown tzid:" << tzidstr << "; assuming clock-time instead!");
+                    }
+                    retn.append(kdt);
+                }
             }
         } else {
             SOCIALD_LOG_ERROR("invalid parameter in ex/rdate string:" << exrdatestr);
@@ -163,13 +172,31 @@ QList<KDateTime> datetimesFromExRDateStr(const QString &exrdatestr, bool *isDate
             if (dtstr.endsWith('Z')) {
                 // UTC
                 KDateTime kdt = KDateTime::fromString(dtstr, RFC5545_KDATETIME_FORMAT);
-                kdt.setTimeSpec(KDateTime::Spec::UTC());
-                retn.append(kdt);
+                if (!kdt.isValid()) {
+                    // try parsing from alternate formats
+                    kdt = KDateTime::fromString(dtstr, RFC3339_FORMAT);
+                }
+                if (!kdt.isValid()) {
+                    SOCIALD_LOG_ERROR("unable to parse datetime from ex/rdate string:" << exrdatestr);
+                } else {
+                    // parsed successfully
+                    kdt.setTimeSpec(KDateTime::Spec::UTC());
+                    retn.append(kdt);
+                }
             } else {
                 // Floating time
                 KDateTime kdt = KDateTime::fromString(dtstr, RFC5545_KDATETIME_FORMAT_NTZC);
-                kdt.setTimeSpec(KDateTime::Spec::ClockTime());
-                retn.append(kdt);
+                if (!kdt.isValid()) {
+                    // try parsing from alternate formats
+                    kdt = KDateTime::fromString(dtstr, RFC3339_FORMAT_NTZC);
+                }
+                if (!kdt.isValid()) {
+                    SOCIALD_LOG_ERROR("unable to parse datetime from ex/rdate string:" << exrdatestr);
+                } else {
+                    // parsed successfully
+                    kdt.setTimeSpec(KDateTime::Spec::ClockTime());
+                    retn.append(kdt);
+                }
             }
         }
     } else {
@@ -1248,6 +1275,10 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                     SOCIALD_LOG_DEBUG("  old start:" << oldDTS << ", old end:" << oldDTE);
                     SOCIALD_LOG_DEBUG("  new start:" << event->dtStart().toString(RFC3339_FORMAT) <<
                                       ", new end:" << event->dtEnd().toString(RFC3339_FORMAT));
+                    SOCIALD_LOG_DEBUG("  exdates:");
+                    Q_FOREACH(const QDate &exd, event->recurrence()->exDates()) SOCIALD_LOG_DEBUG("    " << exd.toString(QDATEONLY_FORMAT));
+                    SOCIALD_LOG_DEBUG("  exdatetimes:");
+                    Q_FOREACH(const KDateTime &exd, event->recurrence()->exDateTimes()) SOCIALD_LOG_DEBUG("    " << exd.toString(RFC5545_KDATETIME_FORMAT));
                     event->endUpdates();
                     m_storageNeedsSave = true;
                     m_idDb.insertEvent(accountId, gCalEventId(event), googleNotebook->uid(), kcalEventId);
