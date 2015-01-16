@@ -97,7 +97,6 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
                                                   const QString &sinceTweetId, const QString &fromUserId)
 {
     QList<QPair<QString, QString> > queryItems;
-    queryItems.append(QPair<QString, QString>(QString(QLatin1String("count")), QString(QLatin1String("10")))); // limit to 10 Tweets.
     if (!sinceTweetId.isEmpty()) {
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("since_id")), sinceTweetId));
     }
