@@ -269,7 +269,7 @@ QList<Buteo::SyncProfile*> SocialdButeoPlugin::ensurePerAccountSyncProfilesExist
     }
 
     for (int i = 0; i < accountIds.size(); ++i) {
-        Accounts::Account *currAccount = am.account(accountIds.at(i));
+        Accounts::Account *currAccount = Accounts::Account::fromId(&am, accountIds.at(i), this);
         if (!currAccount || currAccount->id() == 0
                 || m_socialNetworkSyncAdaptor->syncServiceName().split('-').first() != currAccount->providerName()) {
             // we only generate per-account sync profiles for accounts which

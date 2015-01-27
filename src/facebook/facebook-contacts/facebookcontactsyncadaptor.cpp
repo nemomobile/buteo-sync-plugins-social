@@ -984,7 +984,7 @@ void FacebookContactSyncAdaptor::finalCleanup()
         currentAccountIds.append(static_cast<int>(uaid));
     }
     foreach (int currId, currentAccountIds) {
-        Accounts::Account *act = m_accountManager->account(currId);
+        Accounts::Account *act = Accounts::Account::fromId(m_accountManager, currId, this);
         if (act) {
             if (act->providerName() == QString(QLatin1String("facebook")) && checkAccount(act)) {
                 facebookAccountIds.append(currId);

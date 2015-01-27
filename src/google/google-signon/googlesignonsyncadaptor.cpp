@@ -73,7 +73,7 @@ Accounts::Account *GoogleSignonSyncAdaptor::loadAccount(int accountId)
     if (m_accounts.contains(accountId)) {
         acc = m_accounts[accountId];
     } else {
-        acc = m_accountManager.account(accountId);
+        acc = Accounts::Account::fromId(&m_accountManager, accountId, this);
         if (!acc) {
             SOCIALD_LOG_ERROR(
                     QString(QLatin1String("error: Google account %1 was deleted during signon refresh sync"))

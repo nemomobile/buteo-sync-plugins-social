@@ -167,7 +167,7 @@ Accounts::Account *FacebookSignonSyncAdaptor::loadAccount(int accountId)
     if (m_accounts.contains(accountId)) {
         acc = m_accounts[accountId];
     } else {
-        acc = m_accountManager.account(accountId);
+        acc = Accounts::Account::fromId(&m_accountManager, accountId, this);
         if (!acc) {
             SOCIALD_LOG_ERROR("Facebook account" << accountId << "was deleted during signon refresh sync");
             return 0;

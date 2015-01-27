@@ -80,7 +80,7 @@ void TwitterDataTypeSyncAdaptor::sync(const QString &dataTypeString, int account
 
 void TwitterDataTypeSyncAdaptor::updateDataForAccount(int accountId)
 {
-    Accounts::Account *account = m_accountManager->account(accountId);
+    Accounts::Account *account = Accounts::Account::fromId(m_accountManager, accountId, this);
     if (!account) {
         SOCIALD_LOG_ERROR("existing account with id" << accountId << "couldn't be retrieved");
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -133,7 +133,7 @@ void TwitterDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         foreach (QJsonValue data, dataList) {
             QJsonObject dataMap = data.toObject();
             if (dataMap.value("code").toDouble() == 32 || dataMap.value("code").toDouble() == 89) {
-                Accounts::Account *account = m_accountManager->account(accountId);
+                Accounts::Account *account = Accounts::Account::fromId(m_accountManager, accountId, this);
                 if (account) {
                     setCredentialsNeedUpdate(account);
                 }

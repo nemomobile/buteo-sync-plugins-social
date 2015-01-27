@@ -79,7 +79,7 @@ void GoogleDataTypeSyncAdaptor::sync(const QString &dataTypeString, int accountI
 
 void GoogleDataTypeSyncAdaptor::updateDataForAccount(int accountId)
 {
-    Accounts::Account *account = m_accountManager->account(accountId);
+    Accounts::Account *account = Accounts::Account::fromId(m_accountManager, accountId, this);
     if (!account) {
         SOCIALD_LOG_ERROR("existing account with id" << accountId << "couldn't be retrieved");
         setStatus(SocialNetworkSyncAdaptor::Error);

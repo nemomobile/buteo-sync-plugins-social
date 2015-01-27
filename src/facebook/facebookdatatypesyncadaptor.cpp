@@ -73,7 +73,7 @@ void FacebookDataTypeSyncAdaptor::sync(const QString &dataTypeString, int accoun
 
 void FacebookDataTypeSyncAdaptor::updateDataForAccount(int accountId)
 {
-    Accounts::Account *account = m_accountManager->account(accountId);
+    Accounts::Account *account = Accounts::Account::fromId(m_accountManager, accountId, this);
     if (!account) {
         SOCIALD_LOG_ERROR("existing account with id" << accountId << "couldn't be retrieved");
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -105,7 +105,7 @@ void FacebookDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
         if (errorReply.value("code").toDouble() == 190 &&
                 errorReply.value("error_subcode").toDouble() == 460) {
             int accountId = reply->property("accountId").toInt();
-            Accounts::Account *account = m_accountManager->account(accountId);
+            Accounts::Account *account = Accounts::Account::fromId(m_accountManager, accountId, this);
             if (account) {
                 setCredentialsNeedUpdate(account);
             }
