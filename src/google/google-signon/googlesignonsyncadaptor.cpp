@@ -99,6 +99,7 @@ void GoogleSignonSyncAdaptor::raiseCredentialsNeedUpdateFlag(int accountId)
 {
     Accounts::Account *acc = loadAccount(accountId);
     if (acc) {
+        SOCIALD_LOG_ERROR("GSSA: raising CredentialsNeedUpdate flag");
         Accounts::Service srv = m_accountManager.service(syncServiceName());
         acc->selectService(srv);
         acc->setValue(QStringLiteral("CredentialsNeedUpdate"), QVariant::fromValue<bool>(true));
@@ -112,6 +113,7 @@ void GoogleSignonSyncAdaptor::lowerCredentialsNeedUpdateFlag(int accountId)
 {
     Accounts::Account *acc = loadAccount(accountId);
     if (acc) {
+        SOCIALD_LOG_ERROR("GSSA: lowering CredentialsNeedUpdate flag");
         Accounts::Service srv = m_accountManager.service(syncServiceName());
         acc->selectService(srv);
         acc->setValue(QStringLiteral("CredentialsNeedUpdate"), QVariant::fromValue<bool>(false));
@@ -277,13 +279,13 @@ void GoogleSignonSyncAdaptor::signonError(const SignOn::Error &error)
         session->deleteLater();
     }
 
-    bool raiseFlag = error.type() == SignOn::AuthSession::UserInteractionError;
+    bool raiseFlag = error.type() == SignOn::Error::UserInteraction;
     SOCIALD_LOG_INFO(
             QString(QLatin1String("got signon error when performing signon refresh for Google account %1: %2: %3.  Raising flag? %4"))
             .arg(accountId).arg(error.type()).arg(error.message()).arg(raiseFlag));
 
     if (raiseFlag) {
-        // UserInteractionError is returned if user interaction is required.
+        // UserInteraction error is returned if user interaction is required.
         raiseCredentialsNeedUpdateFlag(accountId);
     }
 
