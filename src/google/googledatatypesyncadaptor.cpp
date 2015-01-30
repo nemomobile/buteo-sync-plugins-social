@@ -264,7 +264,7 @@ void GoogleDataTypeSyncAdaptor::signOnError(const SignOn::Error &error)
 
     // if the error is because credentials have expired, we
     // set the CredentialsNeedUpdate key.
-    if (error.type() == SignOn::AuthSession::UserInteractionError) {
+    if (error.type() == SignOn::Error::UserInteraction) {
         setCredentialsNeedUpdate(account);
     }
 

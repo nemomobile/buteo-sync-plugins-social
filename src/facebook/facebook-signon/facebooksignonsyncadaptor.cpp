@@ -133,9 +133,9 @@ void FacebookSignonSyncAdaptor::requestFinishedHandler()
                     || errorCode == 10
                     || (errorCode >= 200 && errorCode <= 299)) {
                 // the account is in a state which requires user intervention
-                forceTokenExpiry(0, accountId, accessToken);
-                SOCIALD_LOG_DEBUG("access token has expired for Facebook account" << accountId <<
+                SOCIALD_LOG_ERROR("access token has expired for Facebook account" << accountId <<
                                   ":" <<  errorCode << "," << errorType << "," << errorMessage);
+                forceTokenExpiry(0, accountId, accessToken);
             } else {
                 // other error (downtime / service disruption / etc)
                 // ignore this one.
@@ -150,8 +150,8 @@ void FacebookSignonSyncAdaptor::requestFinishedHandler()
         // if the token has been manually revoked.  There is no
         // response data in this case.
         // the account is in a state which requires user intervention
+        SOCIALD_LOG_ERROR("access token has presumably been revoked for Facebook account" << accountId);
         forceTokenExpiry(0, accountId, accessToken);
-        SOCIALD_LOG_DEBUG("access token has presumably expired for Facebook account" << accountId);
     } else {
         // could have been a network error, or something.
         // we treat it as a sync error, but not a signon error.
@@ -190,6 +190,7 @@ void FacebookSignonSyncAdaptor::raiseCredentialsNeedUpdateFlag(int accountId)
 {
     Accounts::Account *acc = loadAccount(accountId);
     if (acc) {
+        SOCIALD_LOG_ERROR("FBSSA: raising CredentialsNeedUpdate flag");
         Accounts::Service srv = m_accountManager.service(syncServiceName());
         acc->selectService(srv);
         acc->setValue(QStringLiteral("CredentialsNeedUpdate"), QVariant::fromValue<bool>(true));
@@ -203,6 +204,7 @@ void FacebookSignonSyncAdaptor::lowerCredentialsNeedUpdateFlag(int accountId)
 {
     Accounts::Account *acc = loadAccount(accountId);
     if (acc) {
+        SOCIALD_LOG_ERROR("FBSSA: lowering CredentialsNeedUpdate flag");
         Accounts::Service srv = m_accountManager.service(syncServiceName());
         acc->selectService(srv);
         acc->setValue(QStringLiteral("CredentialsNeedUpdate"), QVariant::fromValue<bool>(false));
@@ -282,6 +284,7 @@ void FacebookSignonSyncAdaptor::forceTokenExpiryResponse(const SignOn::SessionDa
 
     if (seconds == 0) {
         // successfully forced expiry
+        SOCIALD_LOG_ERROR("forced expiry for reportedly invalid token");
         raiseCredentialsNeedUpdateFlag(accountId);
     } else {
         // successfully forced new ExpiresIn value
@@ -301,6 +304,7 @@ void FacebookSignonSyncAdaptor::forceTokenExpiryError(const SignOn::Error &error
 
     if (seconds == 0) {
         // we treat the error as if it was a success, since we need to update the credentials anyway.
+        SOCIALD_LOG_ERROR("forced expiry for reportedly invalid token failed");
         raiseCredentialsNeedUpdateFlag(accountId);
     } else {
         // don't raise or lower the flag.  If was previously not raised,
