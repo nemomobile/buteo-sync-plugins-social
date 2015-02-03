@@ -101,7 +101,7 @@ void GoogleTwoWayContactSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNet
 
 void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
-    Accounts::Account *account = m_accountManager->account(accountId);
+    Accounts::Account *account = Accounts::Account::fromId(m_accountManager, accountId, this);
     if (!account) {
         SOCIALD_LOG_ERROR("unable to load Google account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -870,7 +870,7 @@ void GoogleTwoWayContactSyncAdaptor::finalCleanup()
         currentAccountIds.append(static_cast<int>(uaid));
     }
     foreach (int currId, currentAccountIds) {
-        Accounts::Account *act = m_accountManager->account(currId);
+        Accounts::Account *act = Accounts::Account::fromId(m_accountManager, currId, this);
         if (act) {
             if (act->providerName() == QString(QLatin1String("google"))) {
                 // this account still exists, no need to purge its content.

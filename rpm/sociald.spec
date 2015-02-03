@@ -14,7 +14,7 @@ BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(mlite5)
 BuildRequires:  pkgconfig(buteosyncfw5) >= 0.6.36
 BuildRequires:  pkgconfig(libsignon-qt5)
-BuildRequires:  pkgconfig(accounts-qt5)
+BuildRequires:  pkgconfig(accounts-qt5) >= 1.13
 BuildRequires:  pkgconfig(socialcache) >= 0.0.31
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  qt5-qttools-linguist
