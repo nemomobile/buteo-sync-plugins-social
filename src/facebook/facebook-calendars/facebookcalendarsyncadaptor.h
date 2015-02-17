@@ -29,6 +29,22 @@
 
 #include <socialcache/facebookcalendardatabase.h>
 
+class FacebookParsedEvent
+{
+public:
+    FacebookParsedEvent();
+    FacebookParsedEvent(const FacebookParsedEvent &e);
+
+public:
+    QString m_id;
+    bool m_isDateOnly;
+    bool m_endExists;
+    KDateTime m_startTime;
+    KDateTime m_endTime;
+    QString m_summary;
+    QString m_description;
+};
+
 class FacebookCalendarSyncAdaptor
         : public FacebookDataTypeSyncAdaptor
 {
@@ -48,7 +64,8 @@ protected: // implementing FacebookDataTypeSyncAdaptor interface
 
 private:
     void requestEvents(int accountId, const QString &accessToken,
-                       const QString &until = QString(), const QString &pagingToken = QString());
+                       const QString &batchRequest = QString());
+    void processParsedEvents(int accountId);
 
 private Q_SLOTS:
     void finishedHandler();
@@ -58,6 +75,7 @@ private:
     mKCal::ExtendedStorage::Ptr m_storage;
     FacebookCalendarDatabase m_db;
     bool m_storageNeedsSave;
+    QMap<QString, FacebookParsedEvent> m_parsedEvents;
 };
 
 #endif // FACEBOOKCALENDARSYNCADAPTOR_H

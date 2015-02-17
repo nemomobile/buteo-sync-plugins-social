@@ -80,7 +80,7 @@ void FacebookSignonSyncAdaptor::beginSync(int accountId, const QString &accessTo
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("access_token")), accessToken));
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("fields")), QLatin1String("id")));
-    QUrl url(QLatin1String("https://graph.facebook.com/me"));
+    QUrl url(graphAPI(QLatin1String("/me")));
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);

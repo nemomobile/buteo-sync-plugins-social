@@ -54,6 +54,7 @@ public:
 
 protected:
     QString clientId();
+    QString graphAPI(const QString &request = QString()) const;
     virtual void updateDataForAccount(int accountIds);
     virtual void beginSync(int accountId, const QString &accessToken) = 0;
 
@@ -71,6 +72,7 @@ private:
     void signIn(Accounts::Account *account);
     bool m_triedLoading; // Is true if we tried to load (even if we failed)
     QString m_clientId;
+    QString m_graphAPI;
 };
 
 #endif // FACEBOOKDATATYPESYNCADAPTOR_H

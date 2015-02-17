@@ -44,7 +44,6 @@
 #include "facebookcontactsyncadaptor.h"
 #include "facebookimagesyncadaptor.h"
 #include "facebooknotificationsyncadaptor.h"
-#include "facebookpostsyncadaptor.h"
 
 class tst_facebook : public QObject
 {
