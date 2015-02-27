@@ -208,7 +208,7 @@ void FacebookCalendarSyncAdaptor::requestEvents(int accountId,
                 : 30;
         uint startTime = QDateTime::currentDateTimeUtc().addDays(sinceSpan * -1).toTime_t();
         QString since = QStringLiteral("since=") + QString::number(startTime);
-        QString calendarQuery = QStringLiteral("{\"method\":\"GET\",\"relative_url\":\"me/events/%1?include_headers=false&limit=200&")
+        QString calendarQuery = QStringLiteral("{\"method\":\"GET\",\"relative_url\":\"me/events/%1?fields=id,name,start_time,end_time,is_date_only,description&include_headers=false&limit=200&")
                                   + since
                                   + QStringLiteral("\"}");
 
