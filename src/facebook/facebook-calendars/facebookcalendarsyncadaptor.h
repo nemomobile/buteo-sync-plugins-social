@@ -43,6 +43,7 @@ public:
     KDateTime m_endTime;
     QString m_summary;
     QString m_description;
+    QString m_location;
 };
 
 class FacebookCalendarSyncAdaptor
