@@ -208,7 +208,7 @@ void FacebookCalendarSyncAdaptor::requestEvents(int accountId,
                 : 30;
         uint startTime = QDateTime::currentDateTimeUtc().addDays(sinceSpan * -1).toTime_t();
         QString since = QStringLiteral("since=") + QString::number(startTime);
-        QString calendarQuery = QStringLiteral("{\"method\":\"GET\",\"relative_url\":\"me/events/%1?include_headers=false&limit=200&")
+        QString calendarQuery = QStringLiteral("{\"method\":\"GET\",\"relative_url\":\"me/events/%1?fields=id,name,start_time,end_time,is_date_only,description,location&include_headers=false&limit=200&")
                                   + since
                                   + QStringLiteral("\"}");
 
@@ -363,6 +363,7 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
                 }
                 parsedEvent.m_summary = dataMap.value(QLatin1String("name")).toString();
                 parsedEvent.m_description = dataMap.value(QLatin1String("description")).toString();
+                parsedEvent.m_location = dataMap.value(QLatin1String("location")).toString();
                 m_parsedEvents[eventId] = parsedEvent;
             }
         }
@@ -516,6 +517,7 @@ void FacebookCalendarSyncAdaptor::processParsedEvents(int accountId)
         // Set the property of the event
         event->setSummary(parsedEvent.m_summary);
         event->setDescription(parsedEvent.m_description);
+        event->setLocation(parsedEvent.m_location);
         event->setDtStart(parsedEvent.m_startTime);
         if (parsedEvent.m_endExists) {
             event->setDtEnd(parsedEvent.m_endTime);
