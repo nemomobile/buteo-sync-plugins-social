@@ -264,7 +264,16 @@ void FacebookDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &resp
     identity->deleteLater();
     account->deleteLater();
 
-    if (!accessToken.isEmpty()) {
+    if (account->value(QLatin1String("clean_and_disable")).toBool()) {
+        SOCIALD_LOG_INFO("account " << accountId << "has clean_and_disable flag on for " << syncServiceName());
+        purgeDataForOldAccount(accountId);
+        Accounts::Service srv = m_accountManager->service(syncServiceName());
+        account->selectService(srv);
+        account->setValue(QLatin1String("enabled"), false);            // disable service
+        account->setValue(QLatin1String("clean_and_disable"), false);  // disable oneshot
+        account->selectService(Accounts::Service());
+        account->syncAndBlock();
+    } else if (!accessToken.isEmpty()) {
         beginSync(accountId, accessToken); // call the derived-class sync entrypoint.
     }
 

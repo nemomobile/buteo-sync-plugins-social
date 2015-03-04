@@ -70,6 +70,7 @@ private:
     void loadClientId();
     void setCredentialsNeedUpdate(Accounts::Account *account);
     void signIn(Accounts::Account *account);
+    bool cleanAndDisable();
     bool m_triedLoading; // Is true if we tried to load (even if we failed)
     QString m_clientId;
     QString m_graphAPI;
