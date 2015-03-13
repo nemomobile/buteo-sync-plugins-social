@@ -226,6 +226,7 @@ void GoogleContactStream::handleAtomEntry()
             if (handler) {
                 QContactDetail convertedDetail = (*this.*handler)();
                 if (convertedDetail != QContactDetail()) {
+                    convertedDetail.setValue(QContactDetail__FieldModifiable, true);
                     entryContact.saveDetail(&convertedDetail);
                 }
             } else if (mXmlReader->qualifiedName().toString() == QStringLiteral("gContact:groupMembershipInfo")) {
