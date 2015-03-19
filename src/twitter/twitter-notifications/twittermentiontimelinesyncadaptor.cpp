@@ -209,6 +209,8 @@ Notification *TwitterMentionTimelineSyncAdaptor::createNotification(int accountI
     }
 
     notification = new Notification(this);
+    // defined above
+    notification->setAppName(qtTrId("qtn_social_notifications_twitter"));
     notification->setCategory(QLatin1String("x-nemo.social.twitter.mention"));
     notification->setHintValue("x-nemo.sociald.account-id", accountId);
     return notification;
