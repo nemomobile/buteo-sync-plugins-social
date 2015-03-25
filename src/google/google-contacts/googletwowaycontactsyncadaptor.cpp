@@ -37,6 +37,7 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
 #include <QtCore/QJsonArray>
+#include <QtCore/QSettings>
 #include <QtGui/QImageReader>
 
 #include <QtContacts/QContactDetailFilter>
@@ -88,7 +89,21 @@ QString GoogleTwoWayContactSyncAdaptor::syncServiceName() const
 
 void GoogleTwoWayContactSyncAdaptor::sync(const QString &dataTypeString, int accountId)
 {
-    m_apiRequestsRemaining[accountId] = 99; // assume we can make up to 99 requests per sync, before being throttled.
+    // check if we need to perform a complete clean sync
+    QString settingsFileName = QString::fromLatin1("%1/%2/gcontacts.ini")
+            .arg(QString::fromLatin1(PRIVILEGED_DATA_DIR))
+            .arg(QString::fromLatin1(SYNC_DATABASE_DIR));
+    QSettings settingsFile(settingsFileName, QSettings::IniFormat);
+    bool doneCleanSync = settingsFile.value(QString::fromLatin1("%1-cleansync").arg(accountId), QVariant::fromValue<bool>(false)).toBool();
+    if (!doneCleanSync) {
+        SOCIALD_LOG_INFO("Performing clean sync of Google contacts from account:" << accountId);
+        purgeAccount(accountId); // purge all data for the account before syncing
+        settingsFile.setValue(QString::fromLatin1("%1-cleansync").arg(accountId), QVariant::fromValue<bool>(true));
+        settingsFile.sync();
+    }
+
+    // assume we can make up to 99 requests per sync, before being throttled.
+    m_apiRequestsRemaining[accountId] = 99;
 
     // call superclass impl.
     GoogleDataTypeSyncAdaptor::sync(dataTypeString, accountId);
