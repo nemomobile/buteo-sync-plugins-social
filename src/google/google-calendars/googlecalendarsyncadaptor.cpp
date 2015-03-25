@@ -35,6 +35,7 @@
 #include <QtSql/QSqlError>
 
 #include <ksystemtimezone.h>
+#include <kdatetime.h>
 
 //----------------------------------------------
 
@@ -279,6 +280,17 @@ QJsonArray recurrenceArray(KCalCore::Event::Ptr event, KCalCore::ICalFormat &ica
     }
 
     return retn;
+}
+
+KDateTime parseRecurrenceId(const QJsonObject &originalStartTime)
+{
+    QString recurrenceIdStr = originalStartTime.value(QLatin1String("dateTime")).toVariant().toString();
+    QString recurrenceIdTzStr = originalStartTime.value(QLatin1String("timeZone")).toVariant().toString();
+    KDateTime recurrenceId = KDateTime::fromString(recurrenceIdStr, RFC3339_FORMAT);
+    if (!recurrenceIdTzStr.isEmpty()) {
+        recurrenceId = recurrenceId.toTimeSpec(KTimeZone(recurrenceIdTzStr));
+    }
+    return recurrenceId;
 }
 
 QJsonObject kCalToJson(KCalCore::Event::Ptr event, KCalCore::ICalFormat &icalFormat)
@@ -555,7 +567,6 @@ QString GoogleCalendarSyncAdaptor::syncServiceName() const
 
 void GoogleCalendarSyncAdaptor::sync(const QString &dataTypeString, int accountId)
 {
-    m_storageNeedsSave = false;
     m_storage->open(); // we close it in finalCleanup()
     GoogleDataTypeSyncAdaptor::sync(dataTypeString, accountId);
 }
@@ -569,6 +580,7 @@ void GoogleCalendarSyncAdaptor::finalCleanup()
     m_storage->close();
     m_idDb.sync();
     m_idDb.wait();
+    m_storageNeedsSave = false;
 
     // set the success status for each of our account settings.
     QList<int> succeededAccounts;
@@ -586,7 +598,6 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkS
 {
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // need to initialise the database
-        m_storageNeedsSave = false;
         m_storage->open(); // we close it in finalCleanup()
     }
 
@@ -601,7 +612,7 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkS
             KCalCore::Incidence::List incidenceList;
             m_storage->allIncidences(&incidenceList, notebook->uid());
             foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-                m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
+                m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid(), incidence->recurrenceId()));
             }
             m_storage->deleteNotebook(notebook);
             m_storageNeedsSave = true;
@@ -623,8 +634,13 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkS
 void GoogleCalendarSyncAdaptor::beginSync(int accountId, const QString &accessToken)
 {
     SOCIALD_LOG_DEBUG("beginning Calendar sync for Google, account" << accountId);
-
     bool needCleanSync = !wasLastSyncSuccessful(accountId);
+    if (needCleanSync) {
+        // we do the cleanup here to ensure atomic deletion + storage.save()
+        SOCIALD_LOG_INFO("performing purge due to requiring clean sync for account:" << accountId);
+        purgeDataForOldAccount(accountId, SocialNetworkSyncAdaptor::CleanUpPurge);
+        m_storage->open(); // we close it in finalCleanup()
+    }
     m_serverCalendarIdToSummaryAndColor[accountId].clear();
     m_calendarIdToEventObjects[accountId].clear();
     m_syncSucceeded[accountId] = true; // set to false on error
@@ -766,7 +782,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
                 KCalCore::Incidence::List incidenceList;
                 m_storage->allIncidences(&incidenceList, notebook->uid());
                 foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-                    m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
+                    m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid(), incidence->recurrenceId()));
                 }
                 m_storage->deleteNotebook(notebook);
                 m_storageNeedsSave = true;
@@ -884,6 +900,14 @@ void GoogleCalendarSyncAdaptor::eventsFinishedHandler()
     QByteArray replyData = reply->readAll();
     bool isError = reply->property("isError").toBool();
 
+    QString replyString = QString::fromUtf8(replyData);
+    SOCIALD_LOG_TRACE("-------------------------------");
+    SOCIALD_LOG_TRACE("Events response for calendar:" << calendarId << "from account:" << accountId);
+    Q_FOREACH (QString line, replyString.split('\n', QString::SkipEmptyParts)) {
+        SOCIALD_LOG_TRACE(line.replace('\r', ' '));
+    }
+    SOCIALD_LOG_TRACE("-------------------------------");
+
     disconnect(reply);
     reply->deleteLater();
     removeReplyTimeout(accountId, reply);
@@ -964,26 +988,27 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
     googleNotebook->setIsReadOnly(false);
 
     // check to see if we're doing a delta update or a clean sync
-    m_storage->loadNotebookIncidences(googleNotebook->uid());
     KCalCore::Incidence::List deletedList, addedList, updatedList, allList;
     QMap<QString, KCalCore::Event::Ptr> allMap, updatedMap;
-    QMap<QString, QString> deletedMap; // gcalId to incidenceUid
+    QMap<QString, QPair<QString, KDateTime> > deletedMap; // gcalId to incidenceUid,recurrenceId
     if (since.isValid()) {
         // delta sync.  populate our lists.
+        SOCIALD_LOG_TRACE("Loading existing data to perform delta sync");
+        m_storage->loadNotebookIncidences(googleNotebook->uid());
         m_storage->allIncidences(&allList, googleNotebook->uid());
         m_storage->deletedIncidences(&deletedList, KDateTime(since), googleNotebook->uid());  // TODO: since UTC?
         m_storage->insertedIncidences(&addedList, KDateTime(since), googleNotebook->uid());   // TODO: since UTC?
         m_storage->modifiedIncidences(&updatedList, KDateTime(since), googleNotebook->uid()); // TODO: since UTC?
         Q_FOREACH(const KCalCore::Incidence::Ptr incidence, allList) {
             QString gcalId = gCalEventId(incidence);
-            KCalCore::Event::Ptr eventPtr = m_calendar->event(incidence->uid());
+            KCalCore::Event::Ptr eventPtr = m_calendar->event(incidence->uid(), incidence->recurrenceId());
             if (gcalId.size() && eventPtr) {
                 allMap.insert(gcalId, eventPtr);
             } // else, newly added locally, no gcalId yet.
         }
         Q_FOREACH(const KCalCore::Incidence::Ptr incidence, updatedList) {
             QString gcalId = gCalEventId(incidence);
-            KCalCore::Event::Ptr eventPtr = m_calendar->event(incidence->uid());
+            KCalCore::Event::Ptr eventPtr = m_calendar->event(incidence->uid(), incidence->recurrenceId());
             if (gcalId.size() && eventPtr) {
                 updatedMap.insert(gcalId, eventPtr);
             } // else, newly added+updated locally, no gcalId yet.
@@ -993,46 +1018,35 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             // custom properties of deleted incidences:
             //QString gcalId = gCalEventId(incidence);
             // Instead, read from the out-of-band id database.
-            QString gcalId = m_idDb.gcalEventId(accountId, googleNotebook->uid(), incidence->uid());
+            QString gcalId = m_idDb.gcalEventId(accountId, googleNotebook->uid(), incidence->uid(), incidence->hasRecurrenceId() ? incidence->recurrenceId().toString() : QString());
             if (gcalId.size()) {
                 m_idDb.removeEvent(accountId, gcalId); // it has been removed from mkcal.
-                deletedMap.insert(gcalId, incidence->uid());
+                deletedMap.insert(gcalId, qMakePair(incidence->uid(), incidence->recurrenceId()));
                 updatedMap.remove(gcalId); // don't upsync updates to deleted events.
             } // else, newly added+deleted locally, no gcalId yet.
-        }
-    } else {
-        // clean sync requires clobbering the notebook,
-        // just in case a previous sync left artifacts.
-        QString nbName = googleNotebook->name();
-        QString nbColor = googleNotebook->color();
-        QString nbPluginName = googleNotebook->pluginName();
-        QString nbAccount = googleNotebook->account();
-        QString nbUid = googleNotebook->uid();
-
-        m_storage->deleteNotebook(googleNotebook);
-
-        googleNotebook = mKCal::Notebook::Ptr(new mKCal::Notebook);
-        googleNotebook->setUid(nbUid);
-        googleNotebook->setIsReadOnly(false);
-        googleNotebook->setName(nbName);
-        googleNotebook->setColor(nbColor);
-        googleNotebook->setPluginName(nbPluginName);
-        googleNotebook->setAccount(nbAccount);
-        m_storage->addNotebook(googleNotebook);
-
-        m_storage->loadNotebookIncidences(googleNotebook->uid());
-        m_storageNeedsSave = true;
-
-        // clean the local->remote id mappings for this notebook (if they exist)
-        if (!nbUid.isEmpty()) {
-            m_idDb.removeEvents(accountId, nbUid);
         }
     }
 
     // for each each of the events downloaded from the server, create a local event.
+    // first, we need to re-order them so that recurring (parent) events will be
+    // handled before any persistent occurrences, otherwise it may fail.
     int remoteAdded = 0, remoteModified = 0, remoteRemoved = 0;
+    QList<QJsonObject> eventObjects;
     foreach (const QJsonObject &eventData, m_calendarIdToEventObjects[accountId].values(calendarId)) {
+        if (eventData.value(QLatin1String("recurringEventId")).toVariant().toString().isEmpty()) {
+            // base event; prepend to list.
+            eventObjects.prepend(eventData);
+        } else {
+            // occurrence; append to list.
+            eventObjects.append(eventData);
+        }
+    }
+
+    // now generate local events for them.
+    foreach (const QJsonObject &eventData, eventObjects) {
         QString eventId = eventData.value(QLatin1String("id")).toVariant().toString();
+        QString parentId = eventData.value(QLatin1String("recurringEventId")).toVariant().toString();
+        KDateTime recurrenceId = parseRecurrenceId(eventData.value("originalStartTime").toObject());
         bool eventWasDeletedRemotely = eventData.value(QLatin1String("status")).toVariant().toString() == QString::fromLatin1("cancelled");
         if (eventWasDeletedRemotely) {
             // delete existing event.
@@ -1043,14 +1057,26 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
 
             m_idDb.removeEvent(accountId, eventId);
             if (allMap.contains(eventId)) {
+                // currently existing base event or persistent occurrence which needs deletion
+                SOCIALD_LOG_DEBUG("Event deleted remotely:" << eventId);
                 m_calendar->deleteEvent(allMap.value(eventId));
+                m_storageNeedsSave = true;
+            } else if (allMap.contains(parentId)) {
+                // this is a non-persistent occurrence, we need to add an EXDATE to the base event.
+                SOCIALD_LOG_DEBUG("Occurrence deleted remotely:" << eventId << "for recurrenceId:" << recurrenceId.toString());
+                KCalCore::Event::Ptr event = allMap.value(parentId);
+                event->startUpdates();
+                event->recurrence()->addExDateTime(recurrenceId);
+                event->endUpdates();
                 m_storageNeedsSave = true;
             } // else already deleted locally, can ignore.
         } else if (deletedMap.contains(eventId)) {
             // event was deleted locally, can ignore.
+            SOCIALD_LOG_DEBUG("Event deleted remotely:" << eventId << "was already deleted locally; ignoring");
         } else if (allMap.contains(eventId)) {
             // modify existing event.
             remoteModified++;
+            SOCIALD_LOG_DEBUG("Event modified remotely:" << eventId);
             KCalCore::Event::Ptr event = allMap.value(eventId);
 
             // if both local and server were modified, prefer server.
@@ -1062,13 +1088,45 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             event->endUpdates();
             m_storageNeedsSave = true;
         } else {
-            // add a new local event
-            remoteAdded++;
-            KCalCore::Event::Ptr event = KCalCore::Event::Ptr(new KCalCore::Event);
+            // add a new local event for the remote addition.
+            KCalCore::Event::Ptr event;
+            if (recurrenceId.isValid()) {
+                // this is a persistent occurrence for an already-existing series.
+                SOCIALD_LOG_DEBUG("Persistent occurrence added remotely:" << eventId);
+                KCalCore::Event::Ptr parentEvent = allMap.value(parentId);
+                if (parentEvent.isNull()) {
+                    // it might have been newly added in this sync cycle.  Look for it from the calendar.
+                    QString parentEventUid = m_recurringEventIdToKCalUid.value(accountId).value(parentId);
+                    parentEvent = parentEventUid.isEmpty() ? parentEvent : m_calendar->event(parentEventUid, KDateTime());
+                    if (parentEvent.isNull()) {
+                        SOCIALD_LOG_ERROR("Cannot find parent event:" << parentId << "for persistent occurrence:" << eventId);
+                        m_syncSucceeded[accountId] = false;
+                        return;
+                    }
+                }
+
+                // dissociate the persistent occurrence
+                event = m_calendar->dissociateSingleOccurrence(parentEvent, recurrenceId, recurrenceId.timeSpec()).staticCast<KCalCore::Event>();
+                if (event.isNull()) {
+                    SOCIALD_LOG_ERROR("Could not dissociate occurrence from recurring event:" << parentId << recurrenceId.toString());
+                    m_syncSucceeded[accountId] = false;
+                    return;
+                }
+            } else {
+                // this is a new event in its own right.
+                SOCIALD_LOG_DEBUG("Event added remotely:" << eventId);
+                event = KCalCore::Event::Ptr(new KCalCore::Event);
+            }
             jsonToKCal(eventData, event, m_icalFormat); // direct conversion
-            m_calendar->addEvent(event, googleNotebook->uid());
+            if (!m_calendar->addEvent(event, googleNotebook->uid())) {
+                SOCIALD_LOG_ERROR("Could not add dissociated occurrence to calendar:" << parentId << recurrenceId.toString());
+                m_syncSucceeded[accountId] = false;
+                return;
+            }
             m_storageNeedsSave = true;
-            m_idDb.insertEvent(accountId, eventId, googleNotebook->uid(), event->uid());
+            m_idDb.insertEvent(accountId, eventId, googleNotebook->uid(), event->uid(), recurrenceId.toString());
+            m_recurringEventIdToKCalUid[accountId].insert(eventId, event->uid());
+            remoteAdded++;
         }
     }
 
@@ -1084,11 +1142,12 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
 
             // first, push up deletions.
             Q_FOREACH (const QString &deletedGcalId, deletedMap.keys()) {
-                QString incidenceUid = deletedMap.value(deletedGcalId);
+                QString incidenceUid = deletedMap.value(deletedGcalId).first;
+                KDateTime recurrenceId = deletedMap.value(deletedGcalId).second;
                 localRemoved++;
                 SOCIALD_LOG_TRACE("upsyncing deletion for gcal id:" << deletedGcalId);
                 upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncDelete,
-                              incidenceUid, calendarId, deletedGcalId, QByteArray());
+                              incidenceUid, recurrenceId, calendarId, deletedGcalId, QByteArray());
             }
 
             // second, push up modifications.
@@ -1100,20 +1159,22 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                     SOCIALD_LOG_TRACE("upsyncing modification for gcal id:" << updatedGcalId);
                     traceDumpStr(QString::fromUtf8(eventBlob));
                     upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncModify,
-                                  event->uid(), calendarId, updatedGcalId, eventBlob);
+                                  event->uid(), event->recurrenceId(),
+                                  calendarId, updatedGcalId, eventBlob);
                 }
             }
 
             // finally, push up insertions.
             Q_FOREACH (KCalCore::Incidence::Ptr incidence, addedList) {
-                KCalCore::Event::Ptr event = m_calendar->event(incidence->uid());
+                KCalCore::Event::Ptr event = m_calendar->event(incidence->uid(), incidence->recurrenceId());
                 if (event) {
                     localAdded++;
                     QByteArray eventBlob = QJsonDocument(kCalToJson(event, m_icalFormat)).toJson();
                     SOCIALD_LOG_TRACE("upsyncing modification for local id:" << incidence->uid());
                     traceDumpStr(QString::fromUtf8(eventBlob));
                     upsyncChanges(accountId, accessToken, GoogleCalendarSyncAdaptor::UpsyncInsert,
-                                  event->uid(), calendarId, QString(), eventBlob);
+                                  event->uid(), event->recurrenceId(),
+                                  calendarId, QString(), eventBlob);
                 }
             }
 
@@ -1127,7 +1188,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
 
 void GoogleCalendarSyncAdaptor::upsyncChanges(int accountId, const QString &accessToken,
                                               GoogleCalendarSyncAdaptor::UpsyncType upsyncType,
-                                              const QString &kcalEventId, const QString &calendarId,
+                                              const QString &kcalEventId, const KDateTime &recurrenceId, const QString &calendarId,
                                               const QString &eventId,const QByteArray &eventData)
 {
     QUrl requestUrl = upsyncType == GoogleCalendarSyncAdaptor::UpsyncInsert
@@ -1167,6 +1228,7 @@ void GoogleCalendarSyncAdaptor::upsyncChanges(int accountId, const QString &acce
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
         reply->setProperty("kcalEventId", kcalEventId);
+        reply->setProperty("recurrenceId", recurrenceId.toString());
         reply->setProperty("calendarId", calendarId);
         reply->setProperty("eventId", eventId);
         reply->setProperty("upsyncType", static_cast<int>(upsyncType));
@@ -1196,6 +1258,7 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
     QString kcalEventId = reply->property("kcalEventId").toString();
+    KDateTime recurrenceId = KDateTime::fromString(reply->property("recurrenceId").toString());
     QString calendarId = reply->property("calendarId").toString();
     int upsyncType = reply->property("upsyncType").toInt();
     QByteArray replyData = reply->readAll();
@@ -1258,10 +1321,9 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
             } else {
                 // update this event in the local calendar
                 m_storage->loadNotebookIncidences(googleNotebook->uid());
-                m_storage->load(kcalEventId);
-                KCalCore::Event::Ptr event = m_calendar->event(kcalEventId);
+                KCalCore::Event::Ptr event = m_calendar->event(kcalEventId, recurrenceId);
                 if (!event) {
-                    SOCIALD_LOG_ERROR("event" << kcalEventId << "was deleted locally during sync of Google account with id" << accountId);
+                    SOCIALD_LOG_ERROR("event" << kcalEventId << recurrenceId.toString() << "was deleted locally during sync of Google account with id" << accountId);
                     m_syncSucceeded[accountId] = false;
                 } else {
                     QString oldDTS = event->dtStart().toString(RFC3339_FORMAT);
@@ -1281,7 +1343,7 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                     Q_FOREACH(const KDateTime &exd, event->recurrence()->exDateTimes()) SOCIALD_LOG_DEBUG("    " << exd.toString(RFC5545_KDATETIME_FORMAT));
                     event->endUpdates();
                     m_storageNeedsSave = true;
-                    m_idDb.insertEvent(accountId, gCalEventId(event), googleNotebook->uid(), kcalEventId);
+                    m_idDb.insertEvent(accountId, gCalEventId(event), googleNotebook->uid(), kcalEventId, recurrenceId.toString());
                 }
 
                 QString updated = parsed.value(QLatin1String("updated")).toVariant().toString();
