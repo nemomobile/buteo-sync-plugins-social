@@ -194,6 +194,7 @@ Provides calendar synchronisation with Google
 %pre google-calendars
 rm -f /home/nemo/.cache/msyncd/sync/client/google-calendars.xml
 rm -f /home/nemo/.cache/msyncd/sync/google.Calendars.xml
+rm -f /home/nemo/.local/share/system/privileged/Sync/gcal.ini
 
 %post google-calendars
 systemctl-user restart msyncd.service || :

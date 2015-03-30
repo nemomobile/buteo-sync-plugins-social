@@ -32,6 +32,7 @@
 #include <extendedcalendar.h>
 #include <extendedstorage.h>
 #include <icalformat.h>
+#include <kdatetime.h>
 
 #include <socialcache/googlecalendardatabase.h>
 
@@ -67,7 +68,7 @@ private:
                                            const QString &calendarId, const QDateTime &since);
     void upsyncChanges(int accountId, const QString &accessToken,
                        GoogleCalendarSyncAdaptor::UpsyncType upsyncType,
-                       const QString &kcalEventId, const QString &calendarId,
+                       const QString &kcalEventId, const KDateTime &recurrenceId, const QString &calendarId,
                        const QString &eventId,const QByteArray &eventData);
 
 private Q_SLOTS:
@@ -78,6 +79,7 @@ private Q_SLOTS:
 private:
     QMap<int, QMap<QString, QPair<QString, QString> > > m_serverCalendarIdToSummaryAndColor;
     QMap<int, QMultiMap<QString, QJsonObject> > m_calendarIdToEventObjects;
+    QMap<int, QMap<QString, QString> > m_recurringEventIdToKCalUid;
     QMap<int, bool> m_syncSucceeded;
 
     mKCal::ExtendedCalendar::Ptr m_calendar;
