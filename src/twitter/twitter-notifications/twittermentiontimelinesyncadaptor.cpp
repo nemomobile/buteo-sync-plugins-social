@@ -114,6 +114,12 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
     reply->deleteLater();
     removeReplyTimeout(accountId, reply);
 
+    if (syncAborted()) {
+        SOCIALD_LOG_INFO("sync aborted, ignoring request response");
+        decrementSemaphore(accountId);
+        return;
+    }
+
     bool ok = false;
     QJsonArray tweets = parseJsonArrayReplyData(replyData, &ok);
     if (ok) {

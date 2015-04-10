@@ -56,8 +56,12 @@ void TwitterHomeTimelineSyncAdaptor::beginSync(int accountId, const QString &oau
 void TwitterHomeTimelineSyncAdaptor::finalize(int accountId)
 {
     Q_UNUSED(accountId)
-    m_db.commit();
-    m_db.wait();
+    if (syncAborted()) {
+        SOCIALD_LOG_INFO("sync aborted, won't commit database changes");
+    } else {
+        m_db.commit();
+        m_db.wait();
+    }
 }
 
 void TwitterHomeTimelineSyncAdaptor::requestMe(int accountId, const QString &oauthToken, const QString &oauthTokenSecret)

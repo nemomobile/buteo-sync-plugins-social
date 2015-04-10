@@ -69,6 +69,8 @@ SocialNetworkSyncAdaptor::SocialNetworkSyncAdaptor(const QString &serviceName,
     , m_accountSyncProfile(NULL)
     , m_syncDb(new SocialNetworkSyncDatabase())
     , m_status(SocialNetworkSyncAdaptor::Invalid)
+    , m_enabled(false)
+    , m_syncAborted(false)
     , m_serviceName(serviceName)
 {
 }
@@ -101,11 +103,23 @@ QString SocialNetworkSyncAdaptor::serviceName() const
     return m_serviceName;
 }
 
+bool SocialNetworkSyncAdaptor::syncAborted() const
+{
+    return m_syncAborted;
+}
+
 void SocialNetworkSyncAdaptor::sync(const QString &dataType, int accountId)
 {
     Q_UNUSED(dataType)
     Q_UNUSED(accountId)
     SOCIALD_LOG_ERROR("sync() must be overridden by derived types");
+}
+
+void SocialNetworkSyncAdaptor::abortSync(Sync::SyncStatus status)
+{
+    SOCIALD_LOG_INFO("forcing timeout of outstanding replies due to abort:" << status);
+    m_syncAborted = true;
+    triggerReplyTimeouts();
 }
 
 /*!
@@ -344,6 +358,18 @@ void SocialNetworkSyncAdaptor::removeReplyTimeout(int accountId, QNetworkReply *
 
     delete timer;
     m_networkReplyTimeouts[accountId].remove(reply);
+}
+
+void SocialNetworkSyncAdaptor::triggerReplyTimeouts()
+{
+    // if we've lost network connectivity, we should immediately timeout all replies.
+    Q_FOREACH (int accountId, m_networkReplyTimeouts.keys()) {
+        Q_FOREACH (QTimer *timer, m_networkReplyTimeouts[accountId]) {
+            timer->stop();
+            timer->setInterval(1);
+            timer->start();
+        }
+    }
 }
 
 QJsonObject SocialNetworkSyncAdaptor::parseJsonObjectReplyData(const QByteArray &replyData, bool *ok)

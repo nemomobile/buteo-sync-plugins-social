@@ -384,6 +384,15 @@ void GoogleTwoWayContactSyncAdaptor::contactsFinishedHandler()
 
 void GoogleTwoWayContactSyncAdaptor::continueSync(int accountId, const QString &accessToken)
 {
+    // early out in case we lost connectivity
+    if (syncAborted()) {
+        SOCIALD_LOG_ERROR("aborting sync of account" << accountId);
+        purgeSyncStateData(QString::number(accountId));
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        // note: don't decrement here - it's done by contactsFinishedHandler().
+        return;
+    }
+
     // for each of the addmods, we need to fixup the contact avatars.
     transformContactAvatars(m_remoteAddMods[accountId], accountId, accessToken);
 
