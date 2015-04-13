@@ -77,7 +77,12 @@ private Q_SLOTS:
     void upsyncFinishedHandler();
 
 private:
-    QMap<int, QMap<QString, QPair<QString, QString> > > m_serverCalendarIdToSummaryAndColor;
+    struct CalendarInfo {
+        QString summary;
+        QString description;
+        QString color;
+    };
+    QMap<int, QMap<QString, CalendarInfo> > m_serverCalendarIdToCalendarInfo;
     QMap<int, QMultiMap<QString, QJsonObject> > m_calendarIdToEventObjects;
     QMap<int, QMap<QString, QString> > m_recurringEventIdToKCalUid;
     QMap<int, bool> m_syncSucceeded;
