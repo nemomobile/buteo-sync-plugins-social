@@ -72,6 +72,7 @@ private Q_SLOTS:
 private:
     QContactManager *m_contactManager;
     FacebookContactImageDownloader *m_workerObject;
+
     QMap<int, QList<QContact> > m_remoteContacts; // accountId to contacts to save.
     QMap<int, QList<QPair<QString, QVariantMap> > > m_queuedAvatarDownloads;
 

@@ -93,14 +93,19 @@ void FacebookImageSyncAdaptor::beginSync(int accountId, const QString &accessTok
 void FacebookImageSyncAdaptor::finalize(int accountId)
 {
     Q_UNUSED(accountId)
-    // Remove albums
-    m_db.removeAlbums(m_cachedAlbums.keys());
 
-    // Remove images
-    m_db.removeImages(m_removedImages);
+    if (syncAborted()) {
+        SOCIALD_LOG_INFO("sync aborted, won't commit database changes");
+    } else {
+        // Remove albums
+        m_db.removeAlbums(m_cachedAlbums.keys());
 
-    m_db.commit();
-    m_db.wait();
+        // Remove images
+        m_db.removeImages(m_removedImages);
+
+        m_db.commit();
+        m_db.wait();
+    }
 }
 
 void FacebookImageSyncAdaptor::requestData(int accountId,
@@ -109,6 +114,12 @@ void FacebookImageSyncAdaptor::requestData(int accountId,
                                            const QString &fbUserId,
                                            const QString &fbAlbumId)
 {
+    if (syncAborted()) {
+        SOCIALD_LOG_DEBUG("skipping data request due to sync abort");
+        clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
+        return;
+    }
+
     QUrl url;
     if (!continuationUrl.isEmpty()) {
         // fetch the next page.

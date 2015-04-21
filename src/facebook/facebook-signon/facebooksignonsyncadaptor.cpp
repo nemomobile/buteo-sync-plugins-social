@@ -112,6 +112,12 @@ void FacebookSignonSyncAdaptor::requestFinishedHandler()
     reply->deleteLater();
     removeReplyTimeout(accountId, reply);
 
+    if (syncAborted()) {
+        SOCIALD_LOG_INFO("sync aborted, skipping signon sync reply handling");
+        decrementSemaphore(accountId);
+        return;
+    }
+
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
     if (!isError && ok && parsed.contains(QStringLiteral("id"))) {

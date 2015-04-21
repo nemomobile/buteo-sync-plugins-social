@@ -105,6 +105,12 @@ void FacebookCalendarSyncAdaptor::sync(const QString &dataTypeString, int accoun
 
 void FacebookCalendarSyncAdaptor::finalCleanup()
 {
+    if (syncAborted()) {
+        SOCIALD_LOG_INFO("sync aborted, won't commit database changes");
+        m_storage->close();
+        return;
+    }
+
     // commit changes to db
     if (m_storageNeedsSave) {
         m_storage->save();
@@ -140,7 +146,6 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
         if (!m_storageNeedsSave || m_storage->save()) {
             setGhostEventCleanupPerformed();
         }
-
     }
 
     // done.

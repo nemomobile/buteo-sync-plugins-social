@@ -87,8 +87,10 @@ public:
     Status status() const;
     bool enabled() const;
     QString serviceName() const;
+
     virtual void sync(const QString &dataType, int accountId = 0);
     virtual void purgeDataForOldAccount(int accountId, PurgeMode mode = SyncPurge) = 0;
+    virtual void abortSync(Sync::SyncStatus status);
 
 Q_SIGNALS:
     void statusChanged();
@@ -107,6 +109,9 @@ protected:
     void setInitialActive(bool enabled);
     void setFinishedInactive();
 
+    // whether the sync has been aborted (perhaps due to network connection loss)
+    bool syncAborted() const;
+
     // Semaphore system
     void incrementSemaphore(int accountId);
     void decrementSemaphore(int accountId);
@@ -114,6 +119,7 @@ protected:
     // network reply timeouts
     void setupReplyTimeout(int accountId, QNetworkReply *reply);
     void removeReplyTimeout(int accountId, QNetworkReply *reply);
+    void triggerReplyTimeouts();
 
     // Parsing methods
     static QJsonObject parseJsonObjectReplyData(const QByteArray &replyData, bool *ok);
@@ -131,6 +137,7 @@ private:
     SocialNetworkSyncDatabase *m_syncDb;
     SocialNetworkSyncAdaptor::Status m_status;
     bool m_enabled;
+    bool m_syncAborted;
     QString m_serviceName;
     QMap<int, int> m_accountSyncSemaphores;
     QMap<int, QMap<QNetworkReply*, QTimer *> > m_networkReplyTimeouts;

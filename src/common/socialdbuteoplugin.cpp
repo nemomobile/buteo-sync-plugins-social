@@ -187,9 +187,11 @@ bool SocialdButeoPlugin::startSync()
     return false;
 }
 
-void SocialdButeoPlugin::abortSync(Sync::SyncStatus)
+void SocialdButeoPlugin::abortSync(Sync::SyncStatus status)
 {
-    // TODO
+    // note: it seems buteo automatically calls abortSync on network connectivity loss...
+    SOCIALD_LOG_INFO("aborting sync with status:" << status);
+    m_socialNetworkSyncAdaptor->abortSync(status);
 }
 
 bool SocialdButeoPlugin::cleanUp()
@@ -213,12 +215,15 @@ Buteo::SyncResults SocialdButeoPlugin::getSyncResults() const
     return m_syncResults;
 }
 
-void SocialdButeoPlugin::connectivityStateChanged(Sync::ConnectivityType, bool)
+void SocialdButeoPlugin::connectivityStateChanged(Sync::ConnectivityType type, bool state)
 {
-    // TODO, see TransportTracker.cpp:149
+    // See TransportTracker.cpp:149 for example
     // Sync::CONNECTIVITY_INTERNET, true|false
-    // Kill all ongoing on false
-    // "Free" single shot sync on wlan?
+    SOCIALD_LOG_INFO("notified of connectivity change:" << type << state);
+    if (type == Sync::CONNECTIVITY_INTERNET && state == false) {
+        // we lost connectivity during sync.
+        abortSync(Sync::SYNC_CONNECTION_ERROR);
+    }
 }
 
 void SocialdButeoPlugin::syncStatusChanged()

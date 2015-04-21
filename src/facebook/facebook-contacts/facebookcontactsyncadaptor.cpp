@@ -765,6 +765,11 @@ bool FacebookContactSyncAdaptor::storeToLocal(const QString &accessToken, int ac
 {
     Q_UNUSED(accessToken)
 
+    if (syncAborted()) {
+        SOCIALD_LOG_INFO("sync aborted, won't commit database changes");
+        return false;
+    }
+
     // steps:
     // 1) load current data from backend
     // 2) determine delta (add/mod/rem)

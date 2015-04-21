@@ -186,6 +186,17 @@ void GoogleSignonSyncAdaptor::initialSignonResponse(const SignOn::SessionData &r
 {
     SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession*>(sender());
     session->disconnect(this);
+
+    if (syncAborted()) {
+        // don't expire the tokens - we may have lost network connectivity
+        // while we were attempting to perform signon sync, and that would
+        // leave us in a position where we're unable to automatically recover.
+        int accountId = session->property("accountId").toInt();
+        SOCIALD_LOG_INFO("aborting signon sync refresh");
+        decrementSemaphore(accountId);
+        return;
+    }
+
     connect(session, SIGNAL(response(SignOn::SessionData)),
             this, SLOT(forceTokenExpiryResponse(SignOn::SessionData)),
             Qt::UniqueConnection);
