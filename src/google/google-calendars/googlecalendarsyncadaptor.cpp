@@ -41,6 +41,8 @@
 
 #define RFC3339_FORMAT      "%Y-%m-%dT%H:%M:%S%:z"
 #define RFC3339_FORMAT_NTZC "%Y-%m-%dT%H:%M:%S%z"
+#define RFC3339_QDATE_FORMAT_MS "yyyy-MM-ddThh:mm:ss.zzzZ"
+#define RFC3339_QDATE_FORMAT_MS_NTZC "yyyy-MM-ddThh:mm:ss.zzz"
 #define KDATEONLY_FORMAT    "%Y-%m-%d"
 #define QDATEONLY_FORMAT    "yyyy-MM-dd"
 #define KLONGTZ_FORMAT      "%:Z"
@@ -99,11 +101,45 @@ void setGhostEventCleanupPerformed()
 
 QString gCalEventId(KCalCore::Incidence::Ptr event)
 {
-    return event->customProperty("jolla-sociald", "gcal-id");
+    // we abuse the comments field to store our gcal-id.
+    // we should use a custom property, but those are deleted on incidence deletion.
+    const QStringList &comments(event->comments());
+    Q_FOREACH (const QString &comment, comments) {
+        if (comment.startsWith("jolla-sociald:gcal-id:")) {
+            return comment.mid(22);
+        }
+    }
+    return QString();
 }
 void setGCalEventId(KCalCore::Incidence::Ptr event, const QString &id)
 {
-    event->setCustomProperty("jolla-sociald", "gcal-id", id);
+    // we abuse the comments field to store our gcal-id.
+    // we should use a custom property, but those are deleted on incidence deletion.
+    const QStringList &comments(event->comments());
+    Q_FOREACH (const QString &comment, comments) {
+        if (comment.startsWith("jolla-sociald:gcal-id:")) {
+            // remove any existing gcal-id comment.
+            event->removeComment(comment);
+            break;
+        }
+    }
+    event->addComment(QStringLiteral("jolla-sociald:gcal-id:%1").arg(id));
+}
+
+KDateTime datetimeFromUpdateStr(const QString &update)
+{
+    // generally, this is an RFC3339 date with timezone information, like:
+    // 2015-04-25T12:02:40.988Z
+    // However, our version of KDateTime is old enough that we don't support this
+    // date format directly.
+    bool tzIncluded = update.endsWith('Z');
+    QDateTime qdt = tzIncluded
+                  ? QDateTime::fromString(update, RFC3339_QDATE_FORMAT_MS)
+                  : QDateTime::fromString(update, RFC3339_QDATE_FORMAT_MS_NTZC);
+    if (tzIncluded) {
+        qdt.setTimeSpec(Qt::UTC);
+    }
+    return KDateTime(qdt, tzIncluded ? KDateTime::UTC : KDateTime::ClockTime);
 }
 
 QList<KDateTime> datetimesFromExRDateStr(const QString &exrdatestr, bool *isDateOnly)
@@ -572,7 +608,7 @@ GoogleCalendarSyncAdaptor::GoogleCalendarSyncAdaptor(QObject *parent)
     , m_storage(mKCal::ExtendedCalendar::defaultStorage(m_calendar))
     , m_storageNeedsSave(false)
 {
-    setInitialActive(m_idDb.isValid());
+    setInitialActive(true);
 }
 
 GoogleCalendarSyncAdaptor::~GoogleCalendarSyncAdaptor()
@@ -603,8 +639,6 @@ void GoogleCalendarSyncAdaptor::finalCleanup()
     if (m_storageNeedsSave) {
         m_storage->save();
     }
-    m_idDb.sync();
-    m_idDb.wait();
     m_storageNeedsSave = false;
 
     // set the success status for each of our account settings.
@@ -680,12 +714,6 @@ void GoogleCalendarSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkS
             m_storageNeedsSave = true;
         }
     }
-
-    // Delete ids from our local->remote id mapping
-    m_idDb.removeEvents(oldId);
-
-    // Delete last update times
-    m_idDb.removeLastUpdateTimes(oldId);
 
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // and commit any changes made.
@@ -888,23 +916,27 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebooks(int accountId, cons
 void GoogleCalendarSyncAdaptor::requestEvents(int accountId, const QString &accessToken, const QString &calendarId,
                                               bool needCleanSync, const QString &pageToken)
 {
-    QString updatedMin = m_idDb.lastUpdateTime(calendarId, accountId);
-    if (updatedMin.isEmpty()) {
-        QDateTime buteoLastSync = lastSyncTimestamp(QLatin1String("google"),
-                                                    SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::Calendars),
-                                                    accountId).addSecs(2); // add 2 secs to avoid fs sync time issues.
-        updatedMin = buteoLastSync.toUTC().toString(Qt::ISODate);
-        SOCIALD_LOG_DEBUG("No previous update timestamp for Google account: " << accountId
-                          << ". Calendar Id: " << calendarId
-                          << ". Using previous buteo sync timestamp: " << updatedMin);
+    // get the last sync date stored into the notebook (if it exists).
+    QString updatedMin;
+    KDateTime syncDate;
+    mKCal::Notebook::Ptr notebook = notebookForCalendarId(accountId, calendarId);
+    if (notebook) {
+        syncDate = notebook->syncDate();
+    }
+
+    if (!needCleanSync && !syncDate.isNull() && syncDate.isValid()) {
+        updatedMin = syncDate.toString();
+        SOCIALD_LOG_DEBUG("Previous update timestamp for Google account:" << accountId <<
+                          "Calendar Id:" << calendarId <<
+                          "- Timestamp:" << syncDate.toString());
+    } else if (needCleanSync) {
+        SOCIALD_LOG_DEBUG("Clean sync required for Google account:" << accountId <<
+                          "Calendar Id:" << calendarId <<
+                          "- Ignoring last sync timestamp:" << syncDate.toString());
     } else {
-        // server timestamp is inclusive. Add one second to exclude events updated on previous round
-        QDateTime modified = QDateTime::fromString(updatedMin, Qt::ISODate);
-        modified.setTimeSpec(Qt::UTC);
-        updatedMin = modified.addSecs(1).toString(Qt::ISODate);
-        SOCIALD_LOG_DEBUG("Previous update timestamp for Google account: "
-                          <<  accountId << ". Calendar Id: "
-                          << calendarId << ". Timestamp: " << updatedMin);
+        SOCIALD_LOG_DEBUG("Invalid previous update timestamp for Google account:" << accountId <<
+                          "Calendar Id:" << calendarId <<
+                          "- Timestamp:" << syncDate.toString());
     }
 
     QList<QPair<QString, QString> > queryItems;
@@ -917,9 +949,9 @@ void GoogleCalendarSyncAdaptor::requestEvents(int accountId, const QString &acce
                                                   QString::fromLatin1("true")));
     }
     queryItems.append(QPair<QString, QString>(QString::fromLatin1("timeMin"),
-                                              QDateTime::currentDateTimeUtc().addMonths(-3).toString(Qt::ISODate)));
+                                              QDateTime::currentDateTimeUtc().addYears(-1).toString(Qt::ISODate)));
     queryItems.append(QPair<QString, QString>(QString::fromLatin1("timeMax"),
-                                              QDateTime::currentDateTimeUtc().addMonths(12).toString(Qt::ISODate)));
+                                              QDateTime::currentDateTimeUtc().addYears(2).toString(Qt::ISODate)));
     if (!pageToken.isEmpty()) { // continuation request
         queryItems.append(QPair<QString, QString>(QString::fromLatin1("pageToken"),
                                                   pageToken));
@@ -1147,8 +1179,12 @@ void GoogleCalendarSyncAdaptor::finishedRequestingRemoteEvents(int accountId, co
     SOCIALD_LOG_DEBUG("finished updating local notebooks, about to apply event modifications locally");
     foreach (const QString &updatedCalendarId, m_calendarsFinishedRequested.keys()) {
         QString updateTimestamp = m_calendarsFinishedRequested.value(updatedCalendarId);
-        m_idDb.setLastUpdateTime(updatedCalendarId, accountId, updateTimestamp);
+        mKCal::Notebook::Ptr notebook = notebookForCalendarId(accountId, updatedCalendarId);
+        KDateTime syncDate = datetimeFromUpdateStr(updateTimestamp);
+        notebook->setSyncDate(syncDate);
+        m_storage->updateNotebook(notebook);
         updateLocalCalendarNotebookEvents(accountId, accessToken, updatedCalendarId, since);
+        m_storageNeedsSave = true;
     }
 
     // now upsync the local changes to the remote server
@@ -1217,13 +1253,8 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             } // else, newly added+updated locally, no gcalId yet.
         }
         Q_FOREACH(const KCalCore::Incidence::Ptr incidence, deletedList) {
-            // We would like to do the following, but mkcal removes
-            // custom properties of deleted incidences:
-            //QString gcalId = gCalEventId(incidence);
-            // Instead, read from the out-of-band id database.
-            QString gcalId = m_idDb.gcalEventId(accountId, googleNotebook->uid(), incidence->uid(), incidence->hasRecurrenceId() ? incidence->recurrenceId().toString() : QString());
+            QString gcalId = gCalEventId(incidence);
             if (gcalId.size()) {
-                m_idDb.removeEvent(accountId, gcalId); // it has been removed from mkcal.
                 deletedMap.insert(gcalId, qMakePair(incidence->uid(), incidence->recurrenceId()));
                 updatedMap.remove(gcalId); // don't upsync updates to deleted events.
             } // else, newly added+deleted locally, no gcalId yet.
@@ -1257,8 +1288,6 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
 
             // if modified locally and deleted on server side, don't upsync modifications
             updatedMap.remove(eventId);
-
-            m_idDb.removeEvent(accountId, eventId);
             if (allMap.contains(eventId)) {
                 // currently existing base event or persistent occurrence which needs deletion
                 SOCIALD_LOG_DEBUG("Event deleted remotely:" << eventId);
@@ -1327,7 +1356,6 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                 continue; // we don't return, but instead attempt to finish other event modifications
             }
             m_storageNeedsSave = true;
-            m_idDb.insertEvent(accountId, eventId, googleNotebook->uid(), event->uid(), recurrenceId.toString());
             m_recurringEventIdToKCalUid[accountId].insert(eventId, event->uid());
             remoteAdded++;
         }
@@ -1565,12 +1593,14 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                     Q_FOREACH(const KDateTime &exd, event->recurrence()->exDateTimes()) SOCIALD_LOG_DEBUG("    " << exd.toString(RFC5545_KDATETIME_FORMAT));
                     event->endUpdates();
                     m_storageNeedsSave = true;
-                    m_idDb.insertEvent(accountId, gCalEventId(event), googleNotebook->uid(), kcalEventId, recurrenceId.toString());
                 }
 
                 QString updated = parsed.value(QLatin1String("updated")).toVariant().toString();
                 if (!updated.isEmpty()) {
-                    m_idDb.setLastUpdateTime(calendarId, accountId, updated);
+                    KDateTime syncDate = datetimeFromUpdateStr(updated);
+                    googleNotebook->setSyncDate(syncDate);
+                    m_storage->updateNotebook(googleNotebook);
+                    m_storageNeedsSave = true;
                 }
             }
         }
