@@ -144,8 +144,7 @@ void GoogleTwoWayContactSyncAdaptor::beginSync(int accountId, const QString &acc
 
     QDateTime remoteSince;
     if (!initSyncAdapter(QString::number(accountId))
-            || !readSyncStateData(&remoteSince, QString::number(accountId))
-            || !readExtraStateData(accountId)) {
+            || !readSyncStateData(&remoteSince, QString::number(accountId))) {
         SOCIALD_LOG_ERROR("unable to init sync adapter - aborting sync Google contacts with account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -815,9 +814,10 @@ void GoogleTwoWayContactSyncAdaptor::purgeAccount(int pid)
 
 void GoogleTwoWayContactSyncAdaptor::finalize(int accountId)
 {
-    if (m_accessTokens[accountId].isEmpty()) {
-        // account failure occurred before sync process was started.
-        // in this case we have nothing left to do.
+    if (m_accessTokens[accountId].isEmpty() || syncAborted()) {
+        // account failure occurred before sync process was started,
+        // or other error occurred during sync.
+        // in this case we have nothing left to do except cleanup.
         return;
     }
 
@@ -872,7 +872,7 @@ void GoogleTwoWayContactSyncAdaptor::finalize(int accountId)
         }
     }
 
-    if (!storeExtraStateData(accountId) || !storeSyncStateData(QString::number(accountId))) {
+    if (!storeSyncStateData(QString::number(accountId))) {
         SOCIALD_LOG_ERROR("unable to finalize sync of Google contacts with account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -993,9 +993,17 @@ void GoogleTwoWayContactSyncAdaptor::finalCleanup()
     }
 }
 
-// this function must be called directly after readSyncStateData()
-bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
+bool GoogleTwoWayContactSyncAdaptor::readSyncStateData(QDateTime *remoteSince,
+                                                       const QString &accountIdStr,
+                                                       TwoWayContactSyncAdapter::ReadStateMode readMode)
 {
+    // first, call superclass implementation
+    if (!TwoWayContactSyncAdapter::readSyncStateData(remoteSince, accountIdStr, readMode)) {
+        return false;
+    }
+
+    // then read our extra state data.
+    int accountId = accountIdStr.toInt();
     QMap<QString, QVariant> values;
     QStringList keys;
     keys << QStringLiteral("myContactsGroupAtomId")
@@ -1003,9 +1011,9 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
          << QStringLiteral("contactEtags")
          << QStringLiteral("contactIds")
          << QStringLiteral("contactAvatars");
-    if (!d->m_engine->fetchOOB(d->m_stateData[QString::number(accountId)].m_oobScope, keys, &values)) {
+    if (!d->m_engine->fetchOOB(d->m_stateData[accountIdStr].m_oobScope, keys, &values)) {
         SOCIALD_LOG_ERROR("failed to read extra data for" << d->m_syncTarget << "account" << accountId);
-        d->clear(QString::number(accountId));
+        d->clear(accountIdStr);
         return false;
     }
 
@@ -1070,7 +1078,7 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
     // Finally, if we're doing a "clean sync" we should pre-populate our prevRemote
     // list with the current state of the local database.
     // This is to avoid clean-syncs causing contact duplication.
-    if (!d->m_stateData[QString::number(accountId)].m_localSince.isValid()) {
+    if (!d->m_stateData[accountIdStr].m_localSince.isValid()) {
         QDateTime maxTimestamp;
         QList<QContact> existingContacts;
         QContactManager::Error error = QContactManager::NoError;
@@ -1083,7 +1091,7 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
                                             &maxTimestamp,
                                             &error)) {
             SOCIALD_LOG_ERROR("failed to fetch pre-existing contacts for account" << accountId);
-            d->clear(QString::number(accountId));
+            d->clear(accountIdStr);
             return false;
         }
 
@@ -1099,7 +1107,7 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
                 // if any came from the one-way sync adaptor, they will need to mangled to the new form.
                 QStringList accountIds = c.detail<QContactOriginMetadata>().groupId().split(',');
                 if (c.detail<QContactSyncTarget>().syncTarget() == SOCIALD_GOOGLE_CONTACTS_SYNCTARGET
-                        && accountIds.contains(QString::number(accountId))
+                        && accountIds.contains(accountIdStr)
                         && !c.detail<QContactGuid>().guid().isEmpty()) {
                     // this actually belongs to this account, but was synced with the one-way adaptor.
                     // we mangle the Guid to the "new" form (accountId:serverGuid) but we do not
@@ -1116,17 +1124,18 @@ bool GoogleTwoWayContactSyncAdaptor::readExtraStateData(int accountId)
         }
 
         // set our state data.
-        d->m_stateData[QString::number(accountId)].m_prevRemote = prevRemote;
-        d->m_stateData[QString::number(accountId)].m_exportedIds = exportedIds;
+        d->m_stateData[accountIdStr].m_prevRemote = prevRemote;
+        d->m_stateData[accountIdStr].m_exportedIds = exportedIds;
     }
 
     // done.
     return true;
 }
 
-// this function must be called directly before storeSyncStateData()
-bool GoogleTwoWayContactSyncAdaptor::storeExtraStateData(int accountId)
+bool GoogleTwoWayContactSyncAdaptor::storeSyncStateData(const QString &accountIdStr)
 {
+    int accountId = accountIdStr.toInt();
+
     // m_myContactsGroupAtomIds
     QVariant mcghValue(m_myContactsGroupAtomIds[accountId]);
 
@@ -1173,11 +1182,34 @@ bool GoogleTwoWayContactSyncAdaptor::storeExtraStateData(int accountId)
     values.insert("contactEtags", ceValue);
     values.insert("contactIds", ciValue);
     values.insert("contactAvatars", caValue);
-    if (!d->m_engine->storeOOB(d->m_stateData[QString::number(accountId)].m_oobScope, values)) {
+    if (!d->m_engine->storeOOB(d->m_stateData[accountIdStr].m_oobScope, values)) {
         SOCIALD_LOG_ERROR("failed to store extra state data for" << d->m_syncTarget << "account" << accountId);
-        d->clear(QString::number(accountId));
+        d->clear(accountIdStr);
         return false;
     }
 
-    return true;
+    // call superclass implementation.
+    return TwoWayContactSyncAdapter::storeSyncStateData(accountIdStr);
+}
+
+bool GoogleTwoWayContactSyncAdaptor::purgeSyncStateData(const QString &accountIdStr, bool purgePartialSyncStateData)
+{
+    // first, remove our extra state data
+    bool removed = true;
+    QStringList purgeKeys;
+    purgeKeys << QStringLiteral("myContactsGroupAtomId") << QStringLiteral("unsupportedElements");
+    purgeKeys << QStringLiteral("contactEtags") << QStringLiteral("contactIds");
+    purgeKeys << QStringLiteral("contactAvatars");
+    if (!d->m_engine->removeOOB(d->m_stateData[accountIdStr].m_oobScope, purgeKeys)) {
+        SOCIALD_LOG_ERROR("failed to remove extra state data for Google account" << accountIdStr);
+        removed = false; // don't return immediately, but attempt to remove the "normal" state data.
+    }
+
+    // then call the superclass implementation
+    if (!TwoWayContactSyncAdapter::purgeSyncStateData(accountIdStr, purgePartialSyncStateData)) {
+        SOCIALD_LOG_ERROR("failed to purge sync state data for Google account:" << accountIdStr);
+        removed = false;
+    }
+
+    return removed;
 }
