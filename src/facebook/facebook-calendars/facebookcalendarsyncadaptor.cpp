@@ -83,7 +83,7 @@ FacebookCalendarSyncAdaptor::FacebookCalendarSyncAdaptor(QObject *parent)
     , m_storage(mKCal::ExtendedCalendar::defaultStorage(m_calendar))
     , m_storageNeedsSave(false)
 {
-    setInitialActive(m_db.isValid());
+    setInitialActive(true);
 }
 
 FacebookCalendarSyncAdaptor::~FacebookCalendarSyncAdaptor()
@@ -113,7 +113,20 @@ void FacebookCalendarSyncAdaptor::finalCleanup()
 
     // commit changes to db
     if (m_storageNeedsSave) {
+        // apply changes from sync
         m_storage->save();
+
+        // set the facebook notebook back to read-only
+        Q_FOREACH (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
+            if (notebook->pluginName() == QLatin1String(FACEBOOK)) {
+                notebook->setIsReadOnly(true);
+                m_storage->updateNotebook(notebook);
+                m_storage->save();
+                break;
+            }
+        }
+
+        // done.
         m_storageNeedsSave = false;
     }
 
@@ -165,21 +178,10 @@ void FacebookCalendarSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetwor
         if (notebook->pluginName() == QLatin1String(FACEBOOK)
                 && notebook->account() == QString::number(oldId)) {
             notebook->setIsReadOnly(false);
-            m_storage->loadNotebookIncidences(notebook->uid());
-            KCalCore::Incidence::List allIncidences;
-            m_storage->allIncidences(&allIncidences, notebook->uid());
-            foreach (const KCalCore::Incidence::Ptr incidence, allIncidences) {
-                m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
-            }
             m_storage->deleteNotebook(notebook);
             m_storageNeedsSave = true;
         }
     }
-
-    // Clean the database
-    m_db.removeEvents(oldId);
-    m_db.sync(oldId);
-    m_db.wait();
 
     if (mode == SocialNetworkSyncAdaptor::CleanUpPurge) {
         // and commit any changes made.
@@ -230,8 +232,10 @@ void FacebookCalendarSyncAdaptor::requestEvents(int accountId,
     QUrlQuery query(url);
     query.setQueryItems(queryItems);
     url.setQuery(query);
-    QNetworkReply *reply = m_networkAccessManager->post(QNetworkRequest(url), QByteArray());
 
+    SOCIALD_LOG_DEBUG("performing request:" << url.toString());
+
+    QNetworkReply *reply = m_networkAccessManager->post(QNetworkRequest(url), QByteArray());
     if (reply) {
         reply->setProperty("accountId", accountId);
         reply->setProperty("accessToken", accessToken);
@@ -263,12 +267,15 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
     reply->deleteLater();
     removeReplyTimeout(accountId, reply);
 
-    QStringList ongoingRequests;
+    SOCIALD_LOG_TRACE("request finished, got response:");
+    Q_FOREACH (const QString &line, QString::fromUtf8(replyData).split('\n', QString::SkipEmptyParts)) {
+        SOCIALD_LOG_TRACE(line);
+    }
 
+    QStringList ongoingRequests;
+    QJsonArray array;
     bool ok = false;
     QJsonDocument jsonDocument = QJsonDocument::fromJson(replyData);
-    QJsonArray array;
-
     if (!jsonDocument.isEmpty() && jsonDocument.isArray()) {
         array = jsonDocument.array();
         if (array.count() > 0) {
@@ -386,6 +393,7 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
             nextBatch.append(QStringLiteral("]"));
             requestEvents(accountId, accessToken, nextBatch);
         } else {
+            SOCIALD_LOG_DEBUG("finished all requests, about to perform database update");
             processParsedEvents(accountId);
             decrementSemaphore(accountId);
         }
@@ -400,158 +408,129 @@ void FacebookCalendarSyncAdaptor::finishedHandler()
 
 void FacebookCalendarSyncAdaptor::processParsedEvents(int accountId)
 {
-    QList<FacebookEvent::ConstPtr> dbEvents = m_db.events(accountId);
-
-    SOCIALD_LOG_DEBUG("have:" << dbEvents.count() << "events in the database");
-
     // Search for the Facebook Notebook
-    // Create one if not found (TODO: check if it failed)
-    // TODO: set a name to the notebook
-    mKCal::Notebook::List facebookNotebooks;
-    foreach (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
-        if (notebook->pluginName() == QLatin1String(FACEBOOK)
-            && notebook->account() == QString::number(accountId)) {
-            facebookNotebooks.append(notebook);
+    SOCIALD_LOG_DEBUG("Received" << m_parsedEvents.size() << "events from server; determining delta");
+    mKCal::Notebook::Ptr fbNotebook;
+    Q_FOREACH (mKCal::Notebook::Ptr notebook, m_storage->notebooks()) {
+        if (notebook->pluginName() == QLatin1String(FACEBOOK) && notebook->account() == QString::number(accountId)) {
+            fbNotebook = notebook;
         }
     }
 
-    SOCIALD_LOG_DEBUG("found" << facebookNotebooks.count() << "notebooks");
-
-    // That should not happen, but we check it nevertheless
-    // we should purge anything that is contained in these notebooks
-    // and restart over
-    if (facebookNotebooks.count() > 1) {
-        SOCIALD_LOG_DEBUG("multiple notebooks detected! resetting notebooks");
-        foreach (mKCal::Notebook::Ptr notebook, facebookNotebooks) {
-            m_storage->loadNotebookIncidences(notebook->uid());
-            KCalCore::Incidence::List incidenceList;
-            m_storage->allIncidences(&incidenceList, notebook->uid());
-            foreach (KCalCore::Incidence::Ptr incidence, incidenceList) {
-                m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
-            }
-            m_storage->deleteNotebook(notebook);
-            m_storageNeedsSave = true;
-        }
-
-        facebookNotebooks.clear();
-    }
-
-    mKCal::Notebook::Ptr notebook;
-
-    // We create the Facebook notebook
-    if (facebookNotebooks.isEmpty()) {
-        notebook = mKCal::Notebook::Ptr(new mKCal::Notebook);
-        notebook->setName(QLatin1String(FACEBOOK));
-        notebook->setPluginName(QLatin1String(FACEBOOK));
-        notebook->setAccount(QString::number(accountId));
-        notebook->setColor(QLatin1String(FACEBOOK_COLOR));
-        notebook->setDescription(m_accountManager->account(accountId)->displayName());
-        notebook->setIsReadOnly(true);
-        m_storage->addNotebook(notebook);
+    if (!fbNotebook) {
+        // create the notebook if required
+        fbNotebook = mKCal::Notebook::Ptr(new mKCal::Notebook);
+        fbNotebook->setName(QLatin1String(FACEBOOK));
+        fbNotebook->setPluginName(QLatin1String(FACEBOOK));
+        fbNotebook->setAccount(QString::number(accountId));
+        fbNotebook->setColor(QLatin1String(FACEBOOK_COLOR));
+        fbNotebook->setDescription(m_accountManager->account(accountId)->displayName());
+        fbNotebook->setIsReadOnly(true);
+        m_storage->addNotebook(fbNotebook);
         m_storageNeedsSave = true;
     } else {
-        notebook = facebookNotebooks.first();
+        // update the notebook details if required
         bool changed = false;
-
-        if (notebook->description().isEmpty()) {
-            notebook->setDescription(m_accountManager->account(accountId)->displayName());
-            changed = true;
-        }
-
-        if (!notebook->isReadOnly()) {
-            notebook->setIsReadOnly(true);
+        if (fbNotebook->description().isEmpty()) {
+            fbNotebook->setDescription(m_accountManager->account(accountId)->displayName());
             changed = true;
         }
 
         if (changed) {
-            m_storage->updateNotebook(notebook);
+            m_storage->updateNotebook(fbNotebook);
             m_storageNeedsSave = true;
         }
     }
 
-    // Useful maps
-    // Calendar events map contains the events that are loaded from the calendar
-    // Db events map contains the events that are from the database
-    // incidences set is updated and entries taken when existing incidences are found
-    // so that the remaining incidences id are those who should be removed.
-    QMap<QString, KCalCore::Event::Ptr> calendarEventsMap;
-    QMap<QString, FacebookEvent::ConstPtr> dbEventsMap;
-    QSet<QString> incidencesSet;
-
     // Set notebook writeable locally.
-    notebook->setIsReadOnly(false);
+    fbNotebook->setIsReadOnly(false);
 
     // We load incidences that are associated to Facebook into memory
-    foreach (const FacebookEvent::ConstPtr &dbEvent, dbEvents) {
-        QString incidenceId = dbEvent->incidenceId();
-        m_storage->load(incidenceId);
-        KCalCore::Event::Ptr event = m_calendar->event(incidenceId);
-        if (!event.isNull()) {
-            dbEventsMap.insert(dbEvent->fbEventId(), dbEvent);
-            calendarEventsMap.insert(dbEvent->fbEventId(), event);
-            incidencesSet.insert(incidenceId);
+    KCalCore::Incidence::List dbEvents;
+    m_storage->loadNotebookIncidences(fbNotebook->uid());
+    if (!m_storage->allIncidences(&dbEvents, fbNotebook->uid())) {
+        SOCIALD_LOG_ERROR("unable to load Facebook events from database");
+        return;
+    }
+
+    // Now determine the delta to the events received from server.
+    QSet<QString> seenLocalEvents;
+    Q_FOREACH (const QString &fbId, m_parsedEvents.keys()) {
+        // find the local event associated with this event.
+        bool foundLocal = false;
+        const FacebookParsedEvent &parsedEvent = m_parsedEvents[fbId];
+        Q_FOREACH (KCalCore::Incidence::Ptr incidence, dbEvents) {
+            if (incidence->uid().endsWith(QStringLiteral(":%1").arg(fbId))) {
+                KCalCore::Event::Ptr event = m_calendar->event(incidence->uid());
+                if (!event) continue; // not a valid event incidence.
+                // found. If it has been modified remotely, then modify locally.
+                foundLocal = true;
+                seenLocalEvents.insert(incidence->uid());
+                if (event->summary() != parsedEvent.m_summary ||
+                    event->description() != parsedEvent.m_description ||
+                    event->location() != parsedEvent.m_location ||
+                    event->dtStart() != parsedEvent.m_startTime ||
+                    (parsedEvent.m_endExists && event->dtEnd() != parsedEvent.m_endTime)) {
+                    // the event has been changed remotely.
+                    event->startUpdates();
+                    event->setSummary(parsedEvent.m_summary);
+                    event->setDescription(parsedEvent.m_description);
+                    event->setLocation(parsedEvent.m_location);
+                    event->setDtStart(parsedEvent.m_startTime);
+                    if (parsedEvent.m_endExists) {
+                        event->setDtEnd(parsedEvent.m_endTime);
+                        event->setHasEndDate(true);
+                    } else {
+                        event->setHasEndDate(false);
+                    }
+                    if (parsedEvent.m_isDateOnly) {
+                        event->setAllDay(true);
+                    }
+                    event->setReadOnly(true);
+                    event->endUpdates();
+                    m_storageNeedsSave = true;
+                    SOCIALD_LOG_DEBUG("Facebook event" << event->uid() << "was modified on server");
+                } else {
+                    SOCIALD_LOG_DEBUG("Facebook event" << event->uid() << "is unchanged on server");
+                }
+            }
+        }
+
+        // if not found locally, it must be a new addition.
+        if (!foundLocal) {
+            KCalCore::Event::Ptr event = KCalCore::Event::Ptr(new KCalCore::Event);
+            QString eventUid = QUuid::createUuid().toString();
+            eventUid = eventUid.mid(1); // remove leading {
+            eventUid.chop(1);           // remove trailing }
+            eventUid = QStringLiteral("%1:%2").arg(eventUid).arg(fbId);
+            event->setUid(eventUid);
+            event->setSummary(parsedEvent.m_summary);
+            event->setDescription(parsedEvent.m_description);
+            event->setLocation(parsedEvent.m_location);
+            event->setDtStart(parsedEvent.m_startTime);
+            if (parsedEvent.m_endExists) {
+                event->setDtEnd(parsedEvent.m_endTime);
+                event->setHasEndDate(true);
+            } else {
+                event->setHasEndDate(false);
+            }
+            if (parsedEvent.m_isDateOnly) {
+                event->setAllDay(true);
+            }
+            event->setReadOnly(true);
+            m_calendar->addEvent(event, fbNotebook->uid());
+            m_storageNeedsSave = true;
+            SOCIALD_LOG_DEBUG("Facebook event" << event->uid() << "was added on server");
         }
     }
 
-    QList<QString> keys = m_parsedEvents.keys();
-    foreach (const QString key, keys) {
-        FacebookParsedEvent &parsedEvent = m_parsedEvents[key];
-        SOCIALD_LOG_DEBUG("process parsed event: \n"
-                          << "    id: " << parsedEvent.m_id << "\n"
-                          << "    summary: " << parsedEvent.m_summary << "\n"
-                          << "    startTime: " << parsedEvent.m_startTime.toString() << "\n"
-                          << "    endTime: " << parsedEvent.m_endTime.toString());
-
-        // Check if this event already exists
-        bool update = false;
-        KCalCore::Event::Ptr event;
-        if (calendarEventsMap.contains(parsedEvent.m_id)) {
-            FacebookEvent::ConstPtr dbEvent = dbEventsMap.value(parsedEvent.m_id);
-            incidencesSet.remove(dbEvent->incidenceId());
-            update = true;
-            event = calendarEventsMap.value(parsedEvent.m_id);
-        }
-
-        if (!update) {
-            event = KCalCore::Event::Ptr(new KCalCore::Event);
-        } else {
-            event->startUpdates();
-        }
-        m_db.addSyncedEvent(parsedEvent.m_id, accountId, event->uid());
-
-        // Set the property of the event
-        event->setSummary(parsedEvent.m_summary);
-        event->setDescription(parsedEvent.m_description);
-        event->setLocation(parsedEvent.m_location);
-        event->setDtStart(parsedEvent.m_startTime);
-        if (parsedEvent.m_endExists) {
-            event->setDtEnd(parsedEvent.m_endTime);
-            event->setHasEndDate(true);
-        } else {
-            event->setHasEndDate(false);
-        }
-        if (parsedEvent.m_isDateOnly) {
-            event->setAllDay(true);
-        }
-        event->setReadOnly(true);
-
-        if (update) {
-            event->endUpdates();
-        } else {
-            m_calendar->addEvent(event, notebook->uid());
+    // Any local events which were not seen, must have been removed remotely.
+    Q_FOREACH (KCalCore::Incidence::Ptr incidence, dbEvents) {
+        if (!seenLocalEvents.contains(incidence->uid())) {
+            // note: have to delete from calendar after loaded from calendar.
+            m_calendar->deleteIncidence(m_calendar->incidence(incidence->uid()));
+            m_storageNeedsSave = true;
+            SOCIALD_LOG_DEBUG("Facebook event" << incidence->uid() << "was deleted on server");
         }
     }
-
-    // Remove all other incidences
-    foreach (const QString &incidence, incidencesSet) {
-        KCalCore::Incidence::Ptr incidencePtr = m_calendar->incidence(incidence);
-        if (incidencePtr) {
-            m_calendar->deleteIncidence(incidencePtr);
-        }
-    }
-
-    // Perform removal and insertions
-    m_db.sync(accountId);
-    m_db.wait();
-    m_storageNeedsSave = true;
 }

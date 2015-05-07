@@ -27,8 +27,6 @@
 #include <extendedcalendar.h>
 #include <extendedstorage.h>
 
-#include <socialcache/facebookcalendardatabase.h>
-
 class FacebookParsedEvent
 {
 public:
@@ -74,7 +72,6 @@ private Q_SLOTS:
 private:
     mKCal::ExtendedCalendar::Ptr m_calendar;
     mKCal::ExtendedStorage::Ptr m_storage;
-    FacebookCalendarDatabase m_db;
     bool m_storageNeedsSave;
     QMap<QString, FacebookParsedEvent> m_parsedEvents;
 };
