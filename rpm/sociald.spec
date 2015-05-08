@@ -427,6 +427,31 @@ rm -f /home/nemo/.cache/msyncd/sync/vk.Contacts.xml
 systemctl-user restart msyncd.service || :
 
 
+%package vk-images
+Summary:    Provides image synchronisation with VK
+License:    TBD
+Group:      System/Libraries
+Requires: %{name} = %{version}-%{release}
+
+%description vk-images
+Provides image synchronisation with VK
+
+%files vk-images
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-images-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-images-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-images.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Images.xml
+
+%pre vk-images
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-images.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Images.xml
+
+%post vk-images
+systemctl-user restart msyncd.service || :
+
+
 %package ts-devel
 Summary:    Translation source for sociald
 License:    LGPLv2.1
