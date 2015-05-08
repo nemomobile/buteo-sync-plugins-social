@@ -64,7 +64,10 @@ protected:
     void finalize(int accountId);
     void finalCleanup();
     // implementing TWCSA interface
-    bool testAccountProvenance(const QContact &contact, const QString &accountId);
+    bool testAccountProvenance(const QContact &contact, const QString &accountIdStr);
+    bool readSyncStateData(QDateTime *remoteSince, const QString &accountIdStr, TwoWayContactSyncAdapter::ReadStateMode readMode = TwoWayContactSyncAdapter::ReadAllState);
+    bool storeSyncStateData(const QString &accountIdStr);
+    bool purgeSyncStateData(const QString &accountIdStr, bool purgePartialSyncStateData = false);
 
 private:
     void requestData(int accountId,
@@ -90,8 +93,6 @@ private:
     bool queueAvatarForDownload(int accountId, const QString &accessToken, const QString &contactGuid, const QString &imageUrl);
     void transformContactAvatars(QList<QContact> &remoteContacts, int accountId, const QString &accessToken);
     void downloadContactAvatarImage(int accountId, const QString &accessToken, const QUrl &imageUrl, const QString &filename);
-    bool readExtraStateData(int accountId);
-    bool storeExtraStateData(int accountId);
 
 private Q_SLOTS:
     void postFinishedHandler();
