@@ -103,6 +103,7 @@ bool SocialdPlugin::startSync()
         startSyncParams << "vk.Notifications";
         startSyncParams << "vk.Calendars";
         startSyncParams << "vk.Contacts";
+        startSyncParams << "vk.Images";
     }
 
     foreach (const QString &param, startSyncParams) {
