@@ -1,7 +1,7 @@
 Name:       sociald
 Summary:    Syncs device data from social services
 Version:    0.1.20
-Release:    1
+Release:    2
 Group:      System/Libraries
 License:    LGPLv2.1
 URL:        https://bitbucket.org/jolla/base-sociald
