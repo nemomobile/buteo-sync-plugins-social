@@ -61,7 +61,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/facebook-calendars.xml
 rm -f /home/nemo/.cache/msyncd/sync/facebook.Calendars.xml
 
 %post facebook-calendars
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 %package facebook-contacts
@@ -88,7 +88,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/facebook-contacts.xml
 rm -f /home/nemo/.cache/msyncd/sync/facebook.Contacts.xml
 
 %post facebook-contacts
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 %package facebook-images
@@ -113,7 +113,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/facebook-images.xml
 rm -f /home/nemo/.cache/msyncd/sync/facebook.Images.xml
 
 %post facebook-images
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 %package facebook-notifications
@@ -141,7 +141,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/facebook-notifications.xml
 rm -f /home/nemo/.cache/msyncd/sync/facebook.Notifications.xml
 
 %post facebook-notifications
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 
@@ -168,7 +168,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/facebook-signon.xml
 rm -f /home/nemo/.cache/msyncd/sync/facebook.Signon.xml
 
 %post facebook-signon
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 
@@ -197,7 +197,7 @@ rm -f /home/nemo/.cache/msyncd/sync/google.Calendars.xml
 rm -f /home/nemo/.local/share/system/privileged/Sync/gcal.ini
 
 %post google-calendars
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 %package google-contacts
@@ -224,7 +224,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/google-contacts.xml
 rm -f /home/nemo/.cache/msyncd/sync/google.Contacts.xml
 
 %post google-contacts
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 %package google-signon
@@ -250,7 +250,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/google-signon.xml
 rm -f /home/nemo/.cache/msyncd/sync/google.Signon.xml
 
 %post google-signon
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 
@@ -282,7 +282,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/twitter-notifications.xml
 rm -f /home/nemo/.cache/msyncd/sync/twitter.Notifications.xml
 
 %post twitter-notifications
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 %package twitter-posts
@@ -311,7 +311,7 @@ rm -f /home/nemo/.cache/msyncd/sync/client/twitter-posts.xml
 rm -f /home/nemo/.cache/msyncd/sync/twitter.Posts.xml
 
 %post twitter-posts
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
 
 %package ts-devel
@@ -365,5 +365,5 @@ rm -rf %{buildroot}
 %qmake5_install
 
 %post
-systemctl-user restart msyncd.service || :
+systemctl-user try-restart msyncd.service || :
 
