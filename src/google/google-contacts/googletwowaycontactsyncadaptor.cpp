@@ -50,6 +50,7 @@
 #include <QtContacts/QContactAvatar>
 #include <QtContacts/QContactUrl>
 #include <QtContacts/QContactGender>
+#include <QtContacts/QContactFavorite>
 #include <QtContacts/QContactNote>
 #include <QtContacts/QContactBirthday>
 #include <QtContacts/QContactPhoneNumber>
@@ -396,8 +397,19 @@ void GoogleTwoWayContactSyncAdaptor::continueSync(int accountId, const QString &
     transformContactAvatars(m_remoteAddMods[accountId], accountId, accessToken);
 
     // now store the changes locally
+    QSet<QContactDetail::DetailType> ignorableDetailTypes = getDefaultIgnorableDetailTypes();
+    ignorableDetailTypes.insert(QContactOriginMetadata::Type);   // we don't downsync metadata details (etag).
+    ignorableDetailTypes.insert(QContactGender::Type);   // we can ignore "differences" in local-mandatory fields.
+    ignorableDetailTypes.insert(QContactFavorite::Type); // we can ignore "differences" in local-mandatory fields.
+    QHash<QContactDetail::DetailType, QSet<int> > ignorableDetailFields = getDefaultIgnorableDetailFields();
+    ignorableDetailFields[QContactDetail::TypeUrl] << QContactUrl::FieldSubType; // ignore URL subtype changes.
+    ignorableDetailFields[QContactDetail::TypeUrl] << QContactDetail::FieldContext; // ignore URL context changes.
+    ignorableDetailFields[QContactDetail::TypePhoneNumber] << QContactPhoneNumber::FieldSubTypes; // ignore Phone subtype changes.
+    ignorableDetailFields[QContactDetail::TypePhoneNumber] << QContactDetail::FieldContext; // ignore Phone context changes.
+    ignorableDetailFields[QContactDetail::TypeEmailAddress] << QContactDetail::FieldContext; // ignore Email context changes.
+    ignorableDetailFields[QContactDetail::TypeAddress] << QContactDetail::FieldContext; // ignore Address context changes.
     SOCIALD_LOG_TRACE("storing remote changes locally for account" << accountId);
-    if (!storeRemoteChanges(m_remoteDels[accountId], &m_remoteAddMods[accountId], QString::number(accountId))) {
+    if (!storeRemoteChanges(m_remoteDels[accountId], &m_remoteAddMods[accountId], QString::number(accountId), false, ignorableDetailTypes, ignorableDetailFields)) {
         SOCIALD_LOG_ERROR("unable to store remote changes locally - aborting sync Google contacts for account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -417,23 +429,11 @@ void GoogleTwoWayContactSyncAdaptor::continueSync(int accountId, const QString &
     }
 
     // now determine which local changes need to be upsynced to the remote server
-    QSet<QContactDetail::DetailType> ignorableDetailTypes;
-    // these are the "default" ignorable detail types from the TWCSA baseclass.
-    ignorableDetailTypes.insert(QContactDetail__TypeDeactivated);
-    ignorableDetailTypes.insert(QContactDetail::TypeDisplayLabel);
-    ignorableDetailTypes.insert(QContactDetail::TypeGlobalPresence);
-    ignorableDetailTypes.insert(QContactDetail__TypeIncidental);
-    ignorableDetailTypes.insert(QContactDetail::TypePresence);
-    ignorableDetailTypes.insert(QContactDetail::TypeOnlineAccount);
-    ignorableDetailTypes.insert(QContactDetail__TypeStatusFlags);
-    ignorableDetailTypes.insert(QContactDetail::TypeSyncTarget);
-    ignorableDetailTypes.insert(QContactDetail::TypeTimestamp);
-    // we add one detail type to the ignorable set: avatar, since we don't upsync avatar changes.
-    ignorableDetailTypes.insert(QContactAvatar::Type);
+    ignorableDetailTypes.insert(QContactAvatar::Type);   // we don't upsync avatar changes.
     // fetch the local changes which occurred since last sync
     QDateTime localSince;
     QList<QContact> locallyAdded, locallyModified, locallyDeleted;
-    if (!determineLocalChanges(&localSince, &locallyAdded, &locallyModified, &locallyDeleted, QString::number(accountId), ignorableDetailTypes)) {
+    if (!determineLocalChanges(&localSince, &locallyAdded, &locallyModified, &locallyDeleted, QString::number(accountId), ignorableDetailTypes, ignorableDetailFields)) {
         SOCIALD_LOG_ERROR("unable to determine local changes - aborting sync Google contacts for account" << accountId);
         purgeSyncStateData(QString::number(accountId));
         setStatus(SocialNetworkSyncAdaptor::Error);
