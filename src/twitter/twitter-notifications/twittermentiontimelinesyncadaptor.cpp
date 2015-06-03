@@ -184,8 +184,9 @@ void TwitterMentionTimelineSyncAdaptor::finishedHandler()
                 // TODO: maybe we should display the name of the account
                 //% "Twitter"
                 notification->setBody(qtTrId("qtn_social_notifications_twitter"));
+                //: Notification text indicating number of mentions. Include the numeric value.
                 //% "You received %n mentions"
-                notification->setSummary(qtTrId("qtn_social_notifications_n_mentions", notification->itemCount()));
+                notification->setSummary(qtTrId("qtn_social_notifications_n_mentions_include_n", notification->itemCount()));
                 openUrlArgs << QLatin1String("https://mobile.twitter.com/i/connect");
             }
             notification->setRemoteDBusCallArguments(QVariantList() << openUrlArgs);
