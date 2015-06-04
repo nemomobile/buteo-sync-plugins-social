@@ -539,7 +539,102 @@ void extractRecurrence(const QJsonArray &recurrence, KCalCore::Event::Ptr event,
     }
 }
 
-void jsonToKCal(const QJsonObject &json, KCalCore::Event::Ptr event, KCalCore::ICalFormat &icalFormat)
+int nearestNemoReminderStartOffset(int googleStartOffset)
+{
+    // Google supports arbitrary start offsets, whereas in Nemo's UI
+    // we only allow specific reminder offsets.
+    // See nemo-qml-plugin-calendar::NemoCalendarEvent::Reminder for
+    // those offset definitions.
+    // Also, Nemo reminder offsets are negative and in seconds,
+    // whereas Google start offsets are positive and in minutes.
+    if (googleStartOffset >= 0 && googleStartOffset <= 5) {
+        return -5 * 60;     // 5 minutes before event start
+    } else if (googleStartOffset > 5 && googleStartOffset <= 15) {
+        return -15 * 60;    // 15 minutes before event start
+    } else if (googleStartOffset > 15 && googleStartOffset <= 30) {
+        return -30 * 60;    // 30 minutes before event start
+    } else if (googleStartOffset > 30 && googleStartOffset <= 60) {
+        return -60 * 60;    // 1 hour before event start
+    } else if (googleStartOffset > 60 && googleStartOffset <= 120) {
+        return -120 * 60;   // 2 hours before event start
+    } else if (googleStartOffset > 120 && googleStartOffset <= 1440) {
+        return -1440 * 60;  // 1 day before event start (24 hours)
+    } else if (googleStartOffset > 1440) {
+        return -2880 * 60;  // 2 days before event start (48 hours)
+    }
+
+    // default reminder: 15 minutes before event start.
+    return -15 * 60;
+}
+
+void extractAlarms(const QJsonObject &json, KCalCore::Event::Ptr event, int defaultReminderStartOffset)
+{
+    int startOffset = -1;
+    if (json.contains(QStringLiteral("reminders"))) {
+        QJsonObject reminders = json.value(QStringLiteral("reminders")).toObject();
+        if (reminders.value(QStringLiteral("useDefault")).toBool()) {
+            if (defaultReminderStartOffset > 0) {
+                startOffset = defaultReminderStartOffset;
+            } else {
+                SOCIALD_LOG_DEBUG("not adding default reminder even though requested: not popup or invalid start offset.");
+            }
+        } else {
+            QJsonArray overrides = reminders.value(QStringLiteral("overrides")).toArray();
+            for (int i = 0; i < overrides.size(); ++i) {
+                QJsonObject override = overrides.at(i).toObject();
+                if (override.value(QStringLiteral("method")).toString() == QStringLiteral("popup")) {
+                    startOffset = override.value(QStringLiteral("minutes")).toInt();
+                }
+            }
+        }
+        if (startOffset > -1) {
+            startOffset = nearestNemoReminderStartOffset(startOffset);
+            SOCIALD_LOG_DEBUG("event needs reminder with start offset (seconds):" << startOffset);
+            KCalCore::Alarm::List alarms = event->alarms();
+            int alarmCount = 0;
+            // check that we have only one non-procedure alarm,
+            // and then check to see if its start offset is correct.
+            for (int i = 0; i < alarms.count(); ++i) {
+                // we don't count Procedure type alarms.
+                if (alarms.at(i)->type() != KCalCore::Alarm::Procedure) {
+                    alarmCount += 1;
+                    if (alarms.at(i)->startOffset().asSeconds() == startOffset) {
+                        // no change required to this alarm.
+                    } else {
+                        alarmCount += 1; // this will cause alarm modification.
+                    }
+                }
+            }
+            if (alarmCount == 1) {
+                // no need to modify alarms for this event
+                SOCIALD_LOG_DEBUG("event already has reminder with start offset (seconds):" << startOffset);
+            } else {
+                SOCIALD_LOG_DEBUG("setting event reminder with start offset (seconds):" << startOffset);
+                for (int i = 0; i < alarms.count(); ++i) {
+                    if (alarms.at(i)->type() != KCalCore::Alarm::Procedure) {
+                        event->removeAlarm(alarms.at(i));
+                    }
+                }
+                KCalCore::Alarm::Ptr alarm = event->newAlarm();
+                alarm->setEnabled(true);
+                alarm->setStartOffset(KCalCore::Duration(startOffset));
+            }
+        }
+    }
+    if (startOffset == -1) {
+        // no reminders were defined in the json received from Google.
+        // remove any alarms as required from the local event.
+        KCalCore::Alarm::List alarms = event->alarms();
+        for (int i = 0; i < alarms.count(); ++i) {
+            if (alarms.at(i)->type() != KCalCore::Alarm::Procedure) {
+                SOCIALD_LOG_DEBUG("removing event reminder with start offset (seconds):" << alarms.at(i)->startOffset().asSeconds());
+                event->removeAlarm(alarms.at(i));
+            }
+        }
+    }
+}
+
+void jsonToKCal(const QJsonObject &json, KCalCore::Event::Ptr event, int defaultReminderStartOffset, KCalCore::ICalFormat &icalFormat)
 {
     KDateTime start, end;
     bool startExists = false, endExists = false;
@@ -565,6 +660,7 @@ void jsonToKCal(const QJsonObject &json, KCalCore::Event::Ptr event, KCalCore::I
     if (isAllDay) {
         event->setAllDay(isAllDay);
     }
+    extractAlarms(json, event, defaultReminderStartOffset);
 }
 
 // returns true if the last sync was marked as successful, and then marks the current
@@ -1031,6 +1127,17 @@ void GoogleCalendarSyncAdaptor::eventsFinishedHandler()
 
         updated = parsed.value(QLatin1String("updated")).toVariant().toString();
 
+        // parse the default reminders data to find the default popup reminder start offset.
+        if (parsed.find(QStringLiteral("defaultReminders")) != parsed.end()) {
+            QJsonArray defaultReminders = parsed.value(QStringLiteral("defaultReminders")).toArray();
+            for (int i = 0; i < defaultReminders.size(); ++i) {
+                QJsonObject defaultReminder = defaultReminders.at(i).toObject();
+                if (defaultReminder.value(QStringLiteral("method")).toString() == QStringLiteral("popup")) {
+                    m_serverCalendarIdToDefaultReminderTimes[accountId][calendarId] = defaultReminder.value(QStringLiteral("minutes")).toInt();
+                }
+            }
+        }
+
         // Parse the event list
         QJsonArray dataList = parsed.value(QLatin1String("items")).toArray();
         foreach (const QJsonValue &item, dataList) {
@@ -1316,7 +1423,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
 
             // then, update local event appropriately.
             event->startUpdates();
-            jsonToKCal(eventData, event, m_icalFormat);
+            jsonToKCal(eventData, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat);
             event->endUpdates();
             m_storageNeedsSave = true;
         } else {
@@ -1349,7 +1456,7 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                 SOCIALD_LOG_DEBUG("Event added remotely:" << eventId);
                 event = KCalCore::Event::Ptr(new KCalCore::Event);
             }
-            jsonToKCal(eventData, event, m_icalFormat); // direct conversion
+            jsonToKCal(eventData, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat); // direct conversion
             if (!m_calendar->addEvent(event, googleNotebook->uid())) {
                 SOCIALD_LOG_ERROR("Could not add dissociated occurrence to calendar:" << parentId << recurrenceId.toString());
                 m_syncSucceeded[accountId] = false;
@@ -1581,7 +1688,7 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                     event->startUpdates();
                     SOCIALD_LOG_TRACE("Local upsync response json:");
                     traceDumpStr(QString::fromUtf8(replyData));
-                    jsonToKCal(parsed, event, m_icalFormat);
+                    jsonToKCal(parsed, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat);
                     SOCIALD_LOG_DEBUG("Two-way calendar sync with account" << accountId << ":");
                     SOCIALD_LOG_DEBUG("  re-updating event" << event->summary());
                     SOCIALD_LOG_DEBUG("  old start:" << oldDTS << ", old end:" << oldDTE);

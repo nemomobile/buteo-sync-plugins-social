@@ -88,6 +88,7 @@ private:
         ChangeType change;
     };
     QMap<int, QMap<QString, CalendarInfo> > m_serverCalendarIdToCalendarInfo;
+    QMap<int, QMap<QString, int> > m_serverCalendarIdToDefaultReminderTimes;
     QMap<int, QMultiMap<QString, QJsonObject> > m_calendarIdToEventObjects;
     QMap<int, QMap<QString, QString> > m_recurringEventIdToKCalUid;
     QMap<int, bool> m_syncSucceeded;
