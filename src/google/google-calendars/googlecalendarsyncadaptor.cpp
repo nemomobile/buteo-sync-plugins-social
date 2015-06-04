@@ -921,7 +921,11 @@ void GoogleCalendarSyncAdaptor::requestEvents(int accountId, const QString &acce
     KDateTime syncDate;
     mKCal::Notebook::Ptr notebook = notebookForCalendarId(accountId, calendarId);
     if (notebook) {
-        syncDate = notebook->syncDate();
+        // Google uses millisecond-resolution modification date detection
+        // however mkcal::notebook syncDate field is second-resolution.
+        // This means we may lose updates, and should use the SyncToken
+        // returned by Google in the future, instead.
+        syncDate = notebook->syncDate().addSecs(1);
     }
 
     if (!needCleanSync && !syncDate.isNull() && syncDate.isValid()) {
