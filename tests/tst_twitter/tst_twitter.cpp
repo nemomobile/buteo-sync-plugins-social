@@ -25,7 +25,7 @@
 #include <QTest>
 
 #include "twitterhometimelinesyncadaptor.h"
-#include "twittermentiontimelinesyncadaptor.h"
+#include "twitternotificationsyncadaptor.h"
 
 class tst_twitter : public QObject
 {
@@ -77,7 +77,7 @@ void tst_twitter::cleanup()
 
 void tst_twitter::notifications()
 {
-    QScopedPointer<TwitterMentionTimelineSyncAdaptor> fbNotSa(new TwitterMentionTimelineSyncAdaptor(this));
+    QScopedPointer<TwitterNotificationSyncAdaptor> fbNotSa(new TwitterNotificationSyncAdaptor(this));
     QSKIP("TODO: write unit tests for this");
 }
 

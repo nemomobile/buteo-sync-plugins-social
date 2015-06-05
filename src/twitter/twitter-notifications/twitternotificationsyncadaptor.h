@@ -1,6 +1,6 @@
 /****************************************************************************
  **
- ** Copyright (C) 2013-2014 Jolla Ltd.
+ ** Copyright (C) 2013-2015 Jolla Ltd.
  ** Contact: Chris Adams <chris.adams@jollamobile.com>
  **
  ** This program/library is free software; you can redistribute it and/or
@@ -19,8 +19,8 @@
  **
  ****************************************************************************/
 
-#ifndef TWITTERMENTIONTIMELINESYNCADAPTOR_H
-#define TWITTERMENTIONTIMELINESYNCADAPTOR_H
+#ifndef TWITTERNOTIFICATIONSYNCADAPTOR_H
+#define TWITTERNOTIFICATIONSYNCADAPTOR_H
 
 #include "twitterdatatypesyncadaptor.h"
 
@@ -32,32 +32,47 @@
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QSslError>
 
+#include <socialcache/twitternotificationsdatabase.h>
+
 class Notification;
-class TwitterMentionTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
+class TwitterNotificationSyncAdaptor : public TwitterDataTypeSyncAdaptor
 {
     Q_OBJECT
 
 public:
-    TwitterMentionTimelineSyncAdaptor(QObject *parent);
-    ~TwitterMentionTimelineSyncAdaptor();
+    TwitterNotificationSyncAdaptor(QObject *parent);
+    ~TwitterNotificationSyncAdaptor();
 
     QString syncServiceName() const;
 
 protected: // implementing TwitterDataTypeSyncAdaptor interface
     void purgeDataForOldAccount(int oldId, SocialNetworkSyncAdaptor::PurgeMode mode);
     void beginSync(int accountId, const QString &oauthToken, const QString &oauthTokenSecret);
+    void finalize(int accountId);
 
 private:
     void requestNotifications(int accountId, const QString &oauthToken,
                               const QString &oauthTokenSecret,
-                              const QString &sinceTweetId = QString());
+                              const QString &sinceTweetId = QString(),
+                              const QString &followersCursor = QString());
 
 private Q_SLOTS:
-    void finishedHandler();
+    void finishedMentionsHandler();
+    void finishedRetweetsHandler();
+    void finishedFollowersHandler();
+    void finishedUserShowHandler();
 
 private:
-    Notification * createNotification(int accountId);
-    Notification * findNotification(int accountId);
+    enum TwitterNotificationType {
+        Mention = 0,
+        Retweet,
+        Follower
+    };
+    Notification * createNotification(int accountId, TwitterNotificationType ntype);
+    Notification * findNotification(int accountId, TwitterNotificationType ntype);
+    TwitterNotificationsDatabase m_db;
+    QDateTime m_lastSyncTimestamp;
+    QSet<QString> m_followerIds;
 };
 
-#endif // TWITTERMENTIONTIMELINESYNCADAPTOR_H
+#endif // TWITTERNOTIFICATIONSYNCADAPTOR_H

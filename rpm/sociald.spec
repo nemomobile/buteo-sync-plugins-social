@@ -15,7 +15,7 @@ BuildRequires:  pkgconfig(mlite5)
 BuildRequires:  pkgconfig(buteosyncfw5) >= 0.6.36
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(accounts-qt5) >= 1.13
-BuildRequires:  pkgconfig(socialcache) >= 0.0.31
+BuildRequires:  pkgconfig(socialcache) >= 0.0.36
 BuildRequires:  pkgconfig(libsailfishkeyprovider)
 BuildRequires:  qt5-qttools-linguist
 Requires: buteo-syncfw-qt5-msyncd
@@ -275,6 +275,8 @@ Provides notification synchronisation with Twitter
 %config %{_sysconfdir}/buteo/profiles/client/twitter-notifications.xml
 %config %{_sysconfdir}/buteo/profiles/sync/twitter.Notifications.xml
 %{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.mention.conf
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.retweet.conf
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.twitter.follower.conf
 %{_datadir}/translations/lipstick-jolla-home-twitter-notif_eng_en.qm
 
 %pre twitter-notifications
