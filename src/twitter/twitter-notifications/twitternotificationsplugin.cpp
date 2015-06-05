@@ -20,7 +20,7 @@
  ****************************************************************************/
 
 #include "twitternotificationsplugin.h"
-#include "twittermentiontimelinesyncadaptor.h"
+#include "twitternotificationsyncadaptor.h"
 #include "socialnetworksyncadaptor.h"
 
 #include <QTranslator>
@@ -62,5 +62,5 @@ TwitterNotificationsPlugin::~TwitterNotificationsPlugin()
 
 SocialNetworkSyncAdaptor *TwitterNotificationsPlugin::createSocialNetworkSyncAdaptor()
 {
-    return new TwitterMentionTimelineSyncAdaptor(this);
+    return new TwitterNotificationSyncAdaptor(this);
 }

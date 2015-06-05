@@ -12,7 +12,10 @@ twitter_notifications_sync_profile.files = $$PWD/twitter.Notifications.xml
 twitter_notifications_client_plugin_xml.path = /etc/buteo/profiles/client
 twitter_notifications_client_plugin_xml.files = $$PWD/twitter-notifications.xml
 twitter_notifications_notification_xml.path = /usr/share/lipstick/notificationcategories/
-twitter_notifications_notification_xml.files = $$PWD/x-nemo.social.twitter.mention.conf
+twitter_notifications_notification_xml.files = \
+    $$PWD/x-nemo.social.twitter.mention.conf \
+    $$PWD/x-nemo.social.twitter.retweet.conf \
+    $$PWD/x-nemo.social.twitter.follower.conf
 
 HEADERS += twitternotificationsplugin.h
 SOURCES += twitternotificationsplugin.cpp
