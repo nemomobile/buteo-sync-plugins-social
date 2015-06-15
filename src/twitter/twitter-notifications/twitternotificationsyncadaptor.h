@@ -73,6 +73,7 @@ private:
     TwitterNotificationsDatabase m_db;
     QDateTime m_lastSyncTimestamp;
     QSet<QString> m_followerIds;
+    bool m_firstTimeSync;
 };
 
 #endif // TWITTERNOTIFICATIONSYNCADAPTOR_H

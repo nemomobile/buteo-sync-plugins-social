@@ -44,6 +44,7 @@
 
 TwitterNotificationSyncAdaptor::TwitterNotificationSyncAdaptor(QObject *parent)
     : TwitterDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Notifications, parent)
+    , m_firstTimeSync(false)
 {
     setInitialActive(m_db.isValid());
 }
@@ -88,6 +89,9 @@ void TwitterNotificationSyncAdaptor::beginSync(int accountId, const QString &oau
     m_lastSyncTimestamp = lastSyncTimestamp(QLatin1String("twitter"),
                                             SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::Notifications),
                                             accountId);
+    if (!m_lastSyncTimestamp.isValid()) {
+        m_firstTimeSync = true;
+    }
     SOCIALD_LOG_DEBUG("last sync of Twitter notifications was at:" << m_lastSyncTimestamp.toString(Qt::ISODate));
     requestNotifications(accountId, oauthToken, oauthTokenSecret);
 }
@@ -271,7 +275,8 @@ void TwitterNotificationSyncAdaptor::finishedMentionsHandler()
             }
         }
 
-        if (mentionsCount > 0) {
+        // if this is the first sync, don't post any notifications (we don't know which are "new" or not)
+        if (!m_firstTimeSync && mentionsCount > 0) {
             // Search if we already have a notification
             Notification *notification = createNotification(accountId, Mention);
 
@@ -353,7 +358,9 @@ void TwitterNotificationSyncAdaptor::finishedRetweetsHandler()
         }
 
         m_db.setRetweetedTweetCounts(accountId, retweetCounts); // won't get committed until finalize();
-        if (newlyRetweetedTweets.size() > 0) {
+
+        // if this is the first sync, don't post any notifications (we don't know which are "new" or not)
+        if (!m_firstTimeSync && newlyRetweetedTweets.size() > 0) {
             // Search if we already have a notification
             Notification *notification = createNotification(accountId, Retweet);
 
@@ -430,8 +437,9 @@ void TwitterNotificationSyncAdaptor::finishedFollowersHandler()
             QSet<QString> differenceSet = m_followerIds;
             QList<QString> newFollowers = differenceSet.subtract(dbFollowerIds).toList();
             bool needMultipleNotification = false;
-            if (newFollowers.size() == 0) {
-                // no new followers.  No need to raise a notification.
+            if (m_firstTimeSync || newFollowers.size() == 0) {
+                // If this is the first sync, don't post any notifications (we don't know which are "new" or not).
+                // Also, if we have no new followers, then no need to raise a notification.
             } else if (newFollowers.size() == 1) {
                 // exactly one new follower.  Possibly need to request detailed information.
                 Notification *notification = findNotification(accountId, Follower);
