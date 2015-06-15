@@ -261,10 +261,12 @@ void TwitterNotificationSyncAdaptor::finishedMentionsHandler()
             } else if (createdTime.daysTo(QDateTime::currentDateTimeUtc()) > sinceSpan) {
                 SOCIALD_LOG_DEBUG("mention for account" << accountId << "is more than" << sinceSpan << "days old:" << createdTime << ":" << text);
             } else {
-                summary = userName;
-                //: Label telling the user that someone mentioned them.  e.g: "John Smith" + "mentioned you in a Tweet"
-                //% "Mentioned you in a Tweet"
-                body = qtTrId("qtn_social_notifications_twitter_mentioned_you");
+                //: Label telling the user that they have N new Twitter mentions.  Do NOT include N.  e.g. "New Mention" / "New Mentions"
+                //% "%n New Mentions"
+                summary = qtTrId("qtn_social_notifications_twitter_new_mentions");
+                //: Label telling the user that someone mentioned them.  e.g: "John Smith mentioned you in a Tweet"
+                //% "%1 mentioned you in a Tweet"
+                body = qtTrId("qtn_social_notifications_twitter_mentioned_you").arg(userName);
                 timestamp = createdTime;
                 link = QLatin1String("https://mobile.twitter.com/") + userScreenName + QLatin1String("/status/") + mentionId;
                 mentionsCount ++;
@@ -285,11 +287,9 @@ void TwitterNotificationSyncAdaptor::finishedMentionsHandler()
                 openUrlArgs << link;
             } else {
                 notification->setTimestamp(QDateTime::currentDateTimeUtc());
-                //: This label refers to the user of the device, eg "You" + "have 5 new followers on Twitter"
-                //% "You"
-                notification->setSummary(qtTrId("qtn_social_notifications_twitter_you"));
+                notification->setSummary(qtTrId("qtn_social_notifications_twitter_new_mentions")); // EE defined above.
                 //: The number of tweets (n) by other people which mention this user. Include n.
-                //% "Received %n mentions"
+                //% "You received %n mentions"
                 notification->setBody(qtTrId("qtn_social_notifications_twitter_n_mentions_include_n", notification->itemCount()));
                 openUrlArgs << QLatin1String("https://mobile.twitter.com/i/connect");
             }
@@ -361,20 +361,17 @@ void TwitterNotificationSyncAdaptor::finishedRetweetsHandler()
             QStringList openUrlArgs;
             notification->setItemCount(newlyRetweetedTweets.size());
             notification->setTimestamp(QDateTime::currentDateTimeUtc());
+            //: Label telling the user that they have N new Twitter retweets.  Do NOT include N.  e.g. "New Retweet" / "New Retweets"
+            //% "%n New Retweets"
+            notification->setSummary(qtTrId("qtn_social_notifications_twitter_new_retweets"));
             if (newlyRetweetedTweets.size() == 1) {
-                //: This label refers to a single Tweet by the user, eg: "Your Tweet" + "has been retweeted 5 times"
-                //% "Your Tweet"
-                notification->setSummary(qtTrId("qtn_social_notifications_twitter_your_tweet"));
                 //: This label tells the user how many times (n) a single Tweet has been retweeted.  Include n.
-                //% "Has been retweeted %n times"
+                //% "Your Tweet has been retweeted %n times"
                 notification->setBody(qtTrId("qtn_social_notifications_twitter_1_n_retweets_include_n", delta));
                 openUrlArgs << QLatin1String("https://mobile.twitter.com/") + selfUserScreenName + QLatin1String("/status/") + newlyRetweetedTweets.first();
             } else {
-                //: This label refers to multiple Tweets by the user, eg: "Your Tweets" + "have been retweeted 5 times"
-                //% "Your Tweets"
-                notification->setSummary(qtTrId("qtn_social_notifications_twitter_your_tweets"));
-                //: This label tells the user how many times (n) multiple Tweets have been retweeted.  Include n.
-                //% "Have been retweeted %n times"
+                //: This label tells the user how many (n) times multiple (m) Tweets have been retweeted.  Include n.  e.g. "Your Tweets have been retweeted 6 times".
+                //% "Your Tweets have been retweeted %n times"
                 notification->setBody(qtTrId("qtn_social_notifications_twitter_m_n_retweets_include_n", delta));
                 openUrlArgs << QLatin1String("https://mobile.twitter.com/i/connect");
             }
@@ -480,9 +477,11 @@ void TwitterNotificationSyncAdaptor::finishedFollowersHandler()
                 Notification *notification = createNotification(accountId, Follower);
                 notification->setItemCount(notification->itemCount() + newFollowers.size());
                 notification->setTimestamp(QDateTime::currentDateTimeUtc());
-                notification->setSummary(qtTrId("qtn_social_notifications_twitter_you")); // EE defined above
-                //: The number of new followers (n) the user has on Twitter.  Include n.  e.g. "You" + "Have 5 new followers".
-                //% "Have %n new followers"
+                //: Label telling the user that they have N new Twitter followers.  Do NOT include N.  e.g. "New Follower" / "New Followers"
+                //% "%n New Followers"
+                notification->setSummary(qtTrId("qtn_social_notifications_twitter_new_followers"));
+                //: The number of new followers (n) the user has on Twitter.  Include n.  e.g. "You have 5 new followers".
+                //% "You have %n new followers"
                 notification->setBody(qtTrId("qtn_social_notifications_n_followers_include_n", notification->itemCount()));
                 QStringList openUrlArgs;
                 openUrlArgs << QLatin1String("https://mobile.twitter.com/i/connect");
@@ -531,10 +530,10 @@ void TwitterNotificationSyncAdaptor::finishedUserShowHandler()
         Notification *notification = createNotification(accountId, Retweet);
         notification->setItemCount(1);
         notification->setTimestamp(QDateTime::currentDateTimeUtc());
-        notification->setSummary(name.isEmpty() ? screenName : name);
-        //: Text telling the user that another user has followed them, e.g.: "John Smith" + "Followed you".
-        //% "Followed you"
-        notification->setBody(qtTrId("qtn_social_notifications_twitter_followed_you"));
+        notification->setSummary(qtTrId("qtn_social_notifications_twitter_new_followers")); // EE defined above.
+        //: Text telling the user that another user has followed them, e.g.: "John Smith Followed you".
+        //% "%1 followed you"
+        notification->setBody(qtTrId("qtn_social_notifications_twitter_followed_you").arg(name.isEmpty() ? screenName : name));
         QStringList openUrlArgs;
         openUrlArgs << QLatin1String("https://mobile.twitter.com/i/connect");
         notification->setRemoteAction(OPEN_BROWSER_ACTION(openUrlArgs));
