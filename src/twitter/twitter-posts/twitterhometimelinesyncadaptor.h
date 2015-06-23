@@ -56,6 +56,8 @@ private:
     void requestPosts(int accountId, const QString &oauthToken, const QString &oauthTokenSecret,
                       const QString &sinceId = QString(), const QString &fromUserId = QString());
     bool fromIsSelfContact(const QString &fromName, const QString &fromTwUid) const;
+    QString sinceId(int accountId);
+    void setSinceId(const QString &sinceId, int accountId);
 
 private Q_SLOTS:
     void finishedMeHandler();

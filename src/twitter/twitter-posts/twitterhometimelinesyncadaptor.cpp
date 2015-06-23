@@ -26,6 +26,10 @@
 #include <QtCore/QJsonValue>
 #include <QtCore/QUrlQuery>
 
+#include <Accounts/Manager>
+#include <Accounts/Account>
+#include <Accounts/AccountService>
+
 TwitterHomeTimelineSyncAdaptor::TwitterHomeTimelineSyncAdaptor(QObject *parent)
     : TwitterDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Posts, parent)
 {
@@ -101,7 +105,7 @@ void TwitterHomeTimelineSyncAdaptor::requestPosts(int accountId, const QString &
                                                   const QString &sinceTweetId, const QString &fromUserId)
 {
     QList<QPair<QString, QString> > queryItems;
-    queryItems.append(QPair<QString, QString>(QString(QLatin1String("count")), QString(QLatin1String("10")))); // limit to 10 Tweets.
+    queryItems.append(QPair<QString, QString>(QString(QLatin1String("count")), QString(QLatin1String("200")))); // limit to 10 Tweets.
     if (!sinceTweetId.isEmpty()) {
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("since_id")), sinceTweetId));
     }
@@ -173,14 +177,15 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     int accountId = reply->property("accountId").toInt();
-    QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"),
-                                           SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::Posts),
-                                           accountId);
+    //QDateTime lastSync = lastSyncTimestamp(QLatin1String("twitter"),
+    //                                       SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::Posts),
+    //                                       accountId);
     QByteArray replyData = reply->readAll();
     disconnect(reply);
     reply->deleteLater();
     removeReplyTimeout(accountId, reply);
 
+    QString nextSince;
     bool ok = false;
     QJsonArray tweets = parseJsonArrayReplyData(replyData, &ok);
     if (ok) {
@@ -190,7 +195,9 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
             return;
         }
 
-        m_db.removePosts(accountId); // purge old tweets.
+        QString since = sinceId(accountId);
+        qDebug("ACCOUNT SINCE ID: %s", qPrintable(since));
+        //m_db.removePosts(accountId); // purge old tweets.
 
         foreach (const QJsonValue &tweetValue, tweets) {
             // these are the fields we eventually need to fill out:
@@ -199,6 +206,16 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
 
             // grab the data from the current post
             QJsonObject tweet = tweetValue.toObject();
+
+            QString postId = tweet.value(QLatin1String("id_str")).toString();
+            if (postId == since) {
+                qDebug("SINCE TWEET FOUND! BREAK");
+                break;
+            }
+
+            if (nextSince.isEmpty()) {
+                nextSince = postId;
+            }
 
             // Just to be sure to get the time of the current (re)tweet
             QDateTime eventTimestamp = parseTwitterDateTime(tweet.value(QLatin1String("created_at")).toString());
@@ -210,7 +227,6 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                 tweet = tweet.value(QLatin1String("retweeted_status")).toObject();
             }
 
-            QString postId = tweet.value(QLatin1String("id_str")).toString();
             QString body = tweet.value(QLatin1String("text")).toString();
             QJsonObject user = tweet.value(QLatin1String("user")).toObject();
             QString name = user.value("name").toString();
@@ -266,6 +282,35 @@ void TwitterHomeTimelineSyncAdaptor::finishedPostsHandler()
                           "got:" << QString::fromLatin1(replyData.constData()));
     }
 
+    if (!nextSince.isEmpty()) {
+        qDebug("SETTING NEXT SINCE: %s", qPrintable(nextSince));
+        setSinceId(nextSince, accountId);
+    }
+
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
+}
+
+
+QString TwitterHomeTimelineSyncAdaptor::sinceId(int accountId)
+{
+    qDebug("GET SINCE ID...");
+    Accounts::Account *account = Accounts::Account::fromId(m_accountManager, accountId, this);
+    if (account) {
+        account->selectService(Accounts::Service());
+        return account->value(QStringLiteral("SinceId")).toString();
+    }
+
+    return QString();
+}
+
+void TwitterHomeTimelineSyncAdaptor::setSinceId(const QString &sinceId, int accountId)
+{
+    qDebug("SET SINCE ID...");
+    Accounts::Account *account = Accounts::Account::fromId(m_accountManager, accountId, this);
+    if (account) {
+        account->selectService(Accounts::Service());
+        account->setValue(QStringLiteral("SinceId"), QVariant::fromValue<QString>(sinceId));
+        account->syncAndBlock();
+    }
 }
