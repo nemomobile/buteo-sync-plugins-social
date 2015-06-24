@@ -75,6 +75,19 @@ private:
     QStringList m_removedImages;
 
     FacebookImagesDatabase m_db;
+
+    // image variants with different dimentions
+    class ImageSource {
+    public:
+        ImageSource(int width, int height, const QString &sourceUrl) : width(width), height(height), sourceUrl(sourceUrl) {}
+        bool operator<(const ImageSource &other) const { return this->width < other.width; }
+        int width;
+        int height;
+        QString sourceUrl;
+    };
+    bool determineOptimalDimensions();
+    int m_optimalThumbnailWidth;
+    int m_optimalImageWidth;
 };
 
 #endif // FACEBOOKIMAGESYNCADAPTOR_H
