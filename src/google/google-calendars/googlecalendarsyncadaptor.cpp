@@ -1017,7 +1017,11 @@ void GoogleCalendarSyncAdaptor::requestEvents(int accountId, const QString &acce
     KDateTime syncDate;
     mKCal::Notebook::Ptr notebook = notebookForCalendarId(accountId, calendarId);
     if (notebook) {
-        syncDate = notebook->syncDate();
+        // TODO: use Google Sync Token instead of the sync timestamp.
+        // mKCal only stores the syncDate with second-resolution which is not good enough
+        // since Google uses millisecond resolution.  Thus we either suffer from a possible
+        // lost updates problem (if we .addSecs(1)) or we suffer from unintentional rollback.
+        syncDate = notebook->syncDate().addSecs(1);
     }
 
     if (!needCleanSync && !syncDate.isNull() && syncDate.isValid()) {
