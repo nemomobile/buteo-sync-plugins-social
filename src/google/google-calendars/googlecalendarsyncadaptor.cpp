@@ -126,6 +126,16 @@ void setGCalEventId(KCalCore::Incidence::Ptr event, const QString &id)
     event->addComment(QStringLiteral("jolla-sociald:gcal-id:%1").arg(id));
 }
 
+QString gCalETag(KCalCore::Incidence::Ptr event)
+{
+    return event->customProperty("jolla-sociald", "gcal-etag");
+}
+void setGCalETag(KCalCore::Incidence::Ptr event, const QString &etag)
+{
+    // note: custom properties are purged on incidence deletion.
+    event->setCustomProperty("jolla-sociald", "gcal-etag", etag);
+}
+
 KDateTime datetimeFromUpdateStr(const QString &update)
 {
     // generally, this is an RFC3339 date with timezone information, like:
@@ -567,7 +577,27 @@ int nearestNemoReminderStartOffset(int googleStartOffset)
     return -15 * 60;
 }
 
-void extractAlarms(const QJsonObject &json, KCalCore::Event::Ptr event, int defaultReminderStartOffset)
+#define START_EVENT_UPDATES_IF_REQUIRED(event, changed) \
+    if (*changed == false) {                            \
+        event->startUpdates();                          \
+    }                                                   \
+    *changed = true;
+
+#define UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, getter, setter, newValue, changed) \
+    if (event->getter() != newValue) {                                              \
+        START_EVENT_UPDATES_IF_REQUIRED(event, changed)                             \
+        event->setter(newValue);                                                    \
+    }
+
+#define END_EVENT_UPDATES_IF_REQUIRED(event, changed, startedUpdates)               \
+    if (*changed == false) {                                                        \
+        SOCIALD_LOG_DEBUG("Ignoring spurious change reported for:" <<               \
+                          event->uid() << event->revision() << event->summary());   \
+    } else if (startedUpdates) {                                                    \
+        event->endUpdates();                                                        \
+    }
+
+void extractAlarms(const QJsonObject &json, KCalCore::Event::Ptr event, int defaultReminderStartOffset, bool *changed)
 {
     int startOffset = -1;
     if (json.contains(QStringLiteral("reminders"))) {
@@ -610,6 +640,7 @@ void extractAlarms(const QJsonObject &json, KCalCore::Event::Ptr event, int defa
                 SOCIALD_LOG_DEBUG("event already has reminder with start offset (seconds):" << startOffset);
             } else {
                 SOCIALD_LOG_DEBUG("setting event reminder with start offset (seconds):" << startOffset);
+                START_EVENT_UPDATES_IF_REQUIRED(event, changed);
                 for (int i = 0; i < alarms.count(); ++i) {
                     if (alarms.at(i)->type() != KCalCore::Alarm::Procedure) {
                         event->removeAlarm(alarms.at(i));
@@ -628,39 +659,58 @@ void extractAlarms(const QJsonObject &json, KCalCore::Event::Ptr event, int defa
         for (int i = 0; i < alarms.count(); ++i) {
             if (alarms.at(i)->type() != KCalCore::Alarm::Procedure) {
                 SOCIALD_LOG_DEBUG("removing event reminder with start offset (seconds):" << alarms.at(i)->startOffset().asSeconds());
+                START_EVENT_UPDATES_IF_REQUIRED(event, changed);
                 event->removeAlarm(alarms.at(i));
             }
         }
     }
 }
 
-void jsonToKCal(const QJsonObject &json, KCalCore::Event::Ptr event, int defaultReminderStartOffset, KCalCore::ICalFormat &icalFormat)
+void jsonToKCal(const QJsonObject &json, KCalCore::Event::Ptr event, int defaultReminderStartOffset, KCalCore::ICalFormat &icalFormat, bool *changed)
 {
+    bool alreadyStarted = *changed; // if this is true, we don't need to call startUpdates/endUpdates() in this function.
+    if (!alreadyStarted && gCalETag(event) == json.value(QLatin1String("etag")).toVariant().toString()) {
+        SOCIALD_LOG_DEBUG("Ignoring non-remote-changed:" << event->uid() << ","
+                          << gCalETag(event) << "==" << json.value(QLatin1String("etag")).toVariant().toString());
+        return; // this event has not changed server-side since we last saw it.
+    }
+
     KDateTime start, end;
     bool startExists = false, endExists = false;
     bool startIsDateOnly = false, endIsDateOnly = false;
     bool isAllDay = false;
     extractStartAndEnd(json, &startExists, &endExists, &startIsDateOnly, &endIsDateOnly, &isAllDay, &start, &end);
-    setGCalEventId(event, json.value(QLatin1String("id")).toVariant().toString());
+    if (gCalEventId(event) != json.value(QLatin1String("id")).toVariant().toString()) {
+        START_EVENT_UPDATES_IF_REQUIRED(event, changed);
+        setGCalEventId(event, json.value(QLatin1String("id")).toVariant().toString());
+    }
+    if (gCalETag(event) != json.value(QLatin1String("etag")).toVariant().toString()) {
+        START_EVENT_UPDATES_IF_REQUIRED(event, changed);
+        setGCalETag(event, json.value(QLatin1String("etag")).toVariant().toString());
+    }
     extractRecurrence(json.value(QLatin1String("recurrence")).toArray(), event, icalFormat);
-    event->setReadOnly(json.value(QLatin1String("locked")).toVariant().toBool());
-    event->setSummary(json.value(QLatin1String("summary")).toVariant().toString());
-    event->setDescription(json.value(QLatin1String("description")).toVariant().toString());
-    event->setLocation(json.value(QLatin1String("location")).toVariant().toString());
-    event->setRevision(json.value(QLatin1String("sequence")).toVariant().toInt());
+    UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, isReadOnly, setReadOnly, json.value(QLatin1String("locked")).toVariant().toBool(), changed)
+    UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, summary, setSummary, json.value(QLatin1String("summary")).toVariant().toString(), changed)
+    UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, description, setDescription, json.value(QLatin1String("description")).toVariant().toString(), changed)
+    UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, location, setLocation, json.value(QLatin1String("location")).toVariant().toString(), changed)
+    UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, revision, setRevision, json.value(QLatin1String("revision")).toVariant().toInt(), changed)
     if (startExists) {
-        event->setDtStart(start);
+        UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, dtStart, setDtStart, start, changed)
     }
     if (endExists) {
-        event->setHasEndDate(true);
-        event->setDtEnd(end);
+        if (!event->hasEndDate() || event->dtEnd() != end) {
+            START_EVENT_UPDATES_IF_REQUIRED(event, changed);
+            event->setHasEndDate(true);
+            event->setDtEnd(end);
+        }
     } else {
-        event->setHasEndDate(false);
+        UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, hasEndDate, setHasEndDate, false, changed)
     }
     if (isAllDay) {
-        event->setAllDay(isAllDay);
+        UPDATE_EVENT_PROPERTY_IF_REQUIRED(event, allDay, setAllDay, false, changed)
     }
-    extractAlarms(json, event, defaultReminderStartOffset);
+    extractAlarms(json, event, defaultReminderStartOffset, changed);
+    END_EVENT_UPDATES_IF_REQUIRED(event, changed, !alreadyStarted);
 }
 
 // returns true if the last sync was marked as successful, and then marks the current
@@ -1414,18 +1464,17 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
             SOCIALD_LOG_DEBUG("Event deleted remotely:" << eventId << "was already deleted locally; ignoring");
         } else if (allMap.contains(eventId)) {
             // modify existing event.
-            remoteModified++;
             SOCIALD_LOG_DEBUG("Event modified remotely:" << eventId);
             KCalCore::Event::Ptr event = allMap.value(eventId);
-
-            // if both local and server were modified, prefer server.
-            updatedMap.remove(eventId);
-
             // then, update local event appropriately.
-            event->startUpdates();
-            jsonToKCal(eventData, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat);
-            event->endUpdates();
-            m_storageNeedsSave = true;
+            bool changed = false;
+            jsonToKCal(eventData, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat, &changed);
+            if (changed) {
+                remoteModified++;
+                m_storageNeedsSave = true;
+                // if both local and server were modified, prefer server.
+                updatedMap.remove(eventId);
+            }
         } else {
             // add a new local event for the remote addition.
             KCalCore::Event::Ptr event;
@@ -1456,7 +1505,8 @@ void GoogleCalendarSyncAdaptor::updateLocalCalendarNotebookEvents(int accountId,
                 SOCIALD_LOG_DEBUG("Event added remotely:" << eventId);
                 event = KCalCore::Event::Ptr(new KCalCore::Event);
             }
-            jsonToKCal(eventData, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat); // direct conversion
+            bool changed = true; // set to true as it's an addition, no need to check for delta.
+            jsonToKCal(eventData, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat, &changed); // direct conversion
             if (!m_calendar->addEvent(event, googleNotebook->uid())) {
                 SOCIALD_LOG_ERROR("Could not add dissociated occurrence to calendar:" << parentId << recurrenceId.toString());
                 m_syncSucceeded[accountId] = false;
@@ -1685,10 +1735,13 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                 } else {
                     QString oldDTS = event->dtStart().toString(RFC3339_FORMAT);
                     QString oldDTE = event->dtEnd().toString(RFC3339_FORMAT);
-                    event->startUpdates();
                     SOCIALD_LOG_TRACE("Local upsync response json:");
                     traceDumpStr(QString::fromUtf8(replyData));
-                    jsonToKCal(parsed, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat);
+                    bool changed = false;
+                    jsonToKCal(parsed, event, m_serverCalendarIdToDefaultReminderTimes[accountId].value(calendarId), m_icalFormat, &changed);
+                    if (changed) {
+                        m_storageNeedsSave = true;
+                    }
                     SOCIALD_LOG_DEBUG("Two-way calendar sync with account" << accountId << ":");
                     SOCIALD_LOG_DEBUG("  re-updating event" << event->summary());
                     SOCIALD_LOG_DEBUG("  old start:" << oldDTS << ", old end:" << oldDTE);
@@ -1698,8 +1751,6 @@ void GoogleCalendarSyncAdaptor::upsyncFinishedHandler()
                     Q_FOREACH(const QDate &exd, event->recurrence()->exDates()) SOCIALD_LOG_DEBUG("    " << exd.toString(QDATEONLY_FORMAT));
                     SOCIALD_LOG_DEBUG("  exdatetimes:");
                     Q_FOREACH(const KDateTime &exd, event->recurrence()->exDateTimes()) SOCIALD_LOG_DEBUG("    " << exd.toString(RFC5545_KDATETIME_FORMAT));
-                    event->endUpdates();
-                    m_storageNeedsSave = true;
                 }
 
                 QString updated = parsed.value(QLatin1String("updated")).toVariant().toString();
