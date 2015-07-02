@@ -35,6 +35,7 @@
 #include <QtNetwork/QSslError>
 
 #include <socialcache/twitterpostsdatabase.h>
+#include <socialcache/socialimagesdatabase.h>
 
 class TwitterHomeTimelineSyncAdaptor : public TwitterDataTypeSyncAdaptor
 {
@@ -63,6 +64,7 @@ private Q_SLOTS:
 
 private:
     TwitterPostsDatabase m_db;
+    SocialImagesDatabase m_imageCacheDb;
     QMap<int, QString> m_accountProfileImage;
     QStringList m_selfTuids; // twitter user id strings of "me" objects
     QMap<QString, QString> m_selfTScreenNames; // map of user id string to screen name

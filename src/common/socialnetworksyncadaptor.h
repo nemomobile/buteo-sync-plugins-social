@@ -37,6 +37,7 @@ class QNetworkAccessManager;
 class QTimer;
 class QNetworkReply;
 class SocialNetworkSyncDatabase;
+class SocialImagesDatabase;
 
 namespace Accounts {
     class Account;
@@ -124,6 +125,10 @@ protected:
     // Parsing methods
     static QJsonObject parseJsonObjectReplyData(const QByteArray &replyData, bool *ok);
     static QJsonArray parseJsonArrayReplyData(const QByteArray &replyData, bool *ok);
+
+    // Cache management
+    void purgeCachedImages(SocialImagesDatabase *database, int accountId);
+    void purgeExpiredImages(SocialImagesDatabase *database, int accountId);
 
     const SocialNetworkSyncAdaptor::DataType m_dataType;
     Accounts::Manager * const m_accountManager;

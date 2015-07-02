@@ -41,6 +41,11 @@ void TwitterHomeTimelineSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNet
     m_db.removePosts(oldId);
     m_db.commit();
     m_db.wait();
+
+    // manage image cache. Social media feed UI caches feed images
+    // and maintains bindings between source and cached image in SocialImageDatabase.
+    // purge cached images belonging to this account.
+    purgeCachedImages(&m_imageCacheDb, oldId);
 }
 
 QString TwitterHomeTimelineSyncAdaptor::syncServiceName() const
@@ -61,6 +66,11 @@ void TwitterHomeTimelineSyncAdaptor::finalize(int accountId)
     } else {
         m_db.commit();
         m_db.wait();
+
+        // manage image cache. Social media feed UI caches feed images
+        // and maintains bindings between source and cached image in SocialImageDatabase.
+        // purge cached images older than four weeks.
+        purgeExpiredImages(&m_imageCacheDb, accountId);
     }
 }
 

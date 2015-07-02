@@ -48,6 +48,11 @@ void FacebookNotificationSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNe
     m_db.removeNotifications(oldId);
     m_db.sync();
     m_db.wait();
+
+    // social media feed UI caches feed images and maintains bindings between
+    // source and cached image in SocialImageDatabase.
+    // purge cached images belonging to this account.
+    purgeCachedImages(&m_imageCacheDb, oldId);
 }
 
 void FacebookNotificationSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -64,6 +69,11 @@ void FacebookNotificationSyncAdaptor::finalize(int accountId)
         m_db.purgeOldNotifications(OLD_NOTIFICATION_LIMIT_IN_DAYS);
         m_db.sync();
         m_db.wait();
+
+        // manage image cache. Social media feed UI caches feed images
+        // and maintains bindings between source and cached image in SocialImageDatabase.
+        // purge cached images older than four weeks.
+        purgeExpiredImages(&m_imageCacheDb, accountId);
     }
 }
 
