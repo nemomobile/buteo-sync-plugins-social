@@ -24,6 +24,7 @@
 
 #include "facebookdatatypesyncadaptor.h"
 #include <socialcache/facebooknotificationsdatabase.h>
+#include <socialcache/socialimagesdatabase.h>
 
 class Notification;
 
@@ -52,6 +53,7 @@ private Q_SLOTS:
 
 private:
     FacebookNotificationsDatabase m_db;
+    SocialImagesDatabase m_imageCacheDb;
 };
 
 #endif // FACEBOOKNOTIFICATIONSYNCADAPTOR_H

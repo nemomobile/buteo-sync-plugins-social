@@ -33,6 +33,8 @@
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 
+#include <socialcache/socialimagesdatabase.h>
+
 #include "buteosyncfw_p.h"
 
 // libaccounts-qt5
@@ -425,4 +427,38 @@ QString SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::DataTyp
     }
 
     return QString();
+}
+
+void SocialNetworkSyncAdaptor::purgeCachedImages(SocialImagesDatabase *database,
+                                                 int accountId)
+{
+    database->queryImages(accountId);
+    database->wait();
+
+    QList<SocialImage::ConstPtr> images = database->images();
+    foreach (SocialImage::ConstPtr image, images) {
+        SOCIALD_LOG_ERROR("Purge cached image " << image->imageFile() << " for account " << image->accountId());
+        QFile::remove(image->imageFile());
+    }
+
+    database->removeImages(images);
+    database->commit();
+    database->wait();
+}
+
+void SocialNetworkSyncAdaptor::purgeExpiredImages(SocialImagesDatabase *database,
+                                                  int accountId)
+{
+    database->queryExpired(accountId);
+    database->wait();
+
+    QList<SocialImage::ConstPtr> images = database->images();
+    foreach (SocialImage::ConstPtr image, images) {
+        SOCIALD_LOG_ERROR("Purge expired image " << image->imageFile() << " for account " << image->accountId());
+        QFile::remove(image->imageFile());
+    }
+
+    database->removeImages(images);
+    database->commit();
+    database->wait();
 }
