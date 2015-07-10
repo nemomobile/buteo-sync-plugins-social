@@ -1310,10 +1310,12 @@ void GoogleCalendarSyncAdaptor::finishedRequestingRemoteEvents(int accountId, co
             case GoogleCalendarSyncAdaptor::CleanSync: {
                 SOCIALD_LOG_DEBUG("Deleting and recreating local notebook for clean-sync server calendar:" << serverCalendarId);
                 // delete
+                QString notebookUid; // we wish to re-use the old notebook's UID after clean sync.
                 mKCal::Notebook::Ptr notebook = notebookForCalendarId(accountId, serverCalendarId);
                 if (!notebook.isNull()) {
                     SOCIALD_LOG_DEBUG("deleting notebook:" << notebook->uid() << "due to clean sync");
                     notebook->setIsReadOnly(false);
+                    notebookUid = notebook->uid();
                     m_storage->deleteNotebook(notebook);
                 } else {
                     SOCIALD_LOG_DEBUG("could not find local notebook corresponding to server calendar:" << serverCalendarId);
@@ -1322,6 +1324,9 @@ void GoogleCalendarSyncAdaptor::finishedRequestingRemoteEvents(int accountId, co
                 SOCIALD_LOG_DEBUG("recreating notebook:" << notebook->uid() << "due to clean sync");
                 notebook = mKCal::Notebook::Ptr(new mKCal::Notebook);
                 notebook->setIsReadOnly(false);
+                if (!notebookUid.isEmpty()) {
+                    notebook->setUid(notebookUid);
+                }
                 notebook->setName(m_serverCalendarIdToCalendarInfo[accountId].value(serverCalendarId).summary);
                 notebook->setColor(m_serverCalendarIdToCalendarInfo[accountId].value(serverCalendarId).color);
                 notebook->setDescription(m_serverCalendarIdToCalendarInfo[accountId].value(serverCalendarId).description);
