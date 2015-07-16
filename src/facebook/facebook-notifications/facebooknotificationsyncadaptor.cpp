@@ -74,6 +74,7 @@ void FacebookNotificationSyncAdaptor::finalize(int accountId)
         // and maintains bindings between source and cached image in SocialImageDatabase.
         // purge cached images older than four weeks.
         purgeExpiredImages(&m_imageCacheDb, accountId);
+        setLastSuccessfulSyncTime(accountId);
     }
 }
 
@@ -87,11 +88,15 @@ void FacebookNotificationSyncAdaptor::requestNotifications(int accountId, const 
     queryItems.append(QPair<QString, QString>(QString(QLatin1String("locale")), QLocale::system().name()));
     QUrl url(graphAPI(QLatin1String("/me/notifications")));
     if (pagingToken.isEmpty()) {
-        int sinceSpan = m_accountSyncProfile
-                      ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
-                      : 7;
+        QDateTime since = lastSuccessfulSyncTime(accountId);
+        if (!since.isValid()) {
+            int sinceSpan = m_accountSyncProfile
+                          ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
+                          : 7;
+            since = QDateTime::currentDateTime().addDays(-1 * sinceSpan).toUTC();
+        }
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("since")),
-                          QString::number(QDateTime::currentDateTime().addDays(-1 * sinceSpan).toTime_t())));
+                          QString::number(since.toTime_t())));
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("limit")), QString::number(NOTIFICATIONS_LIMIT)));
     } else {
         queryItems.append(QPair<QString, QString>(QString(QLatin1String("limit")), QString::number(NOTIFICATIONS_LIMIT)));
@@ -211,4 +216,30 @@ void FacebookNotificationSyncAdaptor::finishedHandler()
 
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
+}
+
+QDateTime FacebookNotificationSyncAdaptor::lastSuccessfulSyncTime(int accountId)
+{
+    QDateTime result;
+    QString settingsFileName = QString::fromLatin1("%1/%2/fbnotif.ini")
+            .arg(QString::fromLatin1(PRIVILEGED_DATA_DIR))
+            .arg(QString::fromLatin1(SYNC_DATABASE_DIR));
+    QSettings settingsFile(settingsFileName, QSettings::IniFormat);
+    uint timestamp = settingsFile.value(QString::fromLatin1("%1-last-successful-sync-time").arg(accountId)).toUInt();
+    if (timestamp > 0) {
+        result = QDateTime::fromTime_t(timestamp);
+    }
+    return result;
+}
+
+void FacebookNotificationSyncAdaptor::setLastSuccessfulSyncTime(int accountId)
+{
+    QDateTime currentTime = QDateTime::currentDateTime().toUTC();
+    QString settingsFileName = QString::fromLatin1("%1/%2/fbnotif.ini")
+            .arg(QString::fromLatin1(PRIVILEGED_DATA_DIR))
+            .arg(QString::fromLatin1(SYNC_DATABASE_DIR));
+    QSettings settingsFile(settingsFileName, QSettings::IniFormat);
+    settingsFile.setValue(QString::fromLatin1("%1-last-successful-sync-time").arg(accountId),
+                          QVariant::fromValue<uint>(currentTime.toTime_t()));
+    settingsFile.sync();
 }
