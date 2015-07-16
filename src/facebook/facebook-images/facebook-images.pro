@@ -7,6 +7,9 @@ include($$PWD/../../common.pri)
 include($$PWD/../facebook-common.pri)
 include($$PWD/facebook-images.pri)
 
+CONFIG += link_pkgconfig
+PKGCONFIG += mlite5
+
 facebook_images_sync_profile.path = /etc/buteo/profiles/sync
 facebook_images_sync_profile.files = $$PWD/facebook.Images.xml
 facebook_images_client_plugin_xml.path = /etc/buteo/profiles/client

@@ -8,6 +8,9 @@ include($$PWD/../../src/facebook/facebook-contacts/facebook-contacts.pri)
 include($$PWD/../../src/facebook/facebook-images/facebook-images.pri)
 include($$PWD/../../src/facebook/facebook-notifications/facebook-notifications.pri)
 
+CONFIG += link_pkgconfig
+PKGCONFIG += mlite5
+
 SOURCES += \
     tst_facebook.cpp \
     tst_facebooknetworkstubs_p.cpp

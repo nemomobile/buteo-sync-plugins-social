@@ -35,6 +35,8 @@
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 
+#include <MGConfItem>
+
 // Update the following version if database schema changes e.g. new
 // fields are added to the existing tables.
 // It will make old tables dropped and creates new ones.
@@ -47,6 +49,8 @@
 // account, it might have some problems, like data being removed while it shouldn't.
 FacebookImageSyncAdaptor::FacebookImageSyncAdaptor(QObject *parent)
     : FacebookDataTypeSyncAdaptor(SocialNetworkSyncAdaptor::Images, parent)
+    , m_optimalThumbnailWidth(0)
+    , m_optimalImageWidth(0)
 {
     setInitialActive(m_db.isValid());
 }
@@ -64,6 +68,11 @@ QString FacebookImageSyncAdaptor::syncServiceName() const
 void FacebookImageSyncAdaptor::sync(const QString &dataTypeString, int accountId)
 {
     // get ready for sync
+    if (!determineOptimalDimensions()) {
+        SOCIALD_LOG_ERROR("unable to determine optimal image dimensions, aborting");
+        setStatus(SocialNetworkSyncAdaptor::Error);
+        return;
+    }
     if (!initRemovalDetectionLists(accountId)) {
         SOCIALD_LOG_ERROR("unable to initialized cached account list for account" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -308,29 +317,46 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
         QString createdTimeStr = imageObject.value(QLatin1String("created_time")).toString();
         QString updatedTimeStr = imageObject.value(QLatin1String("updated_time")).toString();
         QString photoName = imageObject.value(QLatin1String("name")).toString();
+        int imageWidth = 0;
+        int imageHeight = 0;
 
-        // Find the correct thumbnail size. The fallback will be the "picture" which usually
-        // is too small so this is sort of best guess what sizes FB might returns. We can't
-        // also hardcode the exact sizes here, because we can't be sure that certains sizes
-        // will stay for ever.
-        // TODO: we can use https://graph.facebook.com/v2.2/object_id/picture?type=large
+        // Find optimal thumbnail and image source urls based on dimensions.
+        QList<ImageSource> imageSources;
         QJsonArray images = imageObject.value(QLatin1String("images")).toArray();
         foreach (const QJsonValue &imageValue, images) {
             QJsonObject image = imageValue.toObject();
-            int width = static_cast<int>(image.value(QLatin1String("width")).toDouble());
-            int height= static_cast<int>(image.value(QLatin1String("height")).toDouble());
-            if (160 <= width && width <= 350 &&
-                160 <= height && height <= 350) {
-                thumbnailUrl = image.value(QLatin1String("source")).toString();
-                break;
-            }
+            imageSources << ImageSource(static_cast<int>(image.value(QLatin1String("width")).toDouble()),
+                                        static_cast<int>(image.value(QLatin1String("height")).toDouble()),
+                                        image.value(QLatin1String("source")).toString());
         }
 
-        int width = static_cast<int>(imageObject.value(QLatin1String("width")).toDouble());
-        int height = static_cast<int>(imageObject.value(QLatin1String("height")).toDouble());
+        bool foundOptimalThumbnail = false, foundOptimalImage = false;
+        std::sort(imageSources.begin(), imageSources.end());
+        Q_FOREACH (const ImageSource &img, imageSources) {
+            if (!foundOptimalThumbnail && qMin(img.width, img.height) >= m_optimalThumbnailWidth) {
+                foundOptimalThumbnail = true;
+                thumbnailUrl = img.sourceUrl;
+            }
+            if (!foundOptimalImage && qMin(img.width, img.height) >= m_optimalImageWidth) {
+                foundOptimalImage = true;
+                imageWidth = img.width;
+                imageHeight = img.height;
+                imageSrcUrl = img.sourceUrl;
+            }
+        }
+        if (!foundOptimalThumbnail) {
+            // just choose the largest one.
+            thumbnailUrl = imageSources.last().sourceUrl;
+        }
+        if (!foundOptimalImage) {
+            // just choose the largest one.
+            imageSrcUrl = imageSources.last().sourceUrl;
+            imageWidth = imageSources.last().width;
+            imageHeight = imageSources.last().height;
+        }
+
         QDateTime createdTime = QDateTime::fromString(createdTimeStr, Qt::ISODate);
         QDateTime updatedTime = QDateTime::fromString(updatedTimeStr, Qt::ISODate);
-
         if (!m_serverImageIds[fbAlbumId].contains(photoId)) {
             m_serverImageIds[fbAlbumId].insert(photoId);
         }
@@ -339,9 +365,9 @@ void FacebookImageSyncAdaptor::imagesFinishedHandler()
         if (haveAlreadyCachedImage(photoId, imageSrcUrl)) {
             SOCIALD_LOG_DEBUG("have previously cached photo" << photoId << ":" << imageSrcUrl);
         } else {
-            SOCIALD_LOG_DEBUG("caching new photo" << photoId << ":" << imageSrcUrl);
+            SOCIALD_LOG_DEBUG("caching new photo" << photoId << ":" << imageSrcUrl << "->" << imageWidth << "x" << imageHeight);
             m_db.addImage(photoId, fbAlbumId, fbUserId, createdTime, updatedTime,
-                          photoName, width, height, thumbnailUrl, imageSrcUrl);
+                          photoName, imageWidth, imageHeight, thumbnailUrl, imageSrcUrl);
         }
     }
     // perform a continuation request if required.
@@ -481,4 +507,29 @@ void FacebookImageSyncAdaptor::checkRemovedImages(const QString &fbAlbumId)
     }
 
     m_removedImages.append(cachedImageIds.toList());
+}
+
+bool FacebookImageSyncAdaptor::determineOptimalDimensions()
+{
+    int width = 0, height = 0;
+    const int defaultValue = 0;
+    MGConfItem widthConf("/lipstick/screen/primary/width");
+    if (widthConf.value(defaultValue).toInt() != defaultValue) {
+        width = widthConf.value(defaultValue).toInt();
+    }
+    MGConfItem heightConf("/lipstick/screen/primary/height");
+    if (heightConf.value(defaultValue).toInt() != defaultValue) {
+        height = heightConf.value(defaultValue).toInt();
+    }
+
+    // we want to use the largest of these dimensions as the "optimal"
+    int maxDimension = qMax(width, height);
+    if (maxDimension % 3 == 0) {
+        m_optimalThumbnailWidth = maxDimension / 3;
+    } else {
+        m_optimalThumbnailWidth = (maxDimension / 2);
+    }
+    m_optimalImageWidth = maxDimension;
+    SOCIALD_LOG_DEBUG("Determined optimal image dimension:" << m_optimalImageWidth << ", thumbnail:" << m_optimalThumbnailWidth);
+    return true;
 }
