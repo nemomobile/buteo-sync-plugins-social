@@ -1342,6 +1342,11 @@ void GoogleCalendarSyncAdaptor::finishedRequestingRemoteEvents(int accountId, co
     foreach (const QString &updatedCalendarId, m_calendarsFinishedRequested.keys()) {
         QString updateTimestamp = m_calendarsFinishedRequested.value(updatedCalendarId);
         mKCal::Notebook::Ptr notebook = notebookForCalendarId(accountId, updatedCalendarId);
+        if (!notebook) {
+            SOCIALD_LOG_ERROR("local notebook associated with calendar:" << updatedCalendarId << "from account:" << accountId << "was deleted during sync!");
+            m_syncSucceeded[accountId] = false;
+            continue; // but still continue, to ensure local database is in usable state.
+        }
         KDateTime syncDate = datetimeFromUpdateStr(updateTimestamp);
         notebook->setSyncDate(syncDate);
         m_storage->updateNotebook(notebook);
