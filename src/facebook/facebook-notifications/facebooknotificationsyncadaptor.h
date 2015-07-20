@@ -47,6 +47,8 @@ private:
     void requestNotifications(int accountId, const QString &accessToken,
                               const QString &until = QString(),
                               const QString &pagingToken = QString());
+    QDateTime lastSuccessfulSyncTime(int accountId);
+    void setLastSuccessfulSyncTime(int accountId);
 
 private Q_SLOTS:
     void finishedHandler();
