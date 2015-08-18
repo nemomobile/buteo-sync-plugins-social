@@ -240,24 +240,29 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
     copyPost.text = post.value(QStringLiteral("copy_text")).toString();
     newPost.copyPost = copyPost;
 
-    QString identifier = post.contains(QStringLiteral("id"))
-                       ? QString::number(post.value(QStringLiteral("id")).toDouble())
-                       : QString::number(post.value(QStringLiteral("post_id")).toDouble());
     QDateTime createdTime = VKDataTypeSyncAdaptor::parseVKDateTime(post.value(QStringLiteral("date")));
     QString body = post.value(QStringLiteral("text")).toString();
     QString posterName, posterIcon;
+    int fromId = newPost.fromId;
     if (newPost.fromId < 0) {
         // it was posted by a group
         const GroupProfile &group(VKDataTypeSyncAdaptor::findGroupProfile(groupProfiles, newPost.fromId));
         posterName = group.name;
         posterIcon = group.icon;
-
+        fromId = -fromId;
     } else {
         // it was posted by a user
         const UserProfile &user(VKDataTypeSyncAdaptor::findUserProfile(userProfiles, newPost.fromId));
         posterName = user.name();
         posterIcon = user.icon;
     }
+
+    // VK post indentifier is just index number and not globally unique. To make
+    // it unique we combine it with fromId
+    QString identifier = QString::number(fromId) + QStringLiteral("_") +
+                       (post.contains(QStringLiteral("id"))
+                          ? QString::number(post.value(QStringLiteral("id")).toDouble())
+                          : QString::number(post.value(QStringLiteral("post_id")).toDouble()));
 
     SOCIALD_LOG_TRACE("Adding new VK post:" << identifier << "from:" << posterName << "at:" << createdTime);
     Q_FOREACH (const QString &line, body.split('\n')) { SOCIALD_LOG_TRACE(line); }
