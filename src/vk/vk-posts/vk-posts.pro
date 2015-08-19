@@ -8,6 +8,8 @@ include($$PWD/../../common.pri)
 include($$PWD/../vk-common.pri)
 include($$PWD/vk-posts.pri)
 
+PKGCONFIG += mlite5
+
 vk_posts_sync_profile.path = /etc/buteo/profiles/sync
 vk_posts_sync_profile.files = $$PWD/vk.Posts.xml
 vk_posts_client_plugin_xml.path = /etc/buteo/profiles/client

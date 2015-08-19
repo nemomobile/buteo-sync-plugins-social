@@ -38,6 +38,7 @@ protected: // implementing VKDataTypeSyncAdaptor interface
 
 private:
     void requestPosts(int accountId, const QString &accessToken);
+    void determineOptimalImageSize();
 
 private Q_SLOTS:
     void finishedPostsHandler();
@@ -57,6 +58,7 @@ private:
     };
     QList<PostData> m_postsToAdd;
     VKPostsDatabase m_db;
+    QString m_optimalImageSize;
 };
 
 #endif // VKPOSTSYNCADAPTOR_H
