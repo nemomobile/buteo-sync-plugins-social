@@ -16,6 +16,8 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/QUrlQuery>
 
+#include <MGConfItem>
+
 #define SOCIALD_VK_POSTS_ID_PREFIX QStringLiteral("vk-posts-")
 #define SOCIALD_VK_POSTS_GROUPNAME QStringLiteral("vk")
 
@@ -60,6 +62,7 @@ void VKPostSyncAdaptor::finalize(int accountId)
     } else {
         SOCIALD_LOG_DEBUG("finalizing VK posts sync with account:" << accountId);
         m_db.removePosts(accountId); // always purge all posts for the account, prior to saving most recent.
+        determineOptimalImageSize();
         Q_FOREACH (const PostData &post, m_postsToAdd) {
             saveVKPostFromObject(post.accountId, post.post, post.userProfiles, post.groupProfiles);
         }
@@ -212,7 +215,7 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
         if (type == QStringLiteral("photo")
                 || type == QStringLiteral("posted_photo")
                 || type == QStringLiteral("graffiti")) {
-            QString src = typedValue.value(QStringLiteral("photo_1280")).toString();
+            QString src = typedValue.value(m_optimalImageSize).toString();
             if (!src.isEmpty()) {
                 images.append(qMakePair(src, SocialPostImage::Photo));
             }
@@ -268,4 +271,31 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
     Q_FOREACH (const QString &line, body.split('\n')) { SOCIALD_LOG_TRACE(line); }
 
     m_db.addVKPost(identifier, createdTime, body, newPost, images, posterName, posterIcon, accountId);
+}
+
+
+void VKPostSyncAdaptor::determineOptimalImageSize()
+{
+    int width = 0, height = 0;
+    const int defaultValue = 0;
+    MGConfItem widthConf("/lipstick/screen/primary/width");
+    if (widthConf.value(defaultValue).toInt() != defaultValue) {
+        width = widthConf.value(defaultValue).toInt();
+    }
+    MGConfItem heightConf("/lipstick/screen/primary/height");
+    if (heightConf.value(defaultValue).toInt() != defaultValue) {
+        height = heightConf.value(defaultValue).toInt();
+    }
+
+    // we want to use the largest of these dimensions as the "optimal"
+    int maxDimension = qMax(width, height);
+    if (maxDimension >= 2048) {
+        m_optimalImageSize = "photo_1280";
+    } else if (maxDimension >= 960) {
+        m_optimalImageSize = "photo_604";
+    } else {
+        m_optimalImageSize = "photo_75";
+    }
+
+    SOCIALD_LOG_DEBUG("Determined optimal image size for dimension " << maxDimension << " as " << m_optimalImageSize);
 }
