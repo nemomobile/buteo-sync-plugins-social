@@ -212,7 +212,7 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
         if (type == QStringLiteral("photo")
                 || type == QStringLiteral("posted_photo")
                 || type == QStringLiteral("graffiti")) {
-            QString src = typedValue.value(QStringLiteral("photo_75")).toString();
+            QString src = typedValue.value(QStringLiteral("photo_1280")).toString();
             if (!src.isEmpty()) {
                 images.append(qMakePair(src, SocialPostImage::Photo));
             }
