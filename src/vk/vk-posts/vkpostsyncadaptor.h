@@ -39,6 +39,8 @@ protected: // implementing VKDataTypeSyncAdaptor interface
 private:
     void requestPosts(int accountId, const QString &accessToken);
     void determineOptimalImageSize();
+    QDateTime lastSuccessfulSyncTime(int accountId);
+    void setLastSuccessfulSyncTime(int accountId);
 
 private Q_SLOTS:
     void finishedPostsHandler();

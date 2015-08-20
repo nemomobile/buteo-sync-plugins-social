@@ -61,23 +61,34 @@ void VKPostSyncAdaptor::finalize(int accountId)
         SOCIALD_LOG_DEBUG("sync aborted, skipping finalize of VK Posts from account:" << accountId);
     } else {
         SOCIALD_LOG_DEBUG("finalizing VK posts sync with account:" << accountId);
-        m_db.removePosts(accountId); // always purge all posts for the account, prior to saving most recent.
         determineOptimalImageSize();
         Q_FOREACH (const PostData &post, m_postsToAdd) {
             saveVKPostFromObject(post.accountId, post.post, post.userProfiles, post.groupProfiles);
         }
         m_db.commit();
         m_db.wait();
+
+        setLastSuccessfulSyncTime(accountId);
     }
 }
 
 void VKPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
 {
+
+    QDateTime since = lastSuccessfulSyncTime(accountId);
+    if (!since.isValid()) {
+        int sinceSpan = m_accountSyncProfile
+                      ? m_accountSyncProfile->key(Buteo::KEY_SYNC_SINCE_DAYS_PAST, QStringLiteral("7")).toInt()
+                      : 7;
+        since = QDateTime::currentDateTime().addDays(-1 * sinceSpan).toUTC();
+    }
+
     QList<QPair<QString, QString> > queryItems;
     queryItems.append(QPair<QString, QString>(QStringLiteral("access_token"), accessToken));
     queryItems.append(QPair<QString, QString>(QStringLiteral("extended"), QStringLiteral("1")));
     queryItems.append(QPair<QString, QString>(QStringLiteral("v"), QStringLiteral("5.21"))); // version
     queryItems.append(QPair<QString, QString>(QStringLiteral("filters"), QStringLiteral("post,photo,photo_tag,wall_photo,note")));
+    queryItems.append(QPair<QString, QString>(QStringLiteral("start_time"), QString::number(since.toTime_t())));
 
     QUrl url(QStringLiteral("https://api.vk.com/method/newsfeed.get"));
     QUrlQuery query(url);
@@ -298,4 +309,31 @@ void VKPostSyncAdaptor::determineOptimalImageSize()
     }
 
     SOCIALD_LOG_DEBUG("Determined optimal image size for dimension " << maxDimension << " as " << m_optimalImageSize);
+}
+
+// TODO: this is also in Facebook notifications adapter. Move to base class.
+QDateTime VKPostSyncAdaptor::lastSuccessfulSyncTime(int accountId)
+{
+    QDateTime result;
+    QString settingsFileName = QString::fromLatin1("%1/%2/vkposts.ini")
+            .arg(QString::fromLatin1(PRIVILEGED_DATA_DIR))
+            .arg(QString::fromLatin1(SYNC_DATABASE_DIR));
+    QSettings settingsFile(settingsFileName, QSettings::IniFormat);
+    uint timestamp = settingsFile.value(QString::fromLatin1("%1-last-successful-sync-time").arg(accountId)).toUInt();
+    if (timestamp > 0) {
+        result = QDateTime::fromTime_t(timestamp);
+    }
+    return result;
+}
+
+void VKPostSyncAdaptor::setLastSuccessfulSyncTime(int accountId)
+{
+    QDateTime currentTime = QDateTime::currentDateTime().toUTC();
+    QString settingsFileName = QString::fromLatin1("%1/%2/vkposts.ini")
+            .arg(QString::fromLatin1(PRIVILEGED_DATA_DIR))
+            .arg(QString::fromLatin1(SYNC_DATABASE_DIR));
+    QSettings settingsFile(settingsFileName, QSettings::IniFormat);
+    settingsFile.setValue(QString::fromLatin1("%1-last-successful-sync-time").arg(accountId),
+                          QVariant::fromValue<uint>(currentTime.toTime_t()));
+    settingsFile.sync();
 }
