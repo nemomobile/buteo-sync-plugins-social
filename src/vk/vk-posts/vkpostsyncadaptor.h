@@ -19,6 +19,7 @@
 #include <QtNetwork/QSslError>
 
 #include <socialcache/vkpostsdatabase.h>
+#include <socialcache/socialimagesdatabase.h>
 
 class VKPostSyncAdaptor : public VKDataTypeSyncAdaptor
 {
@@ -61,6 +62,7 @@ private:
     QList<PostData> m_postsToAdd;
     VKPostsDatabase m_db;
     QString m_optimalImageSize;
+    SocialImagesDatabase m_imageCacheDb;
 };
 
 #endif // VKPOSTSYNCADAPTOR_H
