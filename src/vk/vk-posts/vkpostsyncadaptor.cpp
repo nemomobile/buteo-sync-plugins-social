@@ -47,6 +47,11 @@ void VKPostSyncAdaptor::purgeDataForOldAccount(int oldId, SocialNetworkSyncAdapt
     m_db.removePosts(oldId);
     m_db.commit();
     m_db.wait();
+
+    // social media feed UI caches feed images and maintains bindings between
+    // source and cached image in SocialImageDatabase.
+    // purge cached images belonging to this account.
+    purgeCachedImages(&m_imageCacheDb, oldId);
 }
 
 void VKPostSyncAdaptor::beginSync(int accountId, const QString &accessToken)
@@ -68,6 +73,10 @@ void VKPostSyncAdaptor::finalize(int accountId)
         m_db.commit();
         m_db.wait();
 
+        // manage image cache. Social media feed UI caches feed images
+        // and maintains bindings between source and cached image in SocialImageDatabase.
+        // purge cached images older than four weeks.
+        purgeExpiredImages(&m_imageCacheDb, accountId);
         setLastSuccessfulSyncTime(accountId);
     }
 }
