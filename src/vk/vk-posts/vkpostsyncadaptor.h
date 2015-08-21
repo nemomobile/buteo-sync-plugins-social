@@ -39,15 +39,17 @@ protected: // implementing VKDataTypeSyncAdaptor interface
 
 private:
     void requestPosts(int accountId, const QString &accessToken);
+    void requestProfiles(int accountId, const QString &accessToken);
     void determineOptimalImageSize();
     QDateTime lastSuccessfulSyncTime(int accountId);
     void setLastSuccessfulSyncTime(int accountId);
 
 private Q_SLOTS:
     void finishedPostsHandler();
+    void finishedProfilesHandler();
 
 private:
-    void saveVKPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles, const QList<GroupProfile> &groupProfiles);
+    void parseVKPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles, const QList<GroupProfile> &groupProfiles);
     struct PostData {
         PostData() : accountId(0) {}
         PostData(int accountId, const QJsonObject &object,
@@ -59,7 +61,30 @@ private:
         QList<UserProfile> userProfiles;
         QList<GroupProfile> groupProfiles;
     };
+    struct ParsedPostData {
+        ParsedPostData() : accountId(0) {}
+        ParsedPostData(const QString &identifier, const QDateTime &createdTime,
+                       const QString &body, const VKPostsDatabase::Post &post,
+                       const QList<QPair<QString, SocialPostImage::ImageType> > &images,
+                       const QString &posterName,
+                       const QString &posterIcon,
+                       int accountId)
+            : identifier(identifier), createdTime(createdTime)
+            , body(body), post(post)
+            , images(images), posterName(posterName)
+            , posterIcon(posterIcon), accountId(accountId) {}
+        QString identifier;
+        QDateTime createdTime;
+        QString body;
+        VKPostsDatabase::Post post;
+        QList<QPair<QString, SocialPostImage::ImageType> > images;
+        QString posterName;
+        QString posterIcon;
+        int accountId;
+    };
+
     QList<PostData> m_postsToAdd;
+    QList<ParsedPostData> m_parsedPosts;
     VKPostsDatabase m_db;
     QString m_optimalImageSize;
     SocialImagesDatabase m_imageCacheDb;

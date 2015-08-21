@@ -66,10 +66,11 @@ void VKPostSyncAdaptor::finalize(int accountId)
         SOCIALD_LOG_DEBUG("sync aborted, skipping finalize of VK Posts from account:" << accountId);
     } else {
         SOCIALD_LOG_DEBUG("finalizing VK posts sync with account:" << accountId);
-        determineOptimalImageSize();
-        Q_FOREACH (const PostData &post, m_postsToAdd) {
-            saveVKPostFromObject(post.accountId, post.post, post.userProfiles, post.groupProfiles);
+
+        Q_FOREACH (const ParsedPostData &parsedPost, m_parsedPosts) {
+            m_db.addVKPost(parsedPost.identifier, parsedPost.createdTime, parsedPost.body, parsedPost.post, parsedPost.images, parsedPost.posterName, parsedPost.posterIcon, parsedPost.accountId);
         }
+
         m_db.commit();
         m_db.wait();
 
@@ -97,7 +98,7 @@ void VKPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
     queryItems.append(QPair<QString, QString>(QStringLiteral("extended"), QStringLiteral("1")));
     queryItems.append(QPair<QString, QString>(QStringLiteral("v"), QStringLiteral("5.21"))); // version
     queryItems.append(QPair<QString, QString>(QStringLiteral("filters"), QStringLiteral("post,photo,photo_tag,wall_photo,note")));
-    queryItems.append(QPair<QString, QString>(QStringLiteral("start_time"), QString::number(since.toTime_t())));
+//    queryItems.append(QPair<QString, QString>(QStringLiteral("start_time"), QString::number(since.toTime_t())));
 
     QUrl url(QStringLiteral("https://api.vk.com/method/newsfeed.get"));
     QUrlQuery query(url);
@@ -125,6 +126,7 @@ void VKPostSyncAdaptor::finishedPostsHandler()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     bool isError = reply->property("isError").toBool();
     int accountId = reply->property("accountId").toInt();
+    QString accessToken = reply->property("accessToken").toString();
 
     QByteArray replyData = reply->readAll();
     disconnect(reply);
@@ -183,11 +185,115 @@ void VKPostSyncAdaptor::finishedPostsHandler()
                           << accountId << "got:" << QString::fromUtf8(replyData));
     }
 
+    qDebug("PARSE ALREADY HERE....");
+    determineOptimalImageSize();
+    Q_FOREACH (const PostData &post, m_postsToAdd) {
+        parseVKPostFromObject(post.accountId, post.post, post.userProfiles, post.groupProfiles);
+    }
+
+    // we're finished this request.  Decrement our busy semaphore.
+    //decrementSemaphore(accountId);
+    requestProfiles(accountId, accessToken);
+}
+
+void VKPostSyncAdaptor::requestProfiles(int accountId, const QString &accessToken)
+{
+    qDebug("*** GET PROFILES ---");
+
+    QString uids;
+    Q_FOREACH (const ParsedPostData postData, m_parsedPosts) {
+         if (postData.post.copyPost.ownerId > 0) {
+             uids += QString::number(postData.post.copyPost.ownerId) + QStringLiteral(",");
+         }
+    }
+
+    if (uids.isEmpty()) {
+        // no repost data to query, proceed to process the results.
+        qDebug("NO REPOST DATA!");
+        decrementSemaphore(accountId);
+        return;
+    }
+
+    uids.chop(1);  // remove last comma
+
+    QList<QPair<QString, QString> > queryItems;
+    queryItems.append(QPair<QString, QString>(QStringLiteral("access_token"), accessToken));
+    queryItems.append(QPair<QString, QString>(QStringLiteral("v"), QStringLiteral("5.21"))); // version
+    queryItems.append(QPair<QString, QString>(QStringLiteral("fields"), QStringLiteral("uid,first_name,last_name,photo")));
+    queryItems.append(QPair<QString, QString>(QStringLiteral("uids"), uids)); // version
+
+    QUrl url(QStringLiteral("https://api.vk.com/method/getProfiles"));
+    QUrlQuery query(url);
+    query.setQueryItems(queryItems);
+    url.setQuery(query);
+
+    qDebug("GET PROFILES URL: %s", qPrintable(url.toString()));
+
+    QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(url));
+
+    if (reply) {
+        reply->setProperty("accountId", accountId);
+        reply->setProperty("accessToken", accessToken);
+        connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
+        connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslErrorsHandler(QList<QSslError>)));
+        connect(reply, SIGNAL(finished()), this, SLOT(finishedProfilesHandler()));
+
+        setupReplyTimeout(accountId, reply);
+    } else {
+        SOCIALD_LOG_ERROR("error: unable to request home posts from VK account with id:" << accountId);
+    }
+}
+
+void VKPostSyncAdaptor::finishedProfilesHandler()
+{
+    qDebug("**** VKPostSyncAdaptor::finishedProfilesHandler");
+
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    bool isError = reply->property("isError").toBool();
+    int accountId = reply->property("accountId").toInt();
+
+    QByteArray replyData = reply->readAll();
+    disconnect(reply);
+    reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
+
+    qDebug("PROFILES REPLY: %s", qPrintable(QString(replyData)));
+
+    bool ok = false;
+    QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
+
+    if (!isError && ok && parsed.contains(QStringLiteral("response"))) {
+        QJsonArray responseArray = parsed.value(QStringLiteral("response")).toArray();
+
+        foreach (QJsonValue data, responseArray) {
+            QJsonObject dataMap = data.toObject();
+            QString uid = dataMap.value(QLatin1String("id")).toVariant().toString();
+            QString firstName = dataMap.value(QLatin1String("first_name")).toVariant().toString();
+            QString lastName = dataMap.value(QLatin1String("last_name")).toVariant().toString();
+            QString photo = dataMap.value(QLatin1String("photo")).toVariant().toString();
+//            qDebug("RESP UID: %s", qPrintable(uid));
+
+            for (QList<ParsedPostData>::iterator it = m_parsedPosts.begin();
+                    it != m_parsedPosts.end(); ++it) {
+//                qDebug("CHECKING UID: %s", qPrintable(QString::number(it->post.copyPost.ownerId)));
+                if (QString::number(it->post.copyPost.ownerId) == uid) {
+//                    qDebug("IT'S A MATCH!!!");
+                    it->post.copyPost.ownerName = firstName + QStringLiteral(" ") + lastName;
+//                    qDebug("OWNER NAME: %s", qPrintable(it->post.copyPost.ownerName));
+                    it->post.copyPost.ownerAvatar = photo;
+                    break;
+                }
+            }
+        }
+    } else {
+        SOCIALD_LOG_ERROR("error: unable to parse VK getProfiles reply: " << accountId);
+    }
+
     // we're finished this request.  Decrement our busy semaphore.
     decrementSemaphore(accountId);
 }
 
-void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles, const QList<GroupProfile> &groupProfiles)
+void VKPostSyncAdaptor::parseVKPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles, const QList<GroupProfile> &groupProfiles)
 {
     VKPostsDatabase::Post newPost;
     newPost.fromId = post.contains(QStringLiteral("from_id"))
@@ -261,6 +367,43 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
     copyPost.ownerId = int(post.value(QStringLiteral("copy_owner_id")).toDouble());
     copyPost.postId = int(post.value(QStringLiteral("copy_post_id")).toDouble());
     copyPost.text = post.value(QStringLiteral("copy_text")).toString();
+
+    if (post.contains(QStringLiteral("copy_history")) && copyPost.type.isEmpty()) {
+        QJsonArray copyHistory = post.value(QStringLiteral("copy_history")).toArray();
+        //qDebug() << "COPY HISTORY KEYS: " << copyHistory.toVariantList();
+        foreach (const QJsonValue historyValue, copyHistory) {
+            QJsonObject object = historyValue.toObject();
+            QStringList keys = object.keys();
+            if (keys.contains(QStringLiteral("owner_id"))) {
+                int ownerId = (int)object.value(QStringLiteral("owner_id")).toDouble();
+                if (ownerId > 0) {
+                    copyPost.ownerId = ownerId;
+                    qDebug("HAD OWNER ID: %d", copyPost.ownerId);
+
+                    if (keys.contains(QStringLiteral("attachments"))) {
+                        QJsonArray attachments = object.value(QStringLiteral("attachments")).toArray();
+                        foreach (const QJsonValue attachment, attachments) {
+                            QJsonObject attachmentObject = attachment.toObject();
+                            copyPost.type = attachmentObject.value("type").toString();
+                            //qDebug() << "ATT: " << attachmentObject.keys();
+                            //qDebug("   TYPE: %s", qPrintable(attachmentObject.value("type").toString()));
+                        }
+                    }
+                    if (keys.contains(QStringLiteral("text"))) {
+                        //qDebug("HAS TEXT");
+                        copyPost.text = object.value(QStringLiteral("text")).toString();
+                    }
+                }
+            }
+        }
+
+        if (copyPost.type.isEmpty()) {
+            copyPost.type = QStringLiteral("post");
+        }
+        //qDebug("SET COPY POST TYPE TO: %s", qPrintable(copyPost.type));
+        //qDebug("SET COPY POST TEXT TO: %s", qPrintable(copyPost.text));
+    }
+
     newPost.copyPost = copyPost;
 
     QDateTime createdTime = VKDataTypeSyncAdaptor::parseVKDateTime(post.value(QStringLiteral("date")));
@@ -287,10 +430,11 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
                           ? QString::number(post.value(QStringLiteral("id")).toDouble())
                           : QString::number(post.value(QStringLiteral("post_id")).toDouble()));
 
-    SOCIALD_LOG_TRACE("Adding new VK post:" << identifier << "from:" << posterName << "at:" << createdTime);
+    SOCIALD_LOG_TRACE("((101)Adding new VK post:" << identifier << "from:" << posterName << "at:" << createdTime);
     Q_FOREACH (const QString &line, body.split('\n')) { SOCIALD_LOG_TRACE(line); }
 
-    m_db.addVKPost(identifier, createdTime, body, newPost, images, posterName, posterIcon, accountId);
+    m_parsedPosts.append(ParsedPostData(identifier, createdTime, body, newPost, images, posterName, posterIcon, accountId));
+    //m_db.addVKPost(identifier, createdTime, body, newPost, images, posterName, posterIcon, accountId);
 }
 
 
