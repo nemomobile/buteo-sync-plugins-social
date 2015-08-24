@@ -83,7 +83,6 @@ void VKPostSyncAdaptor::finalize(int accountId)
 
 void VKPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
 {
-
     QDateTime since = lastSuccessfulSyncTime(accountId);
     if (!since.isValid()) {
         int sinceSpan = m_accountSyncProfile
@@ -97,7 +96,7 @@ void VKPostSyncAdaptor::requestPosts(int accountId, const QString &accessToken)
     queryItems.append(QPair<QString, QString>(QStringLiteral("extended"), QStringLiteral("1")));
     queryItems.append(QPair<QString, QString>(QStringLiteral("v"), QStringLiteral("5.21"))); // version
     queryItems.append(QPair<QString, QString>(QStringLiteral("filters"), QStringLiteral("post,photo,photo_tag,wall_photo,note")));
-    queryItems.append(QPair<QString, QString>(QStringLiteral("start_time"), QString::number(since.toTime_t())));
+    //queryItems.append(QPair<QString, QString>(QStringLiteral("start_time"), QString::number(since.toTime_t())));
 
     QUrl url(QStringLiteral("https://api.vk.com/method/newsfeed.get"));
     QUrlQuery query(url);
@@ -256,11 +255,70 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
     }
 
     VKPostsDatabase::CopyPost copyPost;
-    copyPost.createdTime = VKDataTypeSyncAdaptor::parseVKDateTime(post.value(QStringLiteral("copy_post_date")));
+/*    copyPost.createdTime = VKDataTypeSyncAdaptor::parseVKDateTime(post.value(QStringLiteral("copy_post_date")));
     copyPost.type = post.value(QStringLiteral("copy_post_type")).toString();
     copyPost.ownerId = int(post.value(QStringLiteral("copy_owner_id")).toDouble());
     copyPost.postId = int(post.value(QStringLiteral("copy_post_id")).toDouble());
-    copyPost.text = post.value(QStringLiteral("copy_text")).toString();
+    copyPost.text = post.value(QStringLiteral("copy_text")).toString(); */
+
+    if (post.contains(QStringLiteral("copy_history")) && copyPost.type.isEmpty()) {
+        QJsonArray copyHistory = post.value(QStringLiteral("copy_history")).toArray();
+        //qDebug() << "COPY HISTORY KEYS: " << copyHistory.toVariantList();
+        foreach (const QJsonValue historyValue, copyHistory) {
+            QJsonObject object = historyValue.toObject();
+            QStringList keys = object.keys();
+            if (keys.contains(QStringLiteral("owner_id"))) {
+                int ownerId = (int)object.value(QStringLiteral("owner_id")).toDouble();
+                if (ownerId != 0) {
+                    if (ownerId > 0) {
+                        const UserProfile &user(VKDataTypeSyncAdaptor::findUserProfile(userProfiles, ownerId));
+                        copyPost.ownerName = user.name();
+                        copyPost.ownerAvatar = user.icon;
+                        //qDebug() << "REPOST FROM USER: " << copyPost.ownerName << "   AVATAR: " << copyPost.ownerAvatar;
+                    } else {
+                        // it was posted by a group
+                        const GroupProfile &group(VKDataTypeSyncAdaptor::findGroupProfile(groupProfiles, ownerId));
+                        copyPost.ownerName = group.name;
+                        copyPost.ownerAvatar = group.icon;
+                        ownerId = -ownerId;
+                        //qDebug() << "REPOST FROM GROUP: " << copyPost.ownerName << "   AVATAR: " << copyPost.ownerAvatar;
+                    }
+
+                    copyPost.ownerId = ownerId;
+                    //qDebug("HAD OWNER ID: %d", copyPost.ownerId);
+
+                    copyPost.createdTime = VKDataTypeSyncAdaptor::parseVKDateTime(object.value(QStringLiteral("date")));
+
+                    if (keys.contains(QStringLiteral("attachments"))) {
+                        QJsonArray attachments = object.value(QStringLiteral("attachments")).toArray();
+                        foreach (const QJsonValue attachment, attachments) {
+                            QJsonObject attachmentObject = attachment.toObject();
+                            copyPost.type = attachmentObject.value("type").toString();
+                            //qDebug() << "ATT: " << attachmentObject.keys();
+                            //qDebug() << "ATT OBJ: " << attachmentObject.toVariantMap();
+                            //qDebug("   TYPE: %s", qPrintable(attachmentObject.value("type").toString()));
+                            if (copyPost.type == QStringLiteral("photo")) {
+                                QJsonObject photoObject = attachmentObject.value(QStringLiteral("photo")).toObject();
+                                copyPost.photo = photoObject.value(m_optimalImageSize).toString();
+                                //qDebug("PARSED REPOST PHOTO: %s", qPrintable(copyPost.photo));
+                            }
+                        }
+                    }
+                    if (keys.contains(QStringLiteral("text"))) {
+                        //qDebug("HAS TEXT");
+                        copyPost.text = object.value(QStringLiteral("text")).toString();
+                    }
+                }
+            }
+        }
+
+        if (copyPost.type.isEmpty()) {
+            copyPost.type = QStringLiteral("post");
+        }
+        //qDebug("SET COPY POST TYPE TO: %s", qPrintable(copyPost.type));
+        //qDebug("SET COPY POST TEXT TO: %s", qPrintable(copyPost.text));
+    }
+
     newPost.copyPost = copyPost;
 
     QDateTime createdTime = VKDataTypeSyncAdaptor::parseVKDateTime(post.value(QStringLiteral("date")));
@@ -287,7 +345,6 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
                           ? QString::number(post.value(QStringLiteral("id")).toDouble())
                           : QString::number(post.value(QStringLiteral("post_id")).toDouble()));
 
-    SOCIALD_LOG_TRACE("Adding new VK post:" << identifier << "from:" << posterName << "at:" << createdTime);
     Q_FOREACH (const QString &line, body.split('\n')) { SOCIALD_LOG_TRACE(line); }
 
     m_db.addVKPost(identifier, createdTime, body, newPost, images, posterName, posterIcon, accountId);
