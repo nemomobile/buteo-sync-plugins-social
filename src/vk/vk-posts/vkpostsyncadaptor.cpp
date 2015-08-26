@@ -263,7 +263,9 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
         foreach (const QJsonValue historyValue, copyHistory) {
             QJsonObject object = historyValue.toObject();
             QStringList keys = object.keys();
+
             if (keys.contains(QStringLiteral("owner_id"))) {
+                QStringList images;
                 int ownerId = (int)object.value(QStringLiteral("owner_id")).toDouble();
                 if (ownerId != 0) {
                     if (ownerId > 0) {
@@ -285,16 +287,22 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
                         QJsonArray attachments = object.value(QStringLiteral("attachments")).toArray();
                         foreach (const QJsonValue attachment, attachments) {
                             QJsonObject attachmentObject = attachment.toObject();
-                            copyPost.type = attachmentObject.value("type").toString();
+                            copyPost.type = attachmentObject.value(QStringLiteral("type")).toString();
                             if (copyPost.type == QStringLiteral("photo")) {
                                 QJsonObject photoObject = attachmentObject.value(QStringLiteral("photo")).toObject();
-                                copyPost.photo = photoObject.value(m_optimalImageSize).toString();
-                                hasValidContent = true;
+                                QString photo = photoObject.value(m_optimalImageSize).toString();
+                                if (!photo.isEmpty()) {
+                                    images.append(photo);
+                                }
                             }
                         }
                     }
                     if (keys.contains(QStringLiteral("text"))) {
                         copyPost.text = object.value(QStringLiteral("text")).toString();
+                        hasValidContent = true;
+                    }
+                    if (images.count() > 0) {
+                        copyPost.photo = images.join(QStringLiteral(","));
                         hasValidContent = true;
                     }
                 }
