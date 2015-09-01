@@ -437,7 +437,7 @@ void SocialNetworkSyncAdaptor::purgeCachedImages(SocialImagesDatabase *database,
 
     QList<SocialImage::ConstPtr> images = database->images();
     foreach (SocialImage::ConstPtr image, images) {
-        SOCIALD_LOG_ERROR("Purge cached image " << image->imageFile() << " for account " << image->accountId());
+        SOCIALD_LOG_DEBUG("Purge cached image " << image->imageFile() << " for account " << image->accountId());
         QFile::remove(image->imageFile());
     }
 
@@ -454,7 +454,7 @@ void SocialNetworkSyncAdaptor::purgeExpiredImages(SocialImagesDatabase *database
 
     QList<SocialImage::ConstPtr> images = database->images();
     foreach (SocialImage::ConstPtr image, images) {
-        SOCIALD_LOG_ERROR("Purge expired image " << image->imageFile() << " for account " << image->accountId());
+        SOCIALD_LOG_DEBUG("Purge expired image " << image->imageFile() << " for account " << image->accountId());
         QFile::remove(image->imageFile());
     }
 
