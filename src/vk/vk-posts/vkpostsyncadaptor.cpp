@@ -70,6 +70,10 @@ void VKPostSyncAdaptor::finalize(int accountId)
         Q_FOREACH (const PostData &post, m_postsToAdd) {
             saveVKPostFromObject(post.accountId, post.post, post.userProfiles, post.groupProfiles);
         }
+        Q_FOREACH (const PostData &photoPost, m_photoPostsToAdd) {
+            saveVKPhotoPostFromObject(photoPost.accountId, photoPost.post, photoPost.userProfiles, photoPost.groupProfiles);
+        }
+
         m_db.commit();
         m_db.wait();
 
@@ -162,7 +166,7 @@ void VKPostSyncAdaptor::finishedPostsHandler()
                 if (object.value(QStringLiteral("type")).toString() == QStringLiteral("post")) {
                     m_postsToAdd.append(PostData(accountId, object, userProfiles, groupProfiles));
                 } else  if (object.value(QStringLiteral("type")).toString() == QStringLiteral("photo")) {
-                    SOCIALD_LOG_DEBUG("TODO: unhandled newsfeed item type:" << object.value(QStringLiteral("type")).toString() << ", skipping.");
+                    m_photoPostsToAdd.append(PostData(accountId, object, userProfiles, groupProfiles));
                 } else if (object.value(QStringLiteral("type")).toString() == QStringLiteral("photo_tag")) {
                     SOCIALD_LOG_DEBUG("TODO: unhandled newsfeed item type:" << object.value(QStringLiteral("type")).toString() << ", skipping.");
                 } else if (object.value(QStringLiteral("type")).toString() == QStringLiteral("wall_photo")) {
@@ -339,9 +343,11 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
     // VK post indentifier is just index number and not globally unique. To make
     // it unique we combine it with fromId
     QString identifier = QString::number(fromId) + QStringLiteral("_") +
-                       (post.contains(QStringLiteral("id"))
-                          ? QString::number(post.value(QStringLiteral("id")).toDouble())
-                          : QString::number(post.value(QStringLiteral("post_id")).toDouble()));
+                         (post.contains(QStringLiteral("id"))
+                            ? QString::number(post.value(QStringLiteral("id")).toDouble())
+                            : QString::number(post.value(QStringLiteral("post_id")).toDouble()));
+
+    newPost.link = QStringLiteral("https://m.vk.com/wall") + identifier;
 
     Q_FOREACH (const QString &line, body.split('\n')) { SOCIALD_LOG_TRACE(line); }
 
@@ -349,6 +355,66 @@ void VKPostSyncAdaptor::saveVKPostFromObject(int accountId, const QJsonObject &p
         m_db.addVKPost(identifier, createdTime, body, newPost, images, posterName, posterIcon, accountId);
     } else {
         SOCIALD_LOG_DEBUG("VK post without valid content, skipping");
+    }
+}
+
+void VKPostSyncAdaptor::saveVKPhotoPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles, const QList<GroupProfile> &groupProfiles)
+{
+    bool hasValidContent = false;
+
+    VKPostsDatabase::Post newPost;
+    newPost.fromId = int(post.value(QStringLiteral("source_id")).toDouble());
+
+    int photoOwnerId = 0;
+    int photoAlbumId = 0;
+    QList<QPair<QString, SocialPostImage::ImageType> > images;
+    QJsonObject photosObject = post.value(QStringLiteral("photos")).toObject();
+    if (!photosObject.isEmpty()) {
+        QJsonArray photoArray = photosObject.value(QStringLiteral("items")).toArray();
+        Q_FOREACH (const QJsonValue &photoValue, photoArray) {
+            QJsonObject photo = photoValue.toObject();
+            QString src = photo.value(m_optimalImageSize).toString();
+            if (!src.isEmpty()) {
+                photoOwnerId = (int)photo.value(QStringLiteral("owner_id")).toDouble();
+                photoAlbumId = (int)photo.value(QStringLiteral("album_id")).toDouble();
+                images.append(qMakePair(src, SocialPostImage::Photo));
+                hasValidContent = true;
+            }
+        }
+    }
+
+    QDateTime createdTime = VKDataTypeSyncAdaptor::parseVKDateTime(post.value(QStringLiteral("date")));
+    QString posterName, posterIcon;
+    int fromId = newPost.fromId;
+    if (newPost.fromId < 0) {
+        // it was posted by a group
+        const GroupProfile &group(VKDataTypeSyncAdaptor::findGroupProfile(groupProfiles, newPost.fromId));
+        posterName = group.name;
+        posterIcon = group.icon;
+        fromId = -fromId;
+    } else {
+        // it was posted by a user
+        const UserProfile &user(VKDataTypeSyncAdaptor::findUserProfile(userProfiles, newPost.fromId));
+        posterName = user.name();
+        posterIcon = user.icon;
+    }
+
+    // VK post indentifier is just index number and not globally unique. To make
+    // it unique we combine it with fromId
+    QString identifier = QString::number(fromId) + QStringLiteral("_") +
+                         (post.contains(QStringLiteral("id"))
+                            ? QString::number((int)post.value(QStringLiteral("id")).toDouble())
+                            : QString::number((int)post.value(QStringLiteral("post_id")).toDouble()));
+
+    newPost.link = QStringLiteral("https://m.vk.com/album")
+              + QString::number(photoOwnerId)
+              + QStringLiteral("_")
+              + QString::number(photoAlbumId);
+
+    if (hasValidContent) {
+        m_db.addVKPost(identifier, createdTime, QString(), newPost, images, posterName, posterIcon, accountId);
+    } else {
+        SOCIALD_LOG_DEBUG("VK photo post without valid content, skipping");
     }
 }
 
