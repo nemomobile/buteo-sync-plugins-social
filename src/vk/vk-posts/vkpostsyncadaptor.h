@@ -48,6 +48,7 @@ private Q_SLOTS:
 
 private:
     void saveVKPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles, const QList<GroupProfile> &groupProfiles);
+    void saveVKPhotoPostFromObject(int accountId, const QJsonObject &post, const QList<UserProfile> &userProfiles, const QList<GroupProfile> &groupProfiles);
     struct PostData {
         PostData() : accountId(0) {}
         PostData(int accountId, const QJsonObject &object,
@@ -60,6 +61,7 @@ private:
         QList<GroupProfile> groupProfiles;
     };
     QList<PostData> m_postsToAdd;
+    QList<PostData> m_photoPostsToAdd;
     VKPostsDatabase m_db;
     QString m_optimalImageSize;
     SocialImagesDatabase m_imageCacheDb;
