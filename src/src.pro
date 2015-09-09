@@ -3,4 +3,5 @@ SUBDIRS = \
     sociald \
     google \
     facebook \
-    twitter
+    twitter \
+    dropbox
