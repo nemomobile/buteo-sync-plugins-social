@@ -73,7 +73,8 @@ public:
         Posts,          // "Posts"
         Messages,       // "Messages"
         Emails,         // "Emails"
-        Signon          // "Signon" -- for refreshing AccessTokens etc.
+        Signon,         // "Signon" -- for refreshing AccessTokens etc.
+        Backup          // "Backup" -- for storing backup/restore blobs
     };
     static QStringList validDataTypes();
     static QString dataTypeName(DataType t);
