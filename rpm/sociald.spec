@@ -315,6 +315,36 @@ rm -f /home/nemo/.cache/msyncd/sync/twitter.Posts.xml
 systemctl-user try-restart msyncd.service || :
 
 
+
+
+%package onedrive-signon
+Summary:    Provides signon credentials refreshing with OneDrive
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description onedrive-signon
+Provides signon credentials refreshing with OneDrive
+
+%files onedrive-signon
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/onedrive-signon-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libonedrive-signon-client.so
+%config %{_sysconfdir}/buteo/profiles/client/onedrive-signon.xml
+%config %{_sysconfdir}/buteo/profiles/sync/onedrive.Signon.xml
+
+%pre onedrive-signon
+rm -f /home/nemo/.cache/msyncd/sync/client/onedrive-signon.xml
+rm -f /home/nemo/.cache/msyncd/sync/onedrive.Signon.xml
+
+%post onedrive-signon
+systemctl-user try-restart msyncd.service || :
+
+
+
+
 %package ts-devel
 Summary:    Translation source for sociald
 License:    LGPLv2.1
