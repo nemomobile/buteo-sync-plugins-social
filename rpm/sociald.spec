@@ -371,6 +371,34 @@ systemctl-user try-restart msyncd.service || :
 
 
 
+
+%package dropbox-backup
+Summary:    Provides backup-blob synchronization for Dropbox
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description dropbox-backup
+Provides backup-blob synchronization for Dropbox
+
+%files dropbox-backup
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/dropbox-backup-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libdropbox-backup-client.so
+%config %{_sysconfdir}/buteo/profiles/client/dropbox-backup.xml
+%config %{_sysconfdir}/buteo/profiles/sync/dropbox.Backup.xml
+
+%pre dropbox-backup
+rm -f /home/nemo/.cache/msyncd/sync/client/dropbox-backup.xml
+rm -f /home/nemo/.cache/msyncd/sync/dropbox.Backup.xml
+
+%post dropbox-backup
+systemctl-user try-restart msyncd.service || :
+
+
+
 %package ts-devel
 Summary:    Translation source for sociald
 License:    LGPLv2.1
