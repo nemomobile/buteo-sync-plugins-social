@@ -64,12 +64,12 @@ private Q_SLOTS:
     void userFinishedHandler();
 
 private:
-    QList<VKAlbum> m_receivedAlbums;
-    QList<VKImage> m_receivedPhotos;
-    QList<VKUser> m_receivedUsers;
+    QList<VKAlbum::ConstPtr> m_receivedAlbums;
+    QList<VKImage::ConstPtr> m_receivedPhotos;
+    QList<VKUser::ConstPtr> m_receivedUsers;
     QSet<QString> m_requestedUsers; // only want to request the user information once.
     QSet<QString> m_requestedPhotosForOwnerAndAlbum; // owner_id:album_id
-    QList<VKAlbum> m_emptyAlbums;
+    QList<VKAlbum::ConstPtr> m_emptyAlbums;
     VKImagesDatabase m_db;
     bool m_syncError;
 };

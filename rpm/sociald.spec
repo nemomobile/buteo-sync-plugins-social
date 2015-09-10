@@ -476,7 +476,7 @@ systemctl-user try-restart msyncd.service || :
 
 %package vk-notifications
 Summary:    Provides notification synchronisation with VK
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
 BuildRequires:  qt5-qttools-linguist
@@ -504,7 +504,7 @@ systemctl-user restart msyncd.service || :
 
 %package vk-calendars
 Summary:    Provides calendar synchronisation with VK
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(libmkcal-qt5)
 BuildRequires:  pkgconfig(libkcalcoren-qt5)
@@ -531,7 +531,7 @@ systemctl-user restart msyncd.service || :
 
 %package vk-contacts
 Summary:    Provides contact synchronisation with VK
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
@@ -558,7 +558,7 @@ systemctl-user restart msyncd.service || :
 
 %package vk-images
 Summary:    Provides image synchronisation with VK
-License:    TBD
+License:    LGPLv2.1
 Group:      System/Libraries
 Requires: %{name} = %{version}-%{release}
 
