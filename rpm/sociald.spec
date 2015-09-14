@@ -344,6 +344,32 @@ systemctl-user try-restart msyncd.service || :
 
 
 
+%package onedrive-images
+Summary:    Provides image synchronisation with OneDrive
+License:    LGPLv2.1
+Group:      System/Libraries
+Requires: %{name} = %{version}-%{release}
+
+%description onedrive-images
+Provides image synchronisation with OneDrive
+
+%files onedrive-images
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/onedrive-images-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libonedrive-images-client.so
+%config %{_sysconfdir}/buteo/profiles/client/onedrive-images.xml
+%config %{_sysconfdir}/buteo/profiles/sync/onedrive.Images.xml
+
+%pre onedrive-images
+rm -f /home/nemo/.cache/msyncd/sync/client/onedrive-images.xml
+rm -f /home/nemo/.cache/msyncd/sync/onedrive.Images.xml
+
+%post onedrive-images
+systemctl-user try-restart msyncd.service || :
+
+
+
 
 %package ts-devel
 Summary:    Translation source for sociald
