@@ -370,6 +370,31 @@ systemctl-user try-restart msyncd.service || :
 
 
 
+%package onedrive-backup
+Summary:    Provides backup-blob synchronization for OneDrive
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description onedrive-backup
+Provides backup-blob synchronization for OneDrive
+
+%files onedrive-backup
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/onedrive-backup-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libonedrive-backup-client.so
+%config %{_sysconfdir}/buteo/profiles/client/onedrive-backup.xml
+%config %{_sysconfdir}/buteo/profiles/sync/onedrive.Backup.xml
+
+%pre onedrive-backup
+rm -f /home/nemo/.cache/msyncd/sync/client/onedrive-backup.xml
+rm -f /home/nemo/.cache/msyncd/sync/onedrive.Backup.xml
+
+%post onedrive-backup
+systemctl-user try-restart msyncd.service || :
+
 
 %package ts-devel
 Summary:    Translation source for sociald
