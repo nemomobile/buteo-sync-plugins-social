@@ -423,6 +423,7 @@ QString SocialNetworkSyncAdaptor::dataTypeName(SocialNetworkSyncAdaptor::DataTyp
         case SocialNetworkSyncAdaptor::Messages:      return QStringLiteral("Messages");
         case SocialNetworkSyncAdaptor::Emails:        return QStringLiteral("Emails");
         case SocialNetworkSyncAdaptor::Signon:        return QStringLiteral("Signon");
+        case SocialNetworkSyncAdaptor::Backup:        return QStringLiteral("Backup");
         default: break;
     }
 

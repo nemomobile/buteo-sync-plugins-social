@@ -98,28 +98,18 @@ void OneDriveDataTypeSyncAdaptor::finalCleanup()
 void OneDriveDataTypeSyncAdaptor::errorHandler(QNetworkReply::NetworkError err)
 {
     // OneDrive sends error code 204 (HTTP code 401) for Unauthorized Error
-    // Note: sometimes it sends it spuriously
-    // For now, don't raise the flag, until we can solve
-    // any API rate limit issues associated with avatars
-    // which might cause this (if multiple accounts are involved).
-    // Another possible cause might be: if the ExpiresIn time
-    // is small (less than 30 seconds, say) it's possible that the
-    // access token will expire _during_ the sync process.
-    // XXX TODO: check expires time, force refresh if < 30.
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     if (err == QNetworkReply::AuthenticationRequiredError) {
         int httpCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        QByteArray jsonBody = reply->readAll();
-        qWarning() << "sociald:OneDrive: would normally set CredentialsNeedUpdate for account"
-                   << reply->property("accountId").toInt() << "but could be spurious\n"
-                   << "    Http code:" << httpCode << "\n"
-                   << "    Json body:\n" << jsonBody << "\n";
+        SOCIALD_LOG_INFO("sociald:OneDrive: received:" << httpCode <<
+                         "would normally set CredentialsNeedUpdate for account" <<
+                         reply->property("accountId").toInt() <<
+                         "but could be spurious");
     }
 
     SOCIALD_LOG_ERROR(SocialNetworkSyncAdaptor::dataTypeName(m_dataType) <<
                       "request with account" << sender()->property("accountId").toInt() <<
-                      "experienced error:" << err << "\n" <<
-                      QString::fromUtf8(reply->readAll()));
+                      "experienced error:" << err);
     // set "isError" on the reply so that adapters know to ignore the result in the finished() handler
     reply->setProperty("isError", QVariant::fromValue<bool>(true));
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
