@@ -56,20 +56,37 @@ private:
         Insert = 1,
         Modify = 2,
         Delete = 3,
-        CleanSync = 4 // delete followed by insert.
+        DeleteOccurrence = 4, // used to identify downsynced status->CANCELLED changes only
+        CleanSync = 5 // delete followed by insert.
     };
+
+    struct UpsyncChange {
+        UpsyncChange() : accountId(0), upsyncType(NoChange) {}
+        int accountId;
+        QString accessToken;
+        ChangeType upsyncType;
+        QString kcalEventId;
+        KDateTime recurrenceId;
+        QString calendarId;
+        QString eventId;
+        QByteArray eventData;
+    };
+
     void requestCalendars(int accountId, const QString &accessToken,
                           bool needCleanSync, const QString &pageToken = QString());
     void requestEvents(int accountId, const QString &accessToken,
                        const QString &calendarId, bool needCleanSync,
                        const QString &pageToken = QString());
     void updateLocalCalendarNotebooks(int accountId, const QString &accessToken, bool needCleanSync);
-    void updateLocalCalendarNotebookEvents(int accountId, const QString &accessToken,
+    QList<UpsyncChange> determineSyncDelta(int accountId, const QString &accessToken,
                                            const QString &calendarId, const QDateTime &since);
     void upsyncChanges(int accountId, const QString &accessToken,
                        GoogleCalendarSyncAdaptor::ChangeType upsyncType,
                        const QString &kcalEventId, const KDateTime &recurrenceId, const QString &calendarId,
                        const QString &eventId,const QByteArray &eventData);
+
+    void applyRemoteChangesLocally(int accountId);
+    void updateLocalCalendarNotebookEvents(int accountId, const QString &calendarId);
 
     mKCal::Notebook::Ptr notebookForCalendarId(int accountId, const QString &calendarId) const;
     void finishedRequestingRemoteEvents(int accountId, const QString &accessToken, const QString &calendarId, const QDateTime &since, const QString &updateTimestampStr);
@@ -92,27 +109,19 @@ private:
     QMap<int, QMultiMap<QString, QJsonObject> > m_calendarIdToEventObjects;
     QMap<int, QMap<QString, QString> > m_recurringEventIdToKCalUid;
     QMap<int, bool> m_syncSucceeded;
+    QMap<int, QDateTime> m_prevSinceTimestamp;
+    QMap<int, QDateTime> m_newSinceTimestamp;
 
     QStringList m_calendarsBeingRequested;               // calendarIds
     QMap<QString, QString> m_calendarsFinishedRequested; // calendarId to updated timestamp string
-
-    struct UpsyncChange {
-        UpsyncChange() : accountId(0), upsyncType(NoChange) {}
-        int accountId;
-        QString accessToken;
-        ChangeType upsyncType;
-        QString kcalEventId;
-        KDateTime recurrenceId;
-        QString calendarId;
-        QString eventId;
-        QByteArray eventData;
-    };
-    QList<UpsyncChange> m_changesToUpsync;
+    QMultiMap<QString, QPair<GoogleCalendarSyncAdaptor::ChangeType, QJsonObject> > m_changesFromDownsync; // calendarId to change
+    QMultiMap<QString, QPair<KCalCore::Event::Ptr, QJsonObject> > m_changesFromUpsync; // calendarId to event+upsyncResponse
 
     mKCal::ExtendedCalendar::Ptr m_calendar;
     mKCal::ExtendedStorage::Ptr m_storage;
     mutable KCalCore::ICalFormat m_icalFormat;
     bool m_storageNeedsSave;
+    QDateTime m_originalLastSyncTimestamp;
 };
 
 #endif // GOOGLECALENDARSYNCADAPTOR_H
