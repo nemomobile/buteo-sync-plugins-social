@@ -60,6 +60,14 @@ private:
         CleanSync = 5 // delete followed by insert.
     };
 
+    enum AccessRole {
+        NoAccess = 0,
+        FreeBusyReader = 1,
+        Reader = 2,
+        Writer = 3,
+        Owner = 4
+    };
+
     struct UpsyncChange {
         UpsyncChange() : accountId(0), upsyncType(NoChange) {}
         int accountId;
@@ -98,11 +106,12 @@ private Q_SLOTS:
 
 private:
     struct CalendarInfo {
-        CalendarInfo() : change(NoChange) {}
+        CalendarInfo() : change(NoChange), access(NoAccess) {}
         QString summary;
         QString description;
         QString color;
         ChangeType change;
+        AccessRole access;
     };
     QMap<int, QMap<QString, CalendarInfo> > m_serverCalendarIdToCalendarInfo;
     QMap<int, QMap<QString, int> > m_serverCalendarIdToDefaultReminderTimes;
