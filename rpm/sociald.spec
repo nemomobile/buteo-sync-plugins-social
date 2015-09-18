@@ -343,6 +343,56 @@ rm -f /home/nemo/.cache/msyncd/sync/onedrive.Signon.xml
 systemctl-user try-restart msyncd.service || :
 
 
+%package dropbox-signon
+Summary:    Provides signon credentials refreshing with Dropbox
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description dropbox-signon
+Provides signon credentials refreshing with Dropbox
+
+%files dropbox-signon
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/dropbox-signon-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libdropbox-signon-client.so
+%config %{_sysconfdir}/buteo/profiles/client/dropbox-signon.xml
+%config %{_sysconfdir}/buteo/profiles/sync/dropbox.Signon.xml
+
+%pre dropbox-signon
+rm -f /home/nemo/.cache/msyncd/sync/client/dropbox-signon.xml
+rm -f /home/nemo/.cache/msyncd/sync/dropbox.Signon.xml
+
+%post dropbox-signon
+systemctl-user try-restart msyncd.service || :
+
+
+
+%package dropbox-images
+Summary:    Provides image synchronisation with Dropbox
+License:    LGPLv2.1
+Group:      System/Libraries
+Requires: %{name} = %{version}-%{release}
+
+%description dropbox-images
+Provides image synchronisation with Dropbox
+
+%files dropbox-images
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/dropbox-images-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libdropbox-images-client.so
+%config %{_sysconfdir}/buteo/profiles/client/dropbox-images.xml
+%config %{_sysconfdir}/buteo/profiles/sync/dropbox.Images.xml
+
+%pre dropbox-images
+rm -f /home/nemo/.cache/msyncd/sync/client/dropbox-images.xml
+rm -f /home/nemo/.cache/msyncd/sync/dropbox.Images.xml
+
+%post dropbox-images
+systemctl-user try-restart msyncd.service || :
 
 %package onedrive-images
 Summary:    Provides image synchronisation with OneDrive

@@ -130,6 +130,16 @@ void DropboxDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 }
 
+QString DropboxDataTypeSyncAdaptor::api() const
+{
+    return m_api;
+}
+
+QString DropboxDataTypeSyncAdaptor::content() const
+{
+    return m_content;
+}
+
 QString DropboxDataTypeSyncAdaptor::clientId()
 {
     if (!m_triedLoading) {
@@ -275,6 +285,9 @@ void DropboxDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &respo
     } else {
         SOCIALD_LOG_INFO("signon response for account with id" << accountId << "contained no access token");
     }
+
+    m_api = account->value(QStringLiteral("hosts/ApiHost")).toString();
+    m_content = account->value(QStringLiteral("hosts/ContentHost")).toString();
 
     session->disconnect(this);
     identity->destroySession(session);
