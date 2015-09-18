@@ -344,6 +344,30 @@ systemctl-user try-restart msyncd.service || :
 
 
 
+%package dropbox-images
+Summary:    Provides image synchronisation with Dropbox
+License:    LGPLv2.1
+Group:      System/Libraries
+Requires: %{name} = %{version}-%{release}
+
+%description dropbox-images
+Provides image synchronisation with Dropbox
+
+%files dropbox-images
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/dropbox-images-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libdropbox-images-client.so
+%config %{_sysconfdir}/buteo/profiles/client/dropbox-images.xml
+%config %{_sysconfdir}/buteo/profiles/sync/dropbox.Images.xml
+
+%pre dropbox-images
+rm -f /home/nemo/.cache/msyncd/sync/client/dropbox-images.xml
+rm -f /home/nemo/.cache/msyncd/sync/dropbox.Images.xml
+
+%post dropbox-images
+systemctl-user try-restart msyncd.service || :
+
 %package onedrive-images
 Summary:    Provides image synchronisation with OneDrive
 License:    LGPLv2.1

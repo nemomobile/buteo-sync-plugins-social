@@ -53,6 +53,8 @@ public:
     virtual void sync(const QString &dataTypeString, int accountId);
 
 protected:
+    QString api() const;
+    QString content() const;
     QString clientId();
     QString clientSecret();
     virtual void updateDataForAccount(int accountId);
@@ -74,6 +76,8 @@ private:
     bool m_triedLoading; // Is true if we tried to load (even if we failed)
     QString m_clientId;
     QString m_clientSecret;
+    QString m_api;
+    QString m_content;
 };
 
 #endif // DROPBOXDATATYPESYNCADAPTOR_H
