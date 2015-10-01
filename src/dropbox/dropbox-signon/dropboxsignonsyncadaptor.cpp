@@ -207,11 +207,9 @@ void DropboxSignonSyncAdaptor::initialSignonResponse(const SignOn::SessionData &
     QString mechanism = session->property("mechanism").toString();
     QVariantMap signonSessionData = session->property("signonSessionData").toMap();
 
-    // Now expire the tokens.
     QVariantMap providedTokens;
     providedTokens.insert("AccessToken", responseData.getProperty(QStringLiteral("AccessToken")).toString());
-    providedTokens.insert("RefreshToken", responseData.getProperty(QStringLiteral("RefreshToken")).toString()); // TODO dropbox doesnt havge refresh token
-    providedTokens.insert("ExpiresIn", 2); // TODO: dropbox tokens dont expire
+    providedTokens.insert("RefreshToken", responseData.getProperty(QStringLiteral("RefreshToken")).toString());
     signonSessionData.insert("ProvidedTokens", providedTokens);
 
     session->process(SignOn::SessionData(signonSessionData), mechanism);
@@ -245,7 +243,7 @@ void DropboxSignonSyncAdaptor::triggerRefresh()
 
     SignOn::AuthSession *session = timer->property("session").value<SignOn::AuthSession*>();
     connect(session, SIGNAL(response(SignOn::SessionData)),
-            this, SLOT(refreshTokenResponse(SignOn::SessionData)),
+            this, SLOT(requestTokenResponse(SignOn::SessionData)),
             Qt::UniqueConnection);
     connect(session, SIGNAL(error(SignOn::Error)),
             this, SLOT(signonError(SignOn::Error)),
@@ -256,6 +254,7 @@ void DropboxSignonSyncAdaptor::triggerRefresh()
 
 void DropboxSignonSyncAdaptor::refreshTokenResponse(const SignOn::SessionData &responseData)
 {
+    Q_UNUSED(responseData);
     SignOn::AuthSession *session = qobject_cast<SignOn::AuthSession*>(sender());
     int accountId = session->property("accountId").toInt();
     session->disconnect(this);
@@ -269,8 +268,8 @@ void DropboxSignonSyncAdaptor::refreshTokenResponse(const SignOn::SessionData &r
     }
 
     SOCIALD_LOG_INFO(
-            QString(QLatin1String("successfully performed signon refresh for Dropbox account %1: new ExpiresIn: %3"))
-            .arg(accountId).arg(responseData.getProperty("ExpiresIn").toInt()));
+            QString(QLatin1String("successfully performed signon refresh for Dropbox account %1"))
+            .arg(accountId));
 
     lowerCredentialsNeedUpdateFlag(accountId);
     decrementSemaphore(accountId);
