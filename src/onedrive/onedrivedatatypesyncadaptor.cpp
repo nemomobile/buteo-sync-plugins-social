@@ -142,6 +142,11 @@ void OneDriveDataTypeSyncAdaptor::sslErrorsHandler(const QList<QSslError> &errs)
     // Note: not all errors are "unrecoverable" errors, so we don't change the status here.
 }
 
+QString OneDriveDataTypeSyncAdaptor::api() const
+{
+    return m_api;
+}
+
 QString OneDriveDataTypeSyncAdaptor::clientId()
 {
     if (!m_triedLoading) {
@@ -287,6 +292,8 @@ void OneDriveDataTypeSyncAdaptor::signOnResponse(const SignOn::SessionData &resp
     } else {
         SOCIALD_LOG_INFO("signon response for account with id" << accountId << "contained no access token");
     }
+
+    m_api = account->value(QStringLiteral("api/Host")).toString();
 
     session->disconnect(this);
     identity->destroySession(session);

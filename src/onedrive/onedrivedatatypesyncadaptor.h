@@ -53,11 +53,12 @@ public:
     virtual void sync(const QString &dataTypeString, int accountId);
 
 protected:
+    QString api() const;
     QString clientId();
     QString clientSecret();
     virtual void updateDataForAccount(int accountId);
     virtual void beginSync(int accountId, const QString &accessToken) = 0;
-    virtual void finalCleanup();
+    virtual void finalCleanup();    
 
 protected Q_SLOTS:
     virtual void errorHandler(QNetworkReply::NetworkError err);
@@ -74,6 +75,7 @@ private:
     bool m_triedLoading; // Is true if we tried to load (even if we failed)
     QString m_clientId;
     QString m_clientSecret;
+    QString m_api;
 };
 
 #endif // ONEDRIVEDATATYPESYNCADAPTOR_H
