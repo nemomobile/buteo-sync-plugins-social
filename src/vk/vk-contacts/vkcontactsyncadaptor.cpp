@@ -581,6 +581,14 @@ QList<QContact> VKContactSyncAdaptor::parseContacts(const QJsonArray &json, int 
         const QJsonObject &obj((*it).toObject());
         if (obj.isEmpty()) continue;
 
+        QString mobilePhone = obj.value("mobile_phone").toString();
+        QString homePhone = obj.value("home_phone").toString();
+
+        if (mobilePhone.isEmpty() && homePhone.isEmpty()) {
+            // no contact information, skip
+            continue;
+        }
+
         // build the contact.
         QContact c;
 
@@ -633,14 +641,14 @@ QList<QContact> VKContactSyncAdaptor::parseContacts(const QJsonArray &json, int 
             saveNonexportableDetail(c, addr);
         }
 
-        if (!obj.value("mobile_phone").toString().isEmpty()) {
+        if (!mobilePhone.isEmpty()) {
             QContactPhoneNumber num;
             num.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeMobile);
             num.setNumber(obj.value("mobile_phone").toString());
             saveNonexportableDetail(c, num);
         }
 
-        if (!obj.value("home_phone").toString().isEmpty()) {
+        if (!homePhone.isEmpty()) {
             QContactPhoneNumber num;
             num.setContexts(QContactDetail::ContextHome);
             num.setSubTypes(QList<int>() << QContactPhoneNumber::SubTypeLandline);
@@ -708,6 +716,7 @@ void VKContactSyncAdaptor::transformContactAvatars(QList<QContact> &remoteContac
                     m_contactAvatars[accountId].insert(contactGuid, remoteImageUrl);
                     curr.removeDetail(&avatar);
                     // then trigger the download
+
                     queueAvatarForDownload(accountId, accessToken, contactGuid, remoteImageUrl);
                 }
             }
