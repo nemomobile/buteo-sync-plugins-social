@@ -243,7 +243,7 @@ void DropboxSignonSyncAdaptor::triggerRefresh()
 
     SignOn::AuthSession *session = timer->property("session").value<SignOn::AuthSession*>();
     connect(session, SIGNAL(response(SignOn::SessionData)),
-            this, SLOT(requestTokenResponse(SignOn::SessionData)),
+            this, SLOT(refreshTokenResponse(SignOn::SessionData)),
             Qt::UniqueConnection);
     connect(session, SIGNAL(error(SignOn::Error)),
             this, SLOT(signonError(SignOn::Error)),
