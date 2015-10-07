@@ -196,7 +196,7 @@ void OneDriveImageSyncAdaptor::requestImages(int accountId, const QString &acces
                                              const QString &albumId, const QString &userId,
                                              int imageCount, const QString &nextRound)
 {
-    QString path = nextRound.isEmpty() ? QStringLiteral("%1/files/?filter=photos&limit=100").arg(albumId)
+    QString path = nextRound.isEmpty() ? QStringLiteral("%1/files/?filter=photos&limit=400").arg(albumId)
                                        : nextRound;
 
     QUrl url(QStringLiteral("%1/%2&access_token=%3&").arg(api()).arg(path).arg(accessToken));
@@ -517,6 +517,7 @@ void OneDriveImageSyncAdaptor::userFinishedHandler()
     int accountId = reply->property("accountId").toInt();
     disconnect(reply);
     reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
 
     bool ok = false;
     QJsonObject parsed = parseJsonObjectReplyData(replyData, &ok);
