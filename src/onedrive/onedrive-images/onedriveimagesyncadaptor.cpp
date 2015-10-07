@@ -246,7 +246,6 @@ void OneDriveImageSyncAdaptor::cameraRollFinishedHandler()
     QString albumName = parsed.value(QLatin1String("name")).toString();
     QString createdTimeStr = parsed.value(QLatin1String("created_time")).toString();
     QString updatedTimeStr = parsed.value(QLatin1String("updated_time")).toString();
-    int imageCount = static_cast<int>(parsed.value(QLatin1String("count")).toDouble());
 
     QJsonObject from = parsed.value(QLatin1String("from")).toObject();
     if (from.isEmpty()) {
@@ -274,7 +273,7 @@ void OneDriveImageSyncAdaptor::cameraRollFinishedHandler()
 
     // imageCount value contains all the files an dfolders in the ablbum, not just photos.
     // store temporarily and insert to database only after we know the actual count.
-    m_albumData.insert(albumId, AlbumData(albumId, userId, createdTime, updatedTime, albumName, imageCount));
+    m_albumData.insert(albumId, AlbumData(albumId, userId, createdTime, updatedTime, albumName, 0));
 
     requestImages(accountId, accessToken, albumId, userId);
 
@@ -325,7 +324,6 @@ void OneDriveImageSyncAdaptor::albumsFinishedHandler()
         QString albumName = albumObject.value(QLatin1String("name")).toString();
         QString createdTimeStr = albumObject.value(QLatin1String("created_time")).toString();
         QString updatedTimeStr = albumObject.value(QLatin1String("updated_time")).toString();
-        int imageCount = static_cast<int>(albumObject.value(QLatin1String("count")).toDouble());
 
         // check to see whether we need to sync (any changes since last sync)
         // Note that we also check if the image count is the same, since, when
@@ -347,7 +345,7 @@ void OneDriveImageSyncAdaptor::albumsFinishedHandler()
 
         // imageCount value contains all the files an dfolders in the ablbum, not just photos.
         // store temporarily and insert to database only after we know the actual count.
-        m_albumData.insert(albumId, AlbumData(albumId, userId, createdTime, updatedTime, albumName, imageCount));
+        m_albumData.insert(albumId, AlbumData(albumId, userId, createdTime, updatedTime, albumName, 0));
 
         // request album content
         requestImages(accountId, accessToken, albumId, userId);
