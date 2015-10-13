@@ -163,6 +163,10 @@ void DropboxImageSyncAdaptor::cameraRollFinishedHandler()
 
     if (isError || !ok || parsed.contains("error")) {
         SOCIALD_LOG_ERROR("unable to read albums response for Dropbox account with id" << accountId);
+        if (reply->error() == QNetworkReply::ContentNotFoundError) {
+            SOCIALD_LOG_DEBUG("Possibly" << reply->request().url().toString()
+                              << "is not available on server because no photos have been uploaded yet");
+        }
         clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
         decrementSemaphore(accountId);
         return;
