@@ -315,8 +315,6 @@ rm -f /home/nemo/.cache/msyncd/sync/twitter.Posts.xml
 systemctl-user try-restart msyncd.service || :
 
 
-
-
 %package onedrive-signon
 Summary:    Provides signon credentials refreshing with OneDrive
 License:    LGPLv2.1
@@ -343,6 +341,34 @@ rm -f /home/nemo/.cache/msyncd/sync/onedrive.Signon.xml
 systemctl-user try-restart msyncd.service || :
 
 
+%package vk-posts
+Summary:    Provides post synchronisation with VK
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  pkgconfig(Qt5Contacts)
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description vk-posts
+Provides post synchronisation with VK
+
+%files vk-posts
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.vk.statuspost.conf
+#%{_datadir}/translations/lipstick-jolla-home-vk_eng_en.qm
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-posts-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-posts-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-posts.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Posts.xml
+
+%pre vk-posts
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-posts.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Posts.xml
+
+%post vk-posts
+systemctl-user restart msyncd.service || :
 
 %package dropbox-images
 Summary:    Provides image synchronisation with Dropbox
@@ -446,6 +472,113 @@ rm -f /home/nemo/.cache/msyncd/sync/dropbox.Backup.xml
 %post dropbox-backup
 systemctl-user try-restart msyncd.service || :
 
+
+
+%package vk-notifications
+Summary:    Provides notification synchronisation with VK
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  nemo-qml-plugin-notifications-qt5-devel
+BuildRequires:  qt5-qttools-linguist
+Requires: %{name} = %{version}-%{release}
+
+%description vk-notifications
+Provides notification synchronisation with VK
+
+%files vk-notifications
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-notifications-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-notifications-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-notifications.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Notifications.xml
+%{_datadir}/lipstick/notificationcategories/x-nemo.social.vk.notification.conf
+
+%pre vk-notifications
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-notifications.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Notifications.xml
+
+%post vk-notifications
+systemctl-user restart msyncd.service || :
+
+
+%package vk-calendars
+Summary:    Provides calendar synchronisation with VK
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  pkgconfig(libmkcal-qt5)
+BuildRequires:  pkgconfig(libkcalcoren-qt5)
+Requires: %{name} = %{version}-%{release}
+
+%description vk-calendars
+Provides calendar synchronisation with VK
+
+%files vk-calendars
+#out-of-proces-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-calendars-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-calendars-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-calendars.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Calendars.xml
+
+%pre vk-calendars
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-calendars.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Calendars.xml
+
+%post vk-calendars
+systemctl-user restart msyncd.service || :
+
+
+%package vk-contacts
+Summary:    Provides contact synchronisation with VK
+License:    LGPLv2.1
+Group:      System/Libraries
+BuildRequires:  pkgconfig(Qt5Contacts)
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions)
+Requires: %{name} = %{version}-%{release}
+
+%description vk-contacts
+Provides contact synchronisation with VK
+
+%files vk-contacts
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-contacts-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-contacts-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-contacts.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Contacts.xml
+
+%pre vk-contacts
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-contacts.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Contacts.xml
+
+%post vk-contacts
+systemctl-user restart msyncd.service || :
+
+
+%package vk-images
+Summary:    Provides image synchronisation with VK
+License:    LGPLv2.1
+Group:      System/Libraries
+Requires: %{name} = %{version}-%{release}
+
+%description vk-images
+Provides image synchronisation with VK
+
+%files vk-images
+#out-of-process-plugin form:
+/usr/lib/buteo-plugins-qt5/oopp/vk-images-client
+#in-process-plugin form:
+#/usr/lib/buteo-plugins-qt5/libvk-images-client.so
+%config %{_sysconfdir}/buteo/profiles/client/vk-images.xml
+%config %{_sysconfdir}/buteo/profiles/sync/vk.Images.xml
+
+%pre vk-images
+rm -f /home/nemo/.cache/msyncd/sync/client/vk-images.xml
+rm -f /home/nemo/.cache/msyncd/sync/vk.Images.xml
+
+%post vk-images
+systemctl-user restart msyncd.service || :
 
 
 %package ts-devel
