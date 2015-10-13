@@ -337,12 +337,12 @@ void SocialNetworkSyncAdaptor::timeoutReply()
     reply->disconnect();
 }
 
-void SocialNetworkSyncAdaptor::setupReplyTimeout(int accountId, QNetworkReply *reply)
+void SocialNetworkSyncAdaptor::setupReplyTimeout(int accountId, QNetworkReply *reply, int msecs)
 {
     // this function should be called whenever a new network request is performed.
     QTimer *timer = new QTimer(this);
     timer->setSingleShot(true);
-    timer->setInterval(60000);
+    timer->setInterval(msecs);
     timer->setProperty("accountId", accountId);
     timer->setProperty("networkReply", QVariant::fromValue<QNetworkReply*>(reply));
     connect(timer, SIGNAL(timeout()), this, SLOT(timeoutReply()));

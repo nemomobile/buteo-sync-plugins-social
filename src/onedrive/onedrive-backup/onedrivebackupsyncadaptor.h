@@ -52,6 +52,9 @@ protected: // implementing OneDriveDataTypeSyncAdaptor interface
     void finalCleanup();
 
 private:
+    void initialiseAppFolderRequest(int accountId, const QString &accessToken,
+                                    const QString &localPath, const QString &remotePath,
+                                    const QString &remoteFile, const QString &syncDirection);
     void requestData(int accountId, const QString &accessToken,
                      const QString &localPath, const QString &remotePath,
                      const QString &remoteFile = QString(), const QString &redirectUrl = QString());
@@ -61,10 +64,13 @@ private:
     void purgeAccount(int accountId);
 
 private Q_SLOTS:
+    void initialiseAppFolderFinishedHandler();
     void remotePathFinishedHandler();
     void remoteFileFinishedHandler();
     void createRemotePathFinishedHandler();
     void createRemoteFileFinishedHandler();
+    void downloadProgressHandler(qint64 bytesReceived, qint64 bytesTotal);
+    void uploadProgressHandler(qint64 bytesSent, qint64 bytesTotal);
 
 private:
     QString m_remoteAppDir;

@@ -119,7 +119,7 @@ protected:
     void decrementSemaphore(int accountId);
 
     // network reply timeouts
-    void setupReplyTimeout(int accountId, QNetworkReply *reply);
+    void setupReplyTimeout(int accountId, QNetworkReply *reply, int msecs = 60000);
     void removeReplyTimeout(int accountId, QNetworkReply *reply);
     void triggerReplyTimeouts();
 

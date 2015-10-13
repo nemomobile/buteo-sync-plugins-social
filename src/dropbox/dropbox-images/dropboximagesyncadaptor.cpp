@@ -128,6 +128,7 @@ void DropboxImageSyncAdaptor::queryCameraRoll(int accountId, const QString &acce
     req.setUrl(url);
     req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                      QString(QLatin1String("Bearer ")).toUtf8() + accessToken.toUtf8());
+    SOCIALD_LOG_DEBUG("querying camera roll:" << url.toString());
 
     QNetworkReply *reply = m_networkAccessManager->get(req);
     if (reply) {
@@ -166,6 +167,10 @@ void DropboxImageSyncAdaptor::cameraRollFinishedHandler()
         if (reply->error() == QNetworkReply::ContentNotFoundError) {
             SOCIALD_LOG_DEBUG("Possibly" << reply->request().url().toString()
                               << "is not available on server because no photos have been uploaded yet");
+        }
+        QString errorResponse = QString::fromUtf8(replyData);
+        Q_FOREACH (const QString &line, errorResponse.split('\n')) {
+            SOCIALD_LOG_DEBUG(line);
         }
         clearRemovalDetectionLists(); // don't perform server-side removal detection during this sync run.
         decrementSemaphore(accountId);
@@ -333,6 +338,7 @@ void DropboxImageSyncAdaptor::possiblyAddNewUser(const QString &userId, int acco
     req.setUrl(url);
     req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                      QString(QLatin1String("Bearer ")).toUtf8() + accessToken.toUtf8());
+    SOCIALD_LOG_DEBUG("querying Dropbox account info:" << url.toString());
 
     QNetworkReply *reply = m_networkAccessManager->get(req);
     if (reply) {

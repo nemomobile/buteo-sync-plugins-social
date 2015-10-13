@@ -77,10 +77,22 @@ void OneDriveBackupSyncAdaptor::beginSync(int accountId, const QString &accessTo
     // read from dconf some key values, which determine the direction of sync etc.
     MGConfItem localPathConf("/SailfishOS/vault/OneDrive/localPath");
     MGConfItem remotePathConf("/SailfishOS/vault/OneDrive/remotePath");
+    MGConfItem remoteFileConf("/SailfishOS/vault/OneDrive/remoteFile");
     MGConfItem directionConf("/SailfishOS/vault/OneDrive/direction");
     QString localPath = localPathConf.value(QString()).toString();
     QString remotePath = remotePathConf.value(QString()).toString();
+    QString remoteFile = remoteFileConf.value(QString()).toString();
     QString direction = directionConf.value(QString()).toString();
+
+    // Immediately unset the keys to ensure that future scheduled
+    // or manually triggered syncs fail, until the keys are set.
+    // Specifically, the value of the direction key is important.
+    localPathConf.set(QString());
+    remotePathConf.set(QString());
+    remoteFileConf.set(QString());
+    directionConf.set(QString());
+
+    // set defaults if required.
     if (localPath.isEmpty()) {
         localPath = defaultLocalPath;
     }
@@ -97,15 +109,86 @@ void OneDriveBackupSyncAdaptor::beginSync(int accountId, const QString &accessTo
     }
 
     // either upsync or downsync as required.
-    if (direction == Buteo::VALUE_TO_REMOTE) {
-        uploadData(accountId, accessToken, localPath, remotePath);
-    } else if (direction == Buteo::VALUE_FROM_REMOTE) {
-        requestData(accountId, accessToken, localPath, remotePath);
+    if (direction == Buteo::VALUE_TO_REMOTE || direction == Buteo::VALUE_FROM_REMOTE) {
+#if 0
+        // For debugging, it can be useful to perform an initial app folder request before upload/download.
+        initialiseAppFolderRequest(accountId, accessToken, localPath, remotePath, remoteFile, direction);
+#else
+        // Directly perform either the upload or download
+        if (direction == Buteo::VALUE_TO_REMOTE) {
+            uploadData(accountId, accessToken, localPath, remotePath);
+        } else if (direction == Buteo::VALUE_FROM_REMOTE) {
+            requestData(accountId, accessToken, localPath, remotePath, remoteFile);
+        }
+#endif
     } else {
         SOCIALD_LOG_ERROR("No direction set for OneDrive Backup sync with account:" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
         return;
     }
+}
+
+void OneDriveBackupSyncAdaptor::initialiseAppFolderRequest(int accountId, const QString &accessToken, const QString &localPath, const QString &remotePath, const QString &remoteFile, const QString &syncDirection)
+{
+    QUrl url = QUrl(QStringLiteral("https://api.onedrive.com/v1.0/drive/special/approot"));
+
+    QNetworkRequest req(url);
+    req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
+                     QString(QLatin1String("Bearer ")).toUtf8() + accessToken.toUtf8());
+
+    QNetworkReply *reply = m_networkAccessManager->get(req);
+
+    if (reply) {
+        reply->setProperty("accountId", accountId);
+        reply->setProperty("accessToken", accessToken);
+        reply->setProperty("localPath", localPath);
+        reply->setProperty("remotePath", remotePath);
+        reply->setProperty("remoteFile", remoteFile);
+        reply->setProperty("syncDirection", syncDirection);
+        connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(errorHandler(QNetworkReply::NetworkError)));
+        connect(reply, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslErrorsHandler(QList<QSslError>)));
+        connect(reply, SIGNAL(finished()), this, SLOT(initialiseAppFolderFinishedHandler()));
+
+        // we're requesting data.  Increment the semaphore so that we know we're still busy.
+        incrementSemaphore(accountId);
+        setupReplyTimeout(accountId, reply, 10 * 60 * 1000); // 10 minutes
+    } else {
+        SOCIALD_LOG_ERROR("unable to create app folder initialisation request for OneDrive account with id" << accountId);
+    }
+}
+
+void OneDriveBackupSyncAdaptor::initialiseAppFolderFinishedHandler()
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QByteArray data = reply->readAll();
+    int accountId = reply->property("accountId").toInt();
+    QString accessToken = reply->property("accessToken").toString();
+    QString localPath = reply->property("localPath").toString();
+    QString remotePath = reply->property("remotePath").toString();
+    QString remoteFile = reply->property("remoteFile").toString();
+    QString syncDirection = reply->property("syncDirection").toString();
+    bool isError = reply->property("isError").toBool();
+    reply->deleteLater();
+    removeReplyTimeout(accountId, reply);
+
+    if (isError) {
+        SOCIALD_LOG_ERROR("error occurred when performing initialiseAppFolder request with OneDrive account:" << accountId);
+        debugDumpResponse(data);
+        setStatus(SocialNetworkSyncAdaptor::Error);
+    } else {
+        SOCIALD_LOG_DEBUG("initialiseAppFolder request succeeded with OneDrive account:" << accountId);
+        debugDumpResponse(data);
+        if (syncDirection == Buteo::VALUE_TO_REMOTE) {
+            uploadData(accountId, accessToken, localPath, remotePath);
+        } else if (syncDirection == Buteo::VALUE_FROM_REMOTE) {
+            requestData(accountId, accessToken, localPath, remotePath, remoteFile);
+        } else {
+            SOCIALD_LOG_ERROR("invalid syncDirection specified to initialiseAppFolder request with OneDrive account:" << accountId);
+            setStatus(SocialNetworkSyncAdaptor::Error);
+        }
+    }
+
+    decrementSemaphore(accountId);
 }
 
 void OneDriveBackupSyncAdaptor::requestData(int accountId, const QString &accessToken,
@@ -129,9 +212,11 @@ void OneDriveBackupSyncAdaptor::requestData(int accountId, const QString &access
             queryItems.append(QPair<QString, QString>(QStringLiteral("expand"), QStringLiteral("children")));
             query.setQueryItems(queryItems);
             url.setQuery(query);
+            SOCIALD_LOG_DEBUG("performing directory request:" << url.toString());
         } else {
             // file request, download its metadata.  That will contain a content URL which we will redirect to.
             url = QUrl(QStringLiteral("https://api.onedrive.com/v1.0/%1:/%2/%3").arg(m_remoteAppDir).arg(remotePath).arg(remoteFile));
+            SOCIALD_LOG_DEBUG("performing file request:" << url.toString());
         }
     }
 
@@ -153,12 +238,13 @@ void OneDriveBackupSyncAdaptor::requestData(int accountId, const QString &access
         if (remoteFile.isEmpty()) {
             connect(reply, SIGNAL(finished()), this, SLOT(remotePathFinishedHandler()));
         } else {
+            connect(reply, SIGNAL(downloadProgress(qint64,qint64)), this, SLOT(downloadProgressHandler(qint64,qint64)));
             connect(reply, SIGNAL(finished()), this, SLOT(remoteFileFinishedHandler()));
         }
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
-        setupReplyTimeout(accountId, reply);
+        setupReplyTimeout(accountId, reply, 10 * 60 * 1000); // 10 minutes
     } else {
         SOCIALD_LOG_ERROR("unable to create download request:" << remotePath << remoteFile << redirectUrl <<
                           "for OneDrive account with id" << accountId);
@@ -284,6 +370,8 @@ void OneDriveBackupSyncAdaptor::uploadData(int accountId, const QString &accessT
                           QVariant::fromValue<QString>(QString::fromLatin1("application/json")));
         request.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                              QString(QLatin1String("Bearer ")).toUtf8() + accessToken.toUtf8());
+        SOCIALD_LOG_DEBUG("Attempting to create the remote directory:" << remotePath << "via request:" << url.toString());
+        SOCIALD_LOG_DEBUG("with data:" << createFolderJson);
 
         reply = m_networkAccessManager->post(request, data);
     } else {
@@ -298,8 +386,10 @@ void OneDriveBackupSyncAdaptor::uploadData(int accountId, const QString &accessT
              f.close();
              QNetworkRequest req(url);
              req.setHeader(QNetworkRequest::ContentLengthHeader, data.size());
+             req.setHeader(QNetworkRequest::ContentTypeHeader, "application/octet-stream");
              req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                               QString(QLatin1String("Bearer ")).toUtf8() + accessToken.toUtf8());
+             SOCIALD_LOG_DEBUG("Attempting to create the remote file:" << QStringLiteral("%1/%2").arg(remotePath).arg(localFile) << "via request:" << url.toString());
              reply = m_networkAccessManager->put(req, data);
         }
     }
@@ -315,12 +405,13 @@ void OneDriveBackupSyncAdaptor::uploadData(int accountId, const QString &accessT
         if (localFile.isEmpty()) {
             connect(reply, SIGNAL(finished()), this, SLOT(createRemotePathFinishedHandler()));
         } else {
+            connect(reply, SIGNAL(uploadProgress(qint64,qint64)), this, SLOT(uploadProgressHandler(qint64,qint64)));
             connect(reply, SIGNAL(finished()), this, SLOT(createRemoteFileFinishedHandler()));
         }
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
-        setupReplyTimeout(accountId, reply);
+        setupReplyTimeout(accountId, reply, 10 * 60 * 1000); // 10 minutes
     } else {
         SOCIALD_LOG_ERROR("unable to create upload request:" << localPath << localFile << "->" << remotePath <<
                           "for OneDrive account with id" << accountId);
@@ -389,6 +480,30 @@ void OneDriveBackupSyncAdaptor::createRemoteFileFinishedHandler()
     SOCIALD_LOG_DEBUG("successfully uploaded backup of file:" << localPath << localFile << "to:" << remotePath <<
                       "for OneDrive account:" << accountId);
     decrementSemaphore(accountId);
+}
+
+void OneDriveBackupSyncAdaptor::downloadProgressHandler(qint64 bytesReceived, qint64 bytesTotal)
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    int accountId = reply->property("accountId").toInt();
+    QString localPath = reply->property("localPath").toString();
+    QString remotePath = reply->property("remotePath").toString();
+    QString localFile = reply->property("localFile").toString();
+    SOCIALD_LOG_DEBUG("Have download progress: bytesReceived:" << bytesReceived <<
+                      "of" << bytesTotal << ", for" << localPath << localFile <<
+                      "from" << remotePath << "with account:" << accountId);
+}
+
+void OneDriveBackupSyncAdaptor::uploadProgressHandler(qint64 bytesSent, qint64 bytesTotal)
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    int accountId = reply->property("accountId").toInt();
+    QString localPath = reply->property("localPath").toString();
+    QString remotePath = reply->property("remotePath").toString();
+    QString localFile = reply->property("localFile").toString();
+    SOCIALD_LOG_DEBUG("Have upload progress: bytesSent:" << bytesSent <<
+                      "of" << bytesTotal << ", for" << localPath << localFile <<
+                      "to" << remotePath << "with account:" << accountId);
 }
 
 void OneDriveBackupSyncAdaptor::finalize(int accountId)
