@@ -65,6 +65,8 @@ private Q_SLOTS:
     void remoteFileFinishedHandler();
     void createRemotePathFinishedHandler();
     void createRemoteFileFinishedHandler();
+    void downloadProgressHandler(qint64 bytesReceived, qint64 bytesTotal);
+    void uploadProgressHandler(qint64 bytesSent, qint64 bytesTotal);
 };
 
 #endif // DROPBOXBACKUPSYNCADAPTOR_H

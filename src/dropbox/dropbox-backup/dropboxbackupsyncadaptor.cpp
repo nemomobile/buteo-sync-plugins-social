@@ -75,16 +75,31 @@ void DropboxBackupSyncAdaptor::beginSync(int accountId, const QString &accessTok
     // read from dconf some key values, which determine the direction of sync etc.
     MGConfItem localPathConf("/SailfishOS/vault/Dropbox/localPath");
     MGConfItem remotePathConf("/SailfishOS/vault/Dropbox/remotePath");
+    MGConfItem remoteFileConf("/SailfishOS/vault/Dropbox/remoteFile");
     MGConfItem directionConf("/SailfishOS/vault/Dropbox/direction");
     QString localPath = localPathConf.value(QString()).toString();
     QString remotePath = remotePathConf.value(QString()).toString();
+    QString remoteFile = remoteFileConf.value(QString()).toString();
     QString direction = directionConf.value(QString()).toString();
 
+    // Immediately unset the keys to ensure that future scheduled
+    // or manually triggered syncs fail, until the keys are set.
+    // Specifically, the value of the direction key is important.
+    localPathConf.set(QString());
+    remotePathConf.set(QString());
+    remoteFileConf.set(QString());
+    directionConf.set(QString());
+
+    // set defaults if required.
     if (localPath.isEmpty()) {
         localPath = defaultLocalPath;
     }
     if (remotePath.isEmpty()) {
         remotePath = defaultRemotePath;
+    }
+    if (!remoteFile.isEmpty()) {
+        // dropbox requestData() function takes remoteFile param which has a fully specified path.
+        remoteFile = QStringLiteral("%1/%2").arg(remotePath).arg(remoteFile);
     }
 
     // create local directory if it doesn't exist
@@ -99,7 +114,7 @@ void DropboxBackupSyncAdaptor::beginSync(int accountId, const QString &accessTok
     if (direction == Buteo::VALUE_TO_REMOTE) {
         uploadData(accountId, accessToken, localPath, remotePath);
     } else if (direction == Buteo::VALUE_FROM_REMOTE) {
-        requestData(accountId, accessToken, localPath, remotePath);
+        requestData(accountId, accessToken, localPath, remotePath, remoteFile);
     } else {
         SOCIALD_LOG_ERROR("No direction set for Dropbox Backup sync with account:" << accountId);
         setStatus(SocialNetworkSyncAdaptor::Error);
@@ -119,9 +134,11 @@ void DropboxBackupSyncAdaptor::requestData(int accountId, const QString &accessT
     if (remoteFile.isEmpty()) {
         // folder content request
         url = QUrl(QStringLiteral("https://api.dropboxapi.com/1/metadata/auto/%1").arg(remotePath));
+        SOCIALD_LOG_DEBUG("performing directory request:" << url.toString());
     } else {
         // file download request
         url = QUrl(QStringLiteral("https://content.dropboxapi.com/1/files/auto/%1").arg(remoteFile));
+        SOCIALD_LOG_DEBUG("performing file request:" << url.toString());
     }
 
     QNetworkRequest req(url);
@@ -141,12 +158,13 @@ void DropboxBackupSyncAdaptor::requestData(int accountId, const QString &accessT
         if (remoteFile.isEmpty()) {
             connect(reply, SIGNAL(finished()), this, SLOT(remotePathFinishedHandler()));
         } else {
+            connect(reply, SIGNAL(downloadProgress(qint64,qint64)), this, SLOT(downloadProgressHandler(qint64,qint64)));
             connect(reply, SIGNAL(finished()), this, SLOT(remoteFileFinishedHandler()));
         }
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
-        setupReplyTimeout(accountId, reply);
+        setupReplyTimeout(accountId, reply, 10 * 60 * 1000); // 10 minutes
     } else {
         SOCIALD_LOG_ERROR("unable to create download request:" << remotePath << remoteFile << redirectUrl <<
                           "for Dropbox account with id" << accountId);
@@ -257,6 +275,7 @@ void DropboxBackupSyncAdaptor::uploadData(int accountId, const QString &accessTo
         QNetworkRequest req(url);
         req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                          QString(QLatin1String("Bearer ")).toUtf8() + accessToken.toUtf8());
+        SOCIALD_LOG_DEBUG("Attempting to create the remote directory:" << remotePath << "via request:" << url.toString());
 
         QByteArray data;
         reply = m_networkAccessManager->post(req, data);
@@ -280,6 +299,8 @@ void DropboxBackupSyncAdaptor::uploadData(int accountId, const QString &accessTo
              req.setRawHeader(QString(QLatin1String("Authorization")).toUtf8(),
                               QString(QLatin1String("Bearer ")).toUtf8() + accessToken.toUtf8());
              req.setHeader(QNetworkRequest::ContentLengthHeader, data.size());
+             req.setHeader(QNetworkRequest::ContentTypeHeader, "application/octet-stream");
+             SOCIALD_LOG_DEBUG("Attempting to create the remote file:" << QStringLiteral("%1/%2").arg(remotePath).arg(localFile) << "via request:" << url.toString());
              reply = m_networkAccessManager->put(req, data);
         }
     }
@@ -295,12 +316,13 @@ void DropboxBackupSyncAdaptor::uploadData(int accountId, const QString &accessTo
         if (localFile.isEmpty()) {
             connect(reply, SIGNAL(finished()), this, SLOT(createRemotePathFinishedHandler()));
         } else {
+            connect(reply, SIGNAL(uploadProgress(qint64,qint64)), this, SLOT(uploadProgressHandler(qint64,qint64)));
             connect(reply, SIGNAL(finished()), this, SLOT(createRemoteFileFinishedHandler()));
         }
 
         // we're requesting data.  Increment the semaphore so that we know we're still busy.
         incrementSemaphore(accountId);
-        setupReplyTimeout(accountId, reply);
+        setupReplyTimeout(accountId, reply, 10 * 60 * 1000); // 10 minutes
     } else {
         SOCIALD_LOG_ERROR("unable to create upload request:" << localPath << localFile << "->" << remotePath <<
                           "for Dropbox account with id" << accountId);
@@ -369,6 +391,30 @@ void DropboxBackupSyncAdaptor::createRemoteFileFinishedHandler()
     SOCIALD_LOG_DEBUG("successfully uploaded backup of file:" << localPath << localFile << "to:" << remotePath <<
                       "for Dropbox account:" << accountId);
     decrementSemaphore(accountId);
+}
+
+void DropboxBackupSyncAdaptor::downloadProgressHandler(qint64 bytesReceived, qint64 bytesTotal)
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    int accountId = reply->property("accountId").toInt();
+    QString localPath = reply->property("localPath").toString();
+    QString remotePath = reply->property("remotePath").toString();
+    QString localFile = reply->property("localFile").toString();
+    SOCIALD_LOG_DEBUG("Have download progress: bytesReceived:" << bytesReceived <<
+                      "of" << bytesTotal << ", for" << localPath << localFile <<
+                      "from" << remotePath << "with account:" << accountId);
+}
+
+void DropboxBackupSyncAdaptor::uploadProgressHandler(qint64 bytesSent, qint64 bytesTotal)
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    int accountId = reply->property("accountId").toInt();
+    QString localPath = reply->property("localPath").toString();
+    QString remotePath = reply->property("remotePath").toString();
+    QString localFile = reply->property("localFile").toString();
+    SOCIALD_LOG_DEBUG("Have upload progress: bytesSent:" << bytesSent <<
+                      "of" << bytesTotal << ", for" << localPath << localFile <<
+                      "to" << remotePath << "with account:" << accountId);
 }
 
 void DropboxBackupSyncAdaptor::finalize(int accountId)
