@@ -1,15 +1,2 @@
-This repository contains plugins which can provide data synchronization
-with various social services (such as Facebook and Twitter).
-
-It provides a basic structure which is intended to be simple to extend
-to allow more plugins to be written for further social services or data
-synchronization services.  The framework supports synchronizing data of
-various types (contacts, calendar events, notifications, etc).
-
-The plugins are Buteo synchronization framework plugins.
-Each plugin can be built either in out-of-process mode or in-process
-mode (that is, as a shared library or standalone executable).
-
-The code in this repository is LGPLv2.1 licensed.  Any contributions to
-this repository must be of either this license or a less restrictive
-license (such as BSD license).
+This project has migrated to https://git.merproject.org/mer-core/buteo-sync-plugins-social
+as part of the Mer/Nemo merge work
